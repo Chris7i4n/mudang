@@ -1,0 +1,42 @@
+[package]
+name = "gumiho-mudang-cli"
+description = "User-facing CLI for gumiho-mudang. Binary: mudang."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "mudang"
+path = "src/main.rs"
+
+[dependencies]
+gumiho-mudang-scope = { path = "../gumiho-mudang-scope" }
+gumiho-mudang-lsp = { path = "../gumiho-mudang-lsp" }
+
+clap = { workspace = true }
+clap_complete = { workspace = true }
+
+tokio = { workspace = true }
+
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+console = { workspace = true }
+notify = { workspace = true }
+notify-debouncer-mini = { workspace = true }
+ctrlc = { workspace = true }
+chrono = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+assert_cmd = { workspace = true }
+predicates = { workspace = true }
+insta = { workspace = true }

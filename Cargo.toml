@@ -1,0 +1,100 @@
+[workspace]
+resolver = "2"
+members = [
+    "gumiho-mudang-scope",
+    "gumiho-mudang-lsp",
+    "gumiho-mudang-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.83"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[workspace.dependencies]
+# async runtime
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+futures = "0.3"
+
+# serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# errors / logging
+anyhow = "1"
+thiserror = "1"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+# concurrency primitives
+parking_lot = "0.12"
+dashmap = "6"
+
+# tree-sitter (syntactic engine)
+tree-sitter = "0.25"
+streaming-iterator = "0.1"
+tree-sitter-typescript = "0.23"
+tree-sitter-c-sharp = "0.23"
+tree-sitter-python = "0.25"
+tree-sitter-rust = "0.24"
+tree-sitter-go = "0.25"
+tree-sitter-java = "0.23"
+tree-sitter-ruby = "0.23"
+
+# storage (syntactic engine)
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+# parallelism
+rayon = "1"
+
+# LSP
+lsp-types = "0.97"
+url = "2"
+which = "7"
+lru = "0.16"
+
+# CLI
+clap = { version = "4", features = ["derive", "env"] }
+clap_complete = "4"
+
+# filesystem / hashing
+ignore = "0.4"
+sha2 = "0.10"
+hex = "0.4"
+notify = "6"
+notify-debouncer-mini = "0.4"
+ctrlc = "3"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+console = "0.15"
+
+# dev-deps
+tempfile = "3"
+assert_cmd = "2"
+predicates = "3"
+insta = "1"
+
+[profile.release]
+strip = true
+lto = "thin"
+
+# aggressive release: full LTO + single codegen unit
+[profile.release-fast]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
+
+[profile.bench]
+inherits = "release"
+
+[profile.dev]
+debug = "line-tables-only"
+split-debuginfo = "unpacked"
+incremental = true
+
+[profile.test]
+inherits = "dev"
+opt-level = 0

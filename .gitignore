@@ -1,0 +1,17 @@
+/target
+**/*.rs.bk
+Cargo.lock.bak
+.DS_Store
+.idea/
+.vscode/
+
+# Personal Claude Code overrides
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# Local Scope index (regenerable)
+.scope/
+
+# Profiling artifacts
+flamegraph.svg
+*.trace
