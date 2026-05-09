@@ -1,32 +1,29 @@
 [package]
-name = "gumiho-mudang-lsp"
-description = "Semantic oracle: LSP server lifecycle, capability probing, request dispatch."
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
-license.workspace = true
-publish.workspace = true
+name = "gumiho-lsp"
+version = "0.1.0"
+publish = false
+edition = "2021"
 
 [dependencies]
-tokio = { workspace = true }
-tokio-util = { workspace = true }
-futures = { workspace = true }
-
-serde = { workspace = true }
-serde_json = { workspace = true }
-
-parking_lot = { workspace = true }
-dashmap = { workspace = true }
-lru = { workspace = true }
-
-lsp-types = { workspace = true }
-url = { workspace = true }
-which = { workspace = true }
-
-anyhow = { workspace = true }
-thiserror = { workspace = true }
-tracing = { workspace = true }
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+futures = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+tracing = "0.1"
+parking_lot = "0.12"
+dashmap = "6"
+lsp-types = "0.97"
+lru = "0.16"
+which = "7"
+url = "2"
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["full", "test-util"] }
-tempfile = { workspace = true }
+tokio = { version = "1", features = ["full", "test-util"] }
+tempfile = "3"
+
+[lints.clippy]
+ptr_arg = "deny"
+clone_on_ref_ptr = "warn"
+redundant_clone = "warn"
