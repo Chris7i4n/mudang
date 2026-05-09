@@ -15,28 +15,144 @@ path = "src/main.rs"
 gumiho-mudang-scope = { path = "../gumiho-mudang-scope" }
 gumiho-mudang-lsp = { path = "../gumiho-mudang-lsp" }
 
+# CLI
 clap = { workspace = true }
 clap_complete = { workspace = true }
 
-tokio = { workspace = true }
-
+# Serialisation
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }
 
+# Errors / logging
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 
+# Output / formatting
 console = { workspace = true }
-notify = { workspace = true }
-notify-debouncer-mini = { workspace = true }
-ctrlc = { workspace = true }
 chrono = { workspace = true }
+
+# Signal handling for long-running commands
+ctrlc = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
 assert_cmd = { workspace = true }
 predicates = { workspace = true }
 insta = { workspace = true }
+# Integration tests poke the SQLite graph directly.
+rusqlite = { workspace = true }
+
+[[test]]
+name = "test_index"
+path = "tests/integration/test_index.rs"
+
+[[test]]
+name = "test_sketch"
+path = "tests/integration/test_sketch.rs"
+
+[[test]]
+name = "test_refs"
+path = "tests/integration/test_refs.rs"
+
+[[test]]
+name = "test_deps"
+path = "tests/integration/test_deps.rs"
+
+[[test]]
+name = "test_impact"
+path = "tests/integration/test_impact.rs"
+
+[[test]]
+name = "test_incremental"
+path = "tests/integration/test_incremental.rs"
+
+[[test]]
+name = "test_errors"
+path = "tests/integration/test_errors.rs"
+
+[[test]]
+name = "test_edge_cases"
+path = "tests/integration/test_edge_cases.rs"
+
+[[test]]
+name = "test_json"
+path = "tests/integration/test_json.rs"
+
+[[test]]
+name = "test_trace"
+path = "tests/integration/test_trace.rs"
+
+[[test]]
+name = "test_entrypoints"
+path = "tests/integration/test_entrypoints.rs"
+
+[[test]]
+name = "test_map"
+path = "tests/integration/test_map.rs"
+
+[[test]]
+name = "test_watch"
+path = "tests/integration/test_watch.rs"
+
+[[test]]
+name = "test_workspace"
+path = "tests/integration/test_workspace.rs"
+
+[[test]]
+name = "test_python"
+path = "tests/integration/test_python.rs"
+
+[[test]]
+name = "test_ruby"
+path = "tests/integration/test_ruby.rs"
+
+[[test]]
+name = "test_rust_lang"
+path = "tests/integration/test_rust_lang.rs"
+
+[[test]]
+name = "test_go"
+path = "tests/integration/test_go.rs"
+
+[[test]]
+name = "test_java"
+path = "tests/integration/test_java.rs"
+
+[[test]]
+name = "test_csharp"
+path = "tests/integration/test_csharp.rs"
+
+[[test]]
+name = "test_typescript"
+path = "tests/integration/test_typescript.rs"
+
+[[test]]
+name = "test_flow"
+path = "tests/integration/test_flow.rs"
+
+[[test]]
+name = "test_rdeps"
+path = "tests/integration/test_rdeps.rs"
+
+[[test]]
+name = "test_similar"
+path = "tests/integration/test_similar.rs"
+
+[[test]]
+name = "test_source"
+path = "tests/integration/test_source.rs"
+
+[[test]]
+name = "test_diff"
+path = "tests/integration/test_diff.rs"
+
+[[test]]
+name = "test_summary"
+path = "tests/integration/test_summary.rs"
+
+[[test]]
+name = "test_setup"
+path = "tests/integration/test_setup.rs"

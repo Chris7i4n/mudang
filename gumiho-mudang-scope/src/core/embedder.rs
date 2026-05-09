@@ -118,7 +118,7 @@ pub fn build_embedding_text(
 /// - `"PaymentService"` -> `"Payment Service"`
 /// - `"getHTTPResponse"` -> `"get HTTP Response"`
 /// - `"login"` -> `"login"` (no change)
-pub(crate) fn split_camel_case(name: &str) -> String {
+pub fn split_camel_case(name: &str) -> String {
     let mut result = String::with_capacity(name.len() + 4);
     let chars: Vec<char> = name.chars().collect();
 
@@ -144,7 +144,7 @@ pub(crate) fn split_camel_case(name: &str) -> String {
 /// - `"payment_retry_worker"` -> `"payment retry worker"`
 /// - `"API_KEY"` -> `"API KEY"`
 /// - `"login"` -> `"login"` (no change)
-pub(crate) fn split_snake_case(name: &str) -> String {
+pub fn split_snake_case(name: &str) -> String {
     name.replace('_', " ")
 }
 
