@@ -132,8 +132,7 @@ pub struct RunArgs {
     pub model: Option<String>,
 
     /// Number of experimental conditions: 1 = with-scope only (default),
-    /// 2 = with --compare, 3 = without + with + preloaded,
-    /// 4 = all 3 + with-mcp (scope via MCP tools instead of Bash)
+    /// 2 = with --compare, 3 = without + with + preloaded.
     #[arg(long, default_value = "1")]
     pub conditions: u32,
 
@@ -331,14 +330,7 @@ fn run_benchmarks(args: &RunArgs) -> Result<()> {
     );
 
     // Determine which conditions to run (same tuple approach as prepare_benchmarks)
-    let conditions: Vec<(&str, bool)> = if args.conditions >= 4 {
-        vec![
-            ("without-scope", false),
-            ("with-scope", true),
-            ("with-scope-preloaded", true),
-            ("with-mcp", true),
-        ]
-    } else if args.conditions >= 3 {
+    let conditions: Vec<(&str, bool)> = if args.conditions >= 3 {
         vec![
             ("without-scope", false),
             ("with-scope", true),
@@ -790,14 +782,7 @@ fn prepare_benchmarks(args: &PrepareArgs) -> Result<()> {
     let ndjson_dir = std::path::PathBuf::from(output_base).join("ndjson");
     std::fs::create_dir_all(&ndjson_dir)?;
 
-    let conditions: Vec<(&str, bool)> = if args.conditions >= 4 {
-        vec![
-            ("without-scope", false),
-            ("with-scope", true),
-            ("with-scope-preloaded", true),
-            ("with-mcp", true),
-        ]
-    } else if args.conditions >= 3 {
+    let conditions: Vec<(&str, bool)> = if args.conditions >= 3 {
         vec![
             ("without-scope", false),
             ("with-scope", true),
@@ -896,30 +881,6 @@ fn prepare_benchmarks(args: &PrepareArgs) -> Result<()> {
                         std::fs::copy(&fallback, work_dir.join("CLAUDE.md"))?;
                     }
                 }
-            }
-
-            // Handle MCP condition: install CLAUDE.md.with-mcp and write MCP config
-            if condition_label == "with-mcp" {
-                let mcp_variant = work_dir.join("CLAUDE.md.with-mcp");
-                if mcp_variant.is_file() {
-                    std::fs::copy(&mcp_variant, work_dir.join("CLAUDE.md"))?;
-                }
-                // Write MCP server config for manual runs
-                let scope_mcp_bin = which::which("scope-mcp")
-                    .unwrap_or_else(|_| std::path::PathBuf::from("scope-mcp"));
-                let mcp_config = serde_json::json!({
-                    "mcpServers": {
-                        "scope": {
-                            "command": scope_mcp_bin.to_string_lossy(),
-                            "args": [],
-                            "cwd": work_dir.to_string_lossy()
-                        }
-                    }
-                });
-                std::fs::write(
-                    work_dir.join(".mcp-config.json"),
-                    serde_json::to_string_pretty(&mcp_config)?,
-                )?;
             }
 
             let entry = serde_json::json!({
@@ -1567,7 +1528,6 @@ fn extract_task_id_from_dir_name(dir_name: &str) -> Option<String> {
         "-with-scope-preloaded",
         "-without-scope",
         "-with-scope",
-        "-with-mcp",
     ];
     for suffix in &suffixes {
         if let Some(idx) = dir_name.find(suffix) {
