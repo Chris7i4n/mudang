@@ -59,6 +59,16 @@ test-integration: test-cli
 # Pre-commit gate. Run before pushing.
 gate: fmt-check clippy test
 
+# --- Install ---
+
+# Install the `mudang` binary into ~/.cargo/bin using the
+# release-fast profile (lto fat + codegen-units=1).
+install:
+    cargo install --path gumiho-mudang-cli --profile release-fast --locked --force
+
+uninstall:
+    cargo uninstall gumiho-mudang-cli
+
 # --- Tooling ---
 
 tools-install:
