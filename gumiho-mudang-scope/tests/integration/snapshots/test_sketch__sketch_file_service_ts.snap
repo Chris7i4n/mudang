@@ -1,0 +1,13 @@
+---
+source: tests/integration/test_sketch.rs
+expression: normalized
+---
+src/payments/service.ts
+──────────────────────────────────────────────────────────────────────────────
+  PaymentService          class     4-37     [internal]
+  logger                  property  5        [internal]
+  constructor             method    7-9      [internal]
+  processPayment          method    11-15    [2 callers]
+  refundPayment           method    17-20    [1 caller]
+  validateAmount          method    22-25    [1 caller]
+  describeMethod          method    27-36    [internal]

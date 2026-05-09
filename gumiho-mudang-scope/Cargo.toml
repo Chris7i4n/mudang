@@ -1,37 +1,192 @@
+[workspace]
+members = [".", "mcp"]
+exclude = ["benchmarks/runner"]
+
 [package]
-name = "gumiho-mudang-scope"
-description = "Syntactic engine: tree-sitter ASTs + SQLite-backed symbol/edge graph."
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
-license.workspace = true
-publish.workspace = true
+name = "scope-cli"
+version = "0.10.2"
+edition = "2021"
+description = "Code intelligence CLI for LLM coding agents — structural navigation, dependency graphs, and semantic search without reading full source files"
+license = "MIT"
+repository = "https://github.com/rynhardt-potgieter/scope"
+homepage = "https://github.com/rynhardt-potgieter/scope"
+readme = "README.md"
+keywords = ["cli", "code-intelligence", "tree-sitter", "llm", "code-navigation"]
+categories = ["command-line-utilities", "development-tools"]
+exclude = ["benchmarks/", "docs/", ".claude/", ".github/", "overview/", "project.md"]
+
+[[bin]]
+name = "scope"
+path = "src/main.rs"
 
 [dependencies]
-tree-sitter = { workspace = true }
-streaming-iterator = { workspace = true }
-tree-sitter-typescript = { workspace = true }
-tree-sitter-c-sharp = { workspace = true }
-tree-sitter-python = { workspace = true }
-tree-sitter-rust = { workspace = true }
-tree-sitter-go = { workspace = true }
-tree-sitter-java = { workspace = true }
-tree-sitter-ruby = { workspace = true }
+# CLI
+clap = { version = "4", features = ["derive", "env"] }
+clap_complete = "4"
 
-rusqlite = { workspace = true }
+# Tree-sitter core
+tree-sitter = "0.25.8"
+streaming-iterator = "0.1"
+tree-sitter-typescript = "0.23.2"
 
-serde = { workspace = true }
-serde_json = { workspace = true }
+# Storage
+rusqlite = { version = "0.31", features = ["bundled"] }
 
-rayon = { workspace = true }
-ignore = { workspace = true }
-sha2 = { workspace = true }
-hex = { workspace = true }
+# Serialisation
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
 
-anyhow = { workspace = true }
-thiserror = { workspace = true }
-tracing = { workspace = true }
+# Parallelism
+rayon = "1"
+
+# Utilities
+ignore = "0.4"
+sha2 = "0.10"
+hex = "0.4"
+anyhow = "1"
+thiserror = "1"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+console = "0.15"
+tree-sitter-c-sharp = "0.23.5"
+tree-sitter-python = "0.25.0"
+tree-sitter-rust = "0.24.2"
+tree-sitter-go = "0.25.0"
+tree-sitter-java = "0.23.5"
+tree-sitter-ruby = "0.23.1"
+
+# File watching
+notify = "6"
+notify-debouncer-mini = "0.4"
+ctrlc = "3"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+
+[profile.release]
+strip = true
+lto = "thin"
+
+# Aggressive release profile: full LTO + single codegen unit.
+# Slower to build, ~3-8% faster runtime typical.
+[profile.release-fast]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
 
 [dev-dependencies]
-tempfile = { workspace = true }
-insta = { workspace = true }
+tempfile = "3"
+assert_cmd = "2"
+predicates = "3"
+insta = "1"
+
+[[test]]
+name = "test_index"
+path = "tests/integration/test_index.rs"
+
+[[test]]
+name = "test_sketch"
+path = "tests/integration/test_sketch.rs"
+
+[[test]]
+name = "test_refs"
+path = "tests/integration/test_refs.rs"
+
+[[test]]
+name = "test_deps"
+path = "tests/integration/test_deps.rs"
+
+[[test]]
+name = "test_impact"
+path = "tests/integration/test_impact.rs"
+
+[[test]]
+name = "test_incremental"
+path = "tests/integration/test_incremental.rs"
+
+[[test]]
+name = "test_errors"
+path = "tests/integration/test_errors.rs"
+
+[[test]]
+name = "test_edge_cases"
+path = "tests/integration/test_edge_cases.rs"
+
+[[test]]
+name = "test_json"
+path = "tests/integration/test_json.rs"
+
+[[test]]
+name = "test_trace"
+path = "tests/integration/test_trace.rs"
+
+[[test]]
+name = "test_entrypoints"
+path = "tests/integration/test_entrypoints.rs"
+
+[[test]]
+name = "test_map"
+path = "tests/integration/test_map.rs"
+
+[[test]]
+name = "test_watch"
+path = "tests/integration/test_watch.rs"
+
+[[test]]
+name = "test_workspace"
+path = "tests/integration/test_workspace.rs"
+
+[[test]]
+name = "test_python"
+path = "tests/integration/test_python.rs"
+
+[[test]]
+name = "test_ruby"
+path = "tests/integration/test_ruby.rs"
+
+[[test]]
+name = "test_rust_lang"
+path = "tests/integration/test_rust_lang.rs"
+
+[[test]]
+name = "test_go"
+path = "tests/integration/test_go.rs"
+
+[[test]]
+name = "test_java"
+path = "tests/integration/test_java.rs"
+
+[[test]]
+name = "test_csharp"
+path = "tests/integration/test_csharp.rs"
+
+[[test]]
+name = "test_typescript"
+path = "tests/integration/test_typescript.rs"
+
+[[test]]
+name = "test_flow"
+path = "tests/integration/test_flow.rs"
+
+[[test]]
+name = "test_rdeps"
+path = "tests/integration/test_rdeps.rs"
+
+[[test]]
+name = "test_similar"
+path = "tests/integration/test_similar.rs"
+
+[[test]]
+name = "test_source"
+path = "tests/integration/test_source.rs"
+
+[[test]]
+name = "test_diff"
+path = "tests/integration/test_diff.rs"
+
+[[test]]
+name = "test_summary"
+path = "tests/integration/test_summary.rs"
+
+[[test]]
+name = "test_setup"
+path = "tests/integration/test_setup.rs"

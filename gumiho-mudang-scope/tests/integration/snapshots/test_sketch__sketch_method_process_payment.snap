@@ -1,0 +1,10 @@
+---
+source: tests/integration/test_sketch.rs
+expression: normalized
+---
+processPayment                                    method  src/payments/service.ts:11-15
+──────────────────────────────────────────────────────────────────────────────
+async
+signature:  async processPayment(request: PaymentRequest): Promise<PaymentResult>
+calls:      logger.info, validateAmount
+called by:  OrderController.checkout, OrderController.retryPayment

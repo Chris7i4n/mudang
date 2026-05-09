@@ -1,0 +1,36 @@
+# Rust build artifacts
+/target/
+
+# Scope index files (never commit these)
+.scope/
+
+# Node modules (benchmark fixtures)
+node_modules/
+
+# Benchmark results (commit these intentionally per release)
+# benchmarks/results/ — DO commit, it's part of the record
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code — local tooling, never commit
+/.claude/
+CLAUDE.md
+
+# Overview docs — local reference only, never commit
+/overview/
+
+# Sprint planning — local only
+project.md
+.env
+*.ndjson
+ndjson/
+
+# Local cargo config (machine-specific: native CPU, lld linker)
+/.cargo/
