@@ -30,26 +30,30 @@ clippy:
     cargo clippy --workspace --all-targets -- -D warnings
 
 # --- Test ---
+#
+# Tests run in --release because integration tests have timing
+# assertions calibrated to optimised binaries (e.g. incremental
+# indexing budget < 2 s). Debug builds blow these budgets.
 
 test:
-    cargo test --workspace
+    cargo test --workspace --release
 
 test-fast:
     cargo nextest run --workspace --profile dev-fast
 
 test-changed:
-    cargo nextest run --workspace --changed-since main --profile dev
+    cargo nextest run --workspace --changed-since main --profile dev --release
 
 # Per-crate convenience.
 test-scope:
-    cargo test -p gumiho-mudang-scope
+    cargo test -p gumiho-mudang-scope --release
 
 test-lsp:
-    cargo test -p gumiho-mudang-lsp
+    cargo test -p gumiho-mudang-lsp --release
 
 # CLI crate is also where cross-crate integration tests live.
 test-cli:
-    cargo test -p gumiho-mudang-cli
+    cargo test -p gumiho-mudang-cli --release
 
 # Alias for test-cli — readable when the intent is "integration tests".
 test-integration: test-cli
