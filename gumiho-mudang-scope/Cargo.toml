@@ -1,83 +1,64 @@
-[workspace]
-members = ["."]
-exclude = ["benchmarks/runner"]
-
 [package]
-name = "scope-cli"
-version = "0.10.2"
-edition = "2021"
-description = "Code intelligence CLI for LLM coding agents — structural navigation, dependency graphs, and semantic search without reading full source files"
-license = "MIT"
-repository = "https://github.com/rynhardt-potgieter/scope"
-homepage = "https://github.com/rynhardt-potgieter/scope"
-readme = "README.md"
-keywords = ["cli", "code-intelligence", "tree-sitter", "llm", "code-navigation"]
-categories = ["command-line-utilities", "development-tools"]
-exclude = ["benchmarks/", "docs/", ".claude/", ".github/", "overview/", "project.md"]
+name = "gumiho-mudang-scope"
+description = "Syntactic engine for gumiho-mudang: tree-sitter parsing, per-language plugins, SQLite graph, and FTS5 search."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+publish.workspace = true
 
 [[bin]]
 name = "scope"
 path = "src/main.rs"
 
 [dependencies]
-# CLI
-clap = { version = "4", features = ["derive", "env"] }
-clap_complete = "4"
+# CLI (still consumed by src/main.rs and src/commands/* during transitional phase)
+clap = { workspace = true }
+clap_complete = { workspace = true }
 
 # Tree-sitter core
-tree-sitter = "0.25.8"
-streaming-iterator = "0.1"
-tree-sitter-typescript = "0.23.2"
+tree-sitter = { workspace = true }
+streaming-iterator = { workspace = true }
+tree-sitter-typescript = { workspace = true }
+tree-sitter-c-sharp = { workspace = true }
+tree-sitter-python = { workspace = true }
+tree-sitter-rust = { workspace = true }
+tree-sitter-go = { workspace = true }
+tree-sitter-java = { workspace = true }
+tree-sitter-ruby = { workspace = true }
 
 # Storage
-rusqlite = { version = "0.31", features = ["bundled"] }
+rusqlite = { workspace = true }
 
 # Serialisation
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-toml = "0.8"
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
 
 # Parallelism
-rayon = "1"
+rayon = { workspace = true }
 
 # Utilities
-ignore = "0.4"
-sha2 = "0.10"
-hex = "0.4"
-anyhow = "1"
-thiserror = "1"
-tracing = "0.1"
-tracing-subscriber = "0.3"
-console = "0.15"
-tree-sitter-c-sharp = "0.23.5"
-tree-sitter-python = "0.25.0"
-tree-sitter-rust = "0.24.2"
-tree-sitter-go = "0.25.0"
-tree-sitter-java = "0.23.5"
-tree-sitter-ruby = "0.23.1"
+ignore = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+console = { workspace = true }
 
 # File watching
-notify = "6"
-notify-debouncer-mini = "0.4"
-ctrlc = "3"
-chrono = { version = "0.4", default-features = false, features = ["clock"] }
-
-[profile.release]
-strip = true
-lto = "thin"
-
-# Aggressive release profile: full LTO + single codegen unit.
-# Slower to build, ~3-8% faster runtime typical.
-[profile.release-fast]
-inherits = "release"
-lto = "fat"
-codegen-units = 1
+notify = { workspace = true }
+notify-debouncer-mini = { workspace = true }
+ctrlc = { workspace = true }
+chrono = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3"
-assert_cmd = "2"
-predicates = "3"
-insta = "1"
+tempfile = { workspace = true }
+assert_cmd = { workspace = true }
+predicates = { workspace = true }
+insta = { workspace = true }
 
 [[test]]
 name = "test_index"

@@ -9,7 +9,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use gumiho_lsp::client::LspClient;
+use gumiho_mudang_lsp::client::LspClient;
 
 #[tokio::main]
 async fn main() {

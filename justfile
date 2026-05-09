@@ -47,8 +47,12 @@ test-scope:
 test-lsp:
     cargo test -p gumiho-mudang-lsp
 
+# CLI crate is also where cross-crate integration tests live.
 test-cli:
     cargo test -p gumiho-mudang-cli
+
+# Alias for test-cli — readable when the intent is "integration tests".
+test-integration: test-cli
 
 # --- Gates ---
 

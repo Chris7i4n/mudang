@@ -1,13 +1,20 @@
 /target
 **/*.rs.bk
 Cargo.lock.bak
+gumiho-mudang-scope/Cargo.lock
+gumiho-mudang-lsp/Cargo.lock
+gumiho-mudang-cli/Cargo.lock
+
 .DS_Store
+Thumbs.db
 .idea/
 .vscode/
+*.swp
 
 # Personal Claude Code overrides
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+/CLAUDE.md
 
 # Local Scope index (regenerable)
 .scope/
@@ -15,3 +22,21 @@ Cargo.lock.bak
 # Profiling artifacts
 flamegraph.svg
 *.trace
+
+# Benchmark fixtures
+node_modules/
+
+# Local-only docs and planning
+/overview/
+project.md
+.env
+
+# NDJSON outputs (local profiling/dumps)
+*.ndjson
+ndjson/
+
+# Per-machine cargo config (native CPU, lld linker, etc.)
+/.cargo/
+gumiho-mudang-scope/.cargo/
+gumiho-mudang-lsp/.cargo/
+gumiho-mudang-cli/.cargo/
