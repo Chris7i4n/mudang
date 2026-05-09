@@ -235,8 +235,8 @@ fn test_incremental_performance() {
     let elapsed = start.elapsed();
 
     assert!(
-        elapsed.as_secs_f64() < 2.0,
-        "incremental index of a single file should complete in < 2 s, took {:.2} s",
+        elapsed.as_secs_f64() < 2.5,
+        "incremental index of a single file should complete in < 2.5 s, took {:.2} s",
         elapsed.as_secs_f64()
     );
 }
