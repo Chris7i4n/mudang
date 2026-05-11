@@ -31,3 +31,7 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+# R1 CI gates: compile-fail tests for EdgeBuilder typestate and the
+# absence of `.status(...)` (see CI-GATES.md § Builder requires fields,
+# § Builder forbids status).
+trybuild = "1.0"

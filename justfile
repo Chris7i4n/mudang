@@ -59,6 +59,21 @@ test-integration: test-cli
 # Pre-commit gate. Run before pushing.
 gate: fmt-check clippy test
 
+# --- Refactor CI gates (gumiho-mudang-scope/docs/CI-GATES.md) ---
+#
+# Until repo-wide CI lands, `just gate-refactor` is the durable
+# contract: every gate flipped to `active` in CI-GATES.md is run by
+# this recipe. See sprint 0001 DOD #3.
+
+# Run every active refactor gate.
+gate-refactor: ci-edge-sealed test-builder
+
+ci-edge-sealed:
+    ./scripts/grep_edge_sealed.sh
+
+test-builder:
+    cargo test -p scope-core --test compile_fail_builder
+
 # --- Install ---
 
 # Install the `mudang` binary into ~/.cargo/bin using the

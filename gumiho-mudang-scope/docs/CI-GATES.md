@@ -10,9 +10,9 @@ When a gate is active, the script or test path listed below is the **authoritati
 
 | Gate | Owner | Mechanism | Fails on | Local invocation | Status |
 |---|---|---|---|---|---|
-| Edge sealed | R1 | grep gate over `src/` | `Edge {` literal outside `core::graph` compiles | `just ci-edge-sealed` | planned (Phase A) |
-| Builder requires fields | R1 | compile-fail test in `tests/compile_fail/` | `EdgeBuilder::build()` succeeds without `confidence` / `producer` / `pattern_id` | `just test-builder` | planned (Phase A) |
-| Builder forbids status | R1 | compile-fail test | `EdgeBuilder::status(...)` compiles | `just test-builder` | planned (Phase A) |
+| Edge sealed | R1 | `scripts/grep_edge_sealed.sh` (grep gate) | `Edge {` / `RawEdge {` / `InsertableEdge {` literal outside `scope-core/src/{edge,types}.rs` | `just ci-edge-sealed` | active (sprint 0001 — 2026-05-11) |
+| Builder requires fields | R1 | compile-fail test `scope-core/tests/compile_fail/builder/missing_*.rs` | `EdgeBuilder::build()` succeeds without `confidence` / `producer` / `pattern_id` | `just test-builder` | active (sprint 0001 — 2026-05-11) |
+| Builder forbids status | R1 | compile-fail test `scope-core/tests/compile_fail/builder/no_status_method.rs` | `EdgeBuilder::status(...)` compiles | `just test-builder` | active (sprint 0001 — 2026-05-11) |
 | Insertable typestate | R3 | compile-fail test | `Graph::insert(RawEdge)` compiles; `InsertableEdge` constructor reachable outside resolver | `just test-typestate` | planned (Phase B) |
 | Trait-shape audit | R12 | `scripts/audit_trait_shape.sh` | `LanguagePlugin` / `Extractor` has method named `infer_*`, `evaluate_*`, `solve_*`, `narrow_*`, `resolve_overload_*`, `expand_*` | `just ci-trait-shape` | planned (Phase B) |
 | Process-spawn denylist | R12 | `scripts/audit_no_spawn.sh` | `Command::new(`, `process::Command`, `std::process::Command` appears in `src/languages/`, `src/frameworks/`, `src/core/parser.rs`, `src/core/extract*.rs`, `src/core/resolve*.rs` (excluding allowlist-tagged sites) | `just ci-no-spawn` | planned (Phase B) |

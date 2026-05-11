@@ -1,0 +1,17 @@
+error[E0599]: no method named `build` found for struct `EdgeBuilder<Yes, Yes, Yes, Yes, Yes>` in the current scope
+  --> tests/compile_fail/builder/missing_pattern_id.rs:13:10
+   |
+ 7 |       let _ = Edge::builder()
+   |  _____________-
+ 8 | |         .from("a")
+ 9 | |         .to("b")
+10 | |         .kind(EdgeKind::Calls)
+11 | |         .confidence(Confidence::High)
+12 | |         .producer(Producer::Lang("rust_lang".into()))
+13 | |         .build();
+   | |         -^^^^^ method not found in `EdgeBuilder<Yes, Yes, Yes, Yes, Yes>`
+   | |_________|
+   |
+   |
+   = note: the method was found for
+           - `EdgeBuilder<Yes, Yes, Yes, Yes, Yes, Yes>`
