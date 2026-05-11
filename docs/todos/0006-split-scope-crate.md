@@ -1,8 +1,8 @@
 # 0006 — Split `gumiho-mudang-scope` into sub-crates
 
-- **Status:** TODO (phase A internal)
+- **Status:** shipped (2026-05-11, sprint 0000 via branch `refactor/sprint-0000-crate-decomposition`)
 - **Decision:** decompose the current monolithic `gumiho-mudang-scope` crate into focused sub-crates so the AST edit crate (phase E) and the composer (phase C) can depend only on what they need.
-- **Tracking:** branch `refactor/sprint-0000-crate-decomposition` (opened 2026-05-11)
+- **Tracking:** sprint 0000 closed; all acceptance criteria demonstrated (workspace builds, `cargo test --workspace` green — 456 tests across 43 suites, `cargo doc` builds per crate, `scope-core` has zero sibling-sub-crate dependencies, 1:1 public surface re-exported through the façade). Codex review: PASS, no blockers.
 
 ## Decision
 

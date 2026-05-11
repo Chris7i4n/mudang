@@ -163,7 +163,7 @@ architecture discussion. See `todos/README.md` for the index.
 | 0003 | Update GitHub URLs once the new repository is published                       | TODO   |
 | 0004 | Clarify ONNX vs LanceDB roles in the embeddings stack                         | TODO   |
 | 0005 | Delete `gumiho-mudang-scope/src/core/watcher.rs`                              | TODO   |
-| 0006 | Split `gumiho-mudang-scope` into focused sub-crates                            | TODO   |
+| 0006 | Split `gumiho-mudang-scope` into focused sub-crates                            | shipped (sprint 0000, 2026-05-11) |
 | 0007 | Create `gumiho-mudang-composer` crate                                          | TODO   |
 | 0008 | Constrain `gumiho-mudang-lsp` to basic-RPC primitives                          | TODO   |
 | 0009 | Expand R0 domain edge kinds to cover Rails/Tokio/Axum/React patterns          | ABSORBED into R0 (ships in scope sprint 0001) |

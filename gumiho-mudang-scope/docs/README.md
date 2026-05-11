@@ -51,9 +51,12 @@ These documents govern decisions; revise via explicit commit, not silent edit.
 
 ## Current state
 
-The architectural refactor has not started shipping. Sprint 0000
-(crate decomposition) is the structural prerequisite inside mudang's
-Phase A; sprint 0001 (R0, R1) is the first R-move batch. See
+Sprint 0000 (crate decomposition, structural prerequisite inside
+mudang's Phase A) **shipped 2026-05-11**. The five sub-crates
+(`scope-core`, `scope-index`, `scope-graph`, `scope-search`,
+`scope-workspace`) are live under `gumiho-mudang-scope/`; the legacy
+crate name is now a façade re-exporting them 1:1. R-move work has not
+yet started; sprint 0001 (R0, R1) is the first R-move batch. See
 `REFACTOR-STATUS.md` for the live R-move snapshot. Until the refactor
 closes, plugin authoring follows the pre-refactor trait shapes (see
 `LANGUAGE-PLAYBOOK.md` Step 5 pre-R2 vs post-R2 sections).

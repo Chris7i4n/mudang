@@ -1471,7 +1471,6 @@ dependencies = [
  "anyhow",
  "rusqlite",
  "scope-core",
- "scope-graph",
  "serde",
  "serde_json",
  "thiserror",
