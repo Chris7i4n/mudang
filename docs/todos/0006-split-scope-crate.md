@@ -46,7 +46,29 @@ composer and the CLI) keep working through the same import path.
 - `gumiho-mudang-scope/src/core/embedder.rs` (text builder) → moves
   to `scope-index`. Runtime / store implementations (when phase D
   lands) live in `scope-search`.
-- `gumiho-mudang-scope/src/core/graph.rs` → moves to `scope-graph`.
+- `gumiho-mudang-scope/src/core/graph.rs` → **split** between
+  `scope-core` and `scope-graph`:
+  - `Symbol` and `Edge` struct definitions (with their `serde` derives)
+    move to `scope-core/src/types.rs`. They are the type backbone of
+    parser output and language-plugin signatures; per the § Decision
+    table, `scope-core` owns them.
+  - `impl Symbol { fn from_row }` becomes a private free function
+    `symbol_from_row(row: &rusqlite::Row) -> Symbol` inside
+    `scope-graph/src/graph.rs`. The inherent method's only caller is
+    inside `graph.rs`; the public surface is preserved by the façade
+    re-exporting `Symbol` / `Edge` from `scope-core`.
+  - Everything else (`Graph`, `ChangedFiles`, `ClassRelationships`,
+    `CallerInfo`, `Reference`, `ImpactNode`, `ImpactResult`,
+    `Dependency`, `CallPathStep`, `CallPath`, `TraceResult`, the SQL
+    helpers, and `impl Graph`) moves intact to
+    `scope-graph/src/graph.rs`, which adds `use scope_core::{Symbol,
+    Edge}`.
+  This split is the **only** non-trivial code change inside sprint
+  0000; it is required by the § Decision table (scope-core owns
+  Symbol/Edge) **and** the § Acceptance bullet "gumiho-mudang-edit
+  (phase E) depends on `scope-core` only — never on `scope-graph` or
+  `scope-index`". If Symbol stayed in scope-graph, edit would inherit
+  SQLite transitively through scope-core, breaking the bullet.
 - `gumiho-mudang-scope/src/sql/schema.sql` → moves to `scope-graph`.
 - `gumiho-mudang-scope/src/core/searcher.rs` → moves to `scope-search`.
 - `gumiho-mudang-scope/src/core/workspace_graph.rs` → moves to
