@@ -44,8 +44,16 @@ composer and the CLI) keep working through the same import path.
 - `gumiho-mudang-scope/src/languages/*` → move to `scope-core`.
 - `gumiho-mudang-scope/src/core/indexer.rs` → moves to `scope-index`.
 - `gumiho-mudang-scope/src/core/embedder.rs` (text builder) → moves
-  to `scope-index`. Runtime / store implementations (when phase D
-  lands) live in `scope-search`.
+  to **`scope-search`** (corrected from the earlier `scope-index`
+  target). `searcher.rs` is the sole consumer of
+  `build_embedding_text`, `split_camel_case`, and `split_snake_case`;
+  `indexer.rs` does not call the embedder directly (it goes through
+  the `Searcher` trait). Placing the embedder in `scope-index` would
+  create a cycle (`scope-search` → `scope-index` for embedder,
+  `scope-index` → `scope-search` for `Searcher`); placing it next to
+  its sole caller in `scope-search` keeps the dependency graph acyclic
+  (`scope-search` → `scope-core` only). Runtime / store
+  implementations (when phase D lands) also live in `scope-search`.
 - `gumiho-mudang-scope/src/core/graph.rs` → **split** between
   `scope-core` and `scope-graph`:
   - `Symbol` and `Edge` struct definitions (with their `serde` derives)
