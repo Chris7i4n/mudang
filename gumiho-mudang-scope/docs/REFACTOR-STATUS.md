@@ -8,7 +8,7 @@ Until the refactor closes (Phase E acceptance — see `ARCHITECTURAL-REFACTOR.md
 
 | Phase | Moves | Status | Started | Shipped | Notes |
 |---|---|---|---|---|---|
-| A — Schema and storage | R0, R1 | in-progress | 2026-05-11 | — | first batch; everything else depends on it |
+| A — Schema and storage | R0, R1 | shipped | 2026-05-11 | 2026-05-11 | first batch; everything else depends on it |
 | B — Plugin layer | R2, R3, R4, R7, R9, R11, R12 | unstarted | — | — | depends on Phase A |
 | C — Framework layer | R5 | unstarted | — | — | lands when framework infrastructure is first introduced; design constraint until then |
 | D — Output and audit | R8, R10 | unstarted | — | — | adds detection layer for D2/E1 |
@@ -18,8 +18,8 @@ Until the refactor closes (Phase E acceptance — see `ARCHITECTURAL-REFACTOR.md
 
 | ID | Title | Phase | Status | Commit | Date | Notes |
 |---|---|---|---|---|---|---|
-| R0 | Schema closures | A | in-progress | — | — | adds confidence/status/producer/pattern_id/args_text, surrogate edge_id PK, contains + 30 domain edge kinds (R0 baseline 13 + Tier 1 5 + Tier 2 5 + Tier 3 7; final whitelist 38), `goroutine_spawn` renamed to `green_thread_spawn`, 4-kind concurrency split, 3 new symbol kinds, skipped_ranges. No in-place migration — old indexes are wiped and re-indexed |
-| R1 | Typed edge insertion API | A | in-progress | — | — | seals Edge; EdgeBuilder is sole producer of RawEdge; no .status() at extraction |
+| R0 | Schema closures | A | shipped | ac8dcb3 | 2026-05-11 | adds confidence/status/producer/pattern_id/args_text, surrogate edge_id PK, contains + 30 domain edge kinds (R0 baseline 13 + Tier 1 5 + Tier 2 5 + Tier 3 7; final whitelist 38), `goroutine_spawn` renamed to `green_thread_spawn`, 4-kind concurrency split, 3 new symbol kinds, skipped_ranges. No in-place migration — old indexes are wiped and re-indexed |
+| R1 | Typed edge insertion API | A | shipped | 1192346 | 2026-05-11 | seals Edge; EdgeBuilder is sole producer of RawEdge; no .status() at extraction; Phase A trivial resolver stub in scope-graph::resolver (retired by R3) |
 | R2 | LanguagePlugin output type closure | B | unstarted | — | — | plugin returns RawCaptures; Extractor layer converts to Edge::builder() calls |
 | R3 | Pipeline ordering via type-state | B | unstarted | — | — | extract → resolve → write; resolution is sole producer of status |
 | R4 | WorkspaceContext typed access (split) | B | unstarted | — | — | LanguageWorkspaceContext / FrameworkWorkspaceContext split; mechanical safeguard for C2 |
@@ -72,4 +72,6 @@ Every status transition adds a row to the log below. Update the snapshot tables 
 
 - 2026-05-11 | R0 | unstarted → in-progress | branch refactor/sprint-0001-schema-storage | notes: sprint 0001 opened
 - 2026-05-11 | R1 | unstarted → in-progress | branch refactor/sprint-0001-schema-storage | notes: sprint 0001 opened
-- 2026-05-11 | stub:resolver:phase-a | introduced | commit (R1 implementation commit on sprint branch) | notes: retiring R-move = R3; anchor = ARCHITECTURAL-REFACTOR.md § R1 → Phase A resolver stub
+- 2026-05-11 | stub:resolver:phase-a | introduced | commit 1192346 | notes: retiring R-move = R3; anchor = ARCHITECTURAL-REFACTOR.md § R1 → Phase A resolver stub
+- 2026-05-11 | R0 | in-progress → shipped | commit ac8dcb3 | notes: sprint 0001 closed; acceptance bullets — surrogate edge_id PK with multi-row (from_id,to_id,kind) inserts proven via test_incoming_callers_finds_bare_name_edges; 38-kind whitelist enforced by SQL CHECK; 13 symbol kinds; file_hashes.skipped_ranges; no in-place migration (Graph::open detects pre-R0 schema and surfaces wipe instruction)
+- 2026-05-11 | R1 | in-progress → shipped | commit 1192346 | notes: sprint 0001 closed; acceptance bullets — Edge struct-literal outside scope-core is a compile error (RawEdge pub(crate) fields + grep gate); Graph::insert_* accepts only InsertableEdge via sealed Insertable trait; EdgeBuilder<F,T,K,C,P,I> typestate requires from/to/kind/confidence/producer/pattern_id; EdgeBuilder exposes no .status(...); plugin/storage code routed through builder → resolve_stub flow; CI gates Edge sealed + Builder requires fields + Builder forbids status active in CI-GATES.md, aggregated under `just gate-refactor`

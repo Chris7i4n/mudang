@@ -41,7 +41,7 @@ by mudang's umbrella docs, not by `ARCHITECTURAL-REFACTOR.md`. Sprints
 | # | Sprint | Phase | R-moves | Status |
 |---|---|---|---|---|
 | 0000 | [Crate decomposition](./0000-phase-a-crate-decomposition.md) | A (internal, pre-R0) | — (structural) | shipped (2026-05-11) |
-| 0001 | [Schema and storage](./0001-phase-a-schema-and-storage.md) | A | R0, R1 | unstarted |
+| 0001 | [Schema and storage](./0001-phase-a-schema-and-storage.md) | A | R0, R1 | shipped (2026-05-11) |
 | 0002 | [Dispatch and workspace context](./0002-phase-b-dispatch-and-workspace-context.md) | B | R7, R4 | unstarted |
 | 0003 | [Typed plugin output and resolution pipeline](./0003-phase-b-typed-plugin-and-resolution.md) | B | R2, R3 | unstarted |
 | 0004 | [Trait closure and audit gates](./0004-phase-b-trait-closure-and-audits.md) | B | R9, R11, R12 | unstarted |
