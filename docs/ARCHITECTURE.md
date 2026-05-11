@@ -127,6 +127,9 @@ impl Composer {
 
 - the **composition logic** in `SCOPE-LSP-COMPOSITION.md` (modes 1–5,
   levels 0–3, the §17 decision tree, the §5.4 merge algorithms);
+- the **cross-language stitching layer** in
+  `CROSS-LANG-STITCHING.md` (anchor normalisers, JOIN, stitch cache,
+  `Composer::flow` and friends);
 - the **LSP cache** under `.mudang/lsp-cache/` (composition doc §6);
 - the **AST cache** when phase E lands;
 - the **event bus** for file-change and diagnostics events;
@@ -331,6 +334,8 @@ Everything else stays in orthogonal tools.
 - `ROADMAP.md` — when each piece is built.
 - `SCOPE-LSP-COMPOSITION.md` — how the composer composes (modes 1–5,
   levels 0–3, decision tree, merge algorithms).
+- `CROSS-LANG-STITCHING.md` — composer's anchor-string JOIN that
+  turns the polyglot graph into end-to-end cross-language flows.
 - `SUBSTRATE-PRIMARY.md` — daily workflow built on this architecture.
 - `gumiho-mudang-scope/docs/CHARTER.md` — what scope refuses to do.
 - `gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` — scope's

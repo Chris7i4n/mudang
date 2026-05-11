@@ -18,6 +18,9 @@ example: `docs/ARCHITECTURE.md` §3.1.
 
 - composition logic from `SCOPE-LSP-COMPOSITION.md` (modes 1–5,
   levels 0–3, §5.4 merge algorithms, §17 decision tree, §18 budget);
+- cross-language stitching logic from `CROSS-LANG-STITCHING.md`
+  (anchor normalisers, JOIN algorithm, `Composer::flow` /
+  `stitched_edges` / `unresolved_anchors`, stitch cache);
 - the LSP cache under `.mudang/lsp-cache/` (composition doc §6);
 - the convenient LSP-method wrappers (today nonexistent; built on
   top of `gumiho-mudang-lsp`'s basic-RPC layer);

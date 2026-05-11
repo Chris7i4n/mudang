@@ -13,7 +13,6 @@ Phase E acceptance is the entry condition. Every bullet below must hold before a
 - Every universal rule in the inventory tables (`CHARTER.md` §5 hard limits and `LANGUAGE-PLAYBOOK.md` Step 4) is in class 1 (mechanical), class 2 (detectable), or the explicit class-3 universal list (B1, C2, E3).
 - Every active language plugin's `docs/languages/<name>.md` has zero `NEEDS REVIEW` entries.
 - `scope audit confidence` exists and runs against the reference fixture corpus.
-- `scope status` reports schema version and refuses indices newer than the binary supports.
 - CI gates active: malformed-source (R6), trait-shape audit + spawn-denylist (R12), immutable-source (R9).
 - Full benchmark suite shows < 10% regression from pre-refactor baseline.
 
@@ -62,7 +61,7 @@ Per `LANGUAGE-PLAYBOOK.md` Step 6, each language plugin's depth queue lives in `
 ### Go (depth target)
 - Interface satisfaction via static method-set comparison only (per CHARTER §7's narrowed bound — pointer-vs-value, embedded-interface promotion across packages, generic type parameters are explicitly out)
 - Type embedding to method-promotion edges
-- `go func()` to `goroutine_spawn` edge kind
+- `go func()` to `green_thread_spawn` edge kind (renamed from `goroutine_spawn`; charter §7 Go section)
 - Channel send/receive edges (`channel_send`, `channel_recv`)
 - Build tag awareness (filter indexed files by `+build` / `//go:build`)
 - `go.mod` workspace and module resolution
@@ -99,7 +98,8 @@ Each framework adoption ships independently per `FRAMEWORK-PLAYBOOK.md` Step 5 (
 Cross-references so a future reader does not duplicate work:
 
 - **Resolution pass with confidence/status** — covered by R0 (schema) + R1 (builder) + R3 (typestate pipeline).
-- **Domain edge kinds** — covered by R0 (whitelist additions: 14 net-new).
+- **Domain edge kinds** — covered by R0 (whitelist additions: 31 net-new = `contains` universal + 30 domain across R0 baseline + Tier 1 + Tier 2 + Tier 3; final whitelist 38).
+- **Call-site argument capture** (`edges.args_text`) — covered by R0; consumed by framework predicates (R5) and downstream cross-language stitching.
 - **Config-file readers / WorkspaceContext** — covered by R4 (split into LanguageWorkspaceContext / FrameworkWorkspaceContext).
 - **Symbol metadata structured fields** (decorators, annotations, template_calls) — covered by R0 (schema doc) + R5 (framework consumption).
 - **Stable cross-session symbol IDs** — already shipped pre-refactor (`src/core/parser.rs:220`); maintained, not re-planned.

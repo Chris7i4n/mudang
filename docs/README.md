@@ -14,6 +14,7 @@ the order below for a clean mental model.
 | `SCOPE-LSP-COMPOSITION.md` | The design contract for composing scope + LSP. Largest doc; section index below. |
 | `SUBSTRATE-PRIMARY.md` | Daily workflow built on the architecture; RAM / GPU profiles; agent integration. |
 | `NOTIFY-API.md` | File-change events, cascade flow, daemon protocol, tier 2 wiring. |
+| `CROSS-LANG-STITCHING.md` | Composer mechanism for joining edges across language plugins via anchor strings (URL, queue, topic, env var). |
 | `EDIT-LAYER.md` | Phase E preliminary: AST edit primitives, safety gates, AST cache. |
 
 ---
@@ -104,6 +105,29 @@ File-change event API.
 - §16 what this API is not
 - §17 cross-refs
 
+### `CROSS-LANG-STITCHING.md`
+
+Composer-side anchor-string JOIN that turns the polyglot graph into
+end-to-end cross-language relationships.
+
+- §1 purpose; §2 layer ownership (lang plugin / framework plugin /
+  scope / composer / LSP)
+- §3 anchor types (HTTP, WS, bg job, pubsub, env, table, GraphQL,
+  flag, gRPC)
+- §4 normalisers per anchor (§4.1 URL + method with template-param
+  canonicalisation)
+- §5 algorithm + §5.1 cache (`.mudang/composer-cache/stitch.sqlite`,
+  notify-driven invalidation)
+- §6 confidence policy (`high` / `medium` / `low` / `drop`)
+- §7 failure modes (dynamic URL, microservices, wildcard route,
+  version mismatch)
+- §8 required scope fields (post-R0 + 0009)
+- §9 composer public API (`flow`, `stitched_edges`,
+  `unresolved_anchors`)
+- §10 coverage estimates per anchor
+- §11 non-goals (type shape match, runtime confirmation, cross-repo)
+- §12 cross-refs
+
 ### `EDIT-LAYER.md` (phase E preliminary)
 
 AST structural editing layer.
@@ -153,8 +177,6 @@ architecture discussion. See `todos/README.md` for the index.
   internal R-moves (R0–R12) executed during phase A.
 - `gumiho-mudang-scope/docs/POST-REFACTOR-PLAN.md` — what scope ships
   after R-moves complete.
-- `gumiho-mudang-scope/docs/SCHEMA-MIGRATION.md` — graph schema
-  history.
 
 ---
 
@@ -166,7 +188,7 @@ architecture discussion. See `todos/README.md` for the index.
   `ARCHITECTURE.md` §2.2 + `docs/todos/0006`–`0008`.
 - **"I want to implement phase C"**: `ARCHITECTURE.md` §3 + §4,
   `SCOPE-LSP-COMPOSITION.md` §17 (decision tree), `NOTIFY-API.md`,
-  `docs/todos/0005`, `0007`.
+  `CROSS-LANG-STITCHING.md`, `docs/todos/0005`, `0007`.
 - **"I want to implement phase D"**: `SCOPE-LSP-COMPOSITION.md` §14.5
   + `docs/todos/0004` + `SUBSTRATE-PRIMARY.md` §3.2.
 - **"I want to implement phase E"**: `EDIT-LAYER.md` (this directory).

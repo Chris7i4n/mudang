@@ -722,8 +722,7 @@ LSP responses are expensive. Mudang caches them under
    Scope's incremental indexer detects a change, all cache entries
    under `{old_hash}` are evicted in the same transaction.
 2. **Server version key** — `cache_root/version` records `{server,
-   server_version, scope_schema_version}`. Any change invalidates
-   everything.
+   server_version}`. Any change invalidates everything.
 3. **TTL fallback** — entries older than 30 days are evicted on next
    read regardless of hash.
 4. **Cross-file invalidation** — when a file's exports change (Scope

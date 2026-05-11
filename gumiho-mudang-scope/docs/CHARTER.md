@@ -72,7 +72,9 @@ A fourth, optional but high-priority question for prioritization:
 ```
 4. Does it model framework or domain semantics that LSP will never cover?
    (HTTP routes, queue handlers, ORM relations, migrations, cron jobs,
-    feature flags, component trees, goroutine spawns)
+    feature flags, component trees, green-thread spawns, middleware
+    chains, validators, error handlers, websocket handlers, client
+    routes, auth guards, cache bindings)
 ```
 
 If yes: this is the strongest moat Scope has against LSP. Prioritize.
@@ -110,7 +112,7 @@ These are the directions Scope can grow without breaking its identity. Sprints s
 | Direction | Cost | Strategic value |
 |---|---|---|
 | **Resolution pass** marking each `edge.to_id` as `resolved` / `ambiguous` / `dangling` with confidence (`high` / `medium` / `low`) | medium | +10–30% precision across all languages, additive to schema, no parser change |
-| **Domain edge kinds**: `http_route`, `queue_handler`, `orm_relation`, `migration`, `cron`, `feature_flag`, `goroutine_spawn`, `renders`, `awaits_on`, `hook_use`, `inherits_from`, `channel_send`, `channel_recv` (exhaustive list and migration in `ARCHITECTURAL-REFACTOR.md` R0) | low per kind (schema migration + small parser) | Strongest moat versus LSP; LSP will never cover this |
+| **Domain edge kinds** (30 total): R0 baseline 13 — `http_route`, `queue_handler`, `orm_relation`, `migration`, `cron`, `feature_flag`, `green_thread_spawn`, `renders`, `awaits_on`, `hook_use`, `inherits_from`, `channel_send`, `channel_recv`; Tier 1 — `middleware`, `validates_with`, `error_handler`, `websocket_handler`, `client_route`; Tier 2 — `auth_guard`, `cache_binding`, `runtime_task_spawn`, `route_mount`, `store_select`; Tier 3 — `sse_stream`, `signal_handler`, `cancel_token`, `lazy_load`, `query_binding`, `os_process_spawn`, `os_thread_spawn`. (Exhaustive list + 4-kind concurrency taxonomy in `ARCHITECTURAL-REFACTOR.md` R0.) | low per kind (schema migration + small parser) | Strongest moat versus LSP; LSP will never cover this |
 | **Config-file readers** (Cargo.toml, package.json, tsconfig.json, pyproject.toml, go.mod) for module hierarchy, workspace members, path aliases, external import marking | low | Unlocks correct cross-file and cross-crate resolution |
 | **Re-export resolution** (`pub use`, `export * from`, `export {x} from`, `__all__`) via static text following | low | Fixes a major precision gap with no compiler involvement |
 | **Doc-comment chain merging** (`///` chains, `//!` inner docs, JSDoc multi-line) | low | Improves docstring quality without semantic work |
@@ -186,7 +188,7 @@ Framework-version handling is **deliberately asymmetric**: framework plugins are
 **In scope:**
 - Interface satisfaction via **static method-set comparison only** — collect M's declared methods (name, parameter list as text, return list as text); collect I's declared methods (same shape); emit an `implements` edge with `confidence='medium'` when M's set covers I's set as plain text. **Out of bounds even within this row**: pointer-vs-value receiver semantics, embedded-interface promotion across packages, generic type parameters in either side, and any edge case requiring Go's actual method-set computation. Those are type-system territory and are rejected by section 5's "Trait/interface bound checking" hard limit. The IN row above is the syntactic shadow of the type-system rule, not the rule itself; a Go plugin that grew into "actual method-set semantics" is rejected as out-of-scope-permanent regardless of how useful it would be.
 - Type embedding to method-promotion edges
-- `go func()` to `goroutine_spawn` edge kind
+- `go func()` to `green_thread_spawn` edge kind (renamed from `goroutine_spawn`; same semantics — stackful M:N green thread — but the new name applies cleanly across Erlang/Elixir processes, JVM virtual threads, and any other stackful runtime)
 - Channel send/receive edges
 - Build tag awareness (filter indexed files by `+build` / `//go:build`)
 - `go.mod` workspace and module resolution
@@ -304,7 +306,7 @@ Charter changes are versioned by commit; there is no separate version number on 
 For context. These are the structural limits in the codebase as inherited and the reason the hard limits in section 5 are hard:
 
 - **`symbols.kind` is a closed `CHECK` list of 10 kinds** (`function`, `class`, `method`, `interface`, `struct`, `enum`, `const`, `type`, `property`, `variant`). Adding a kind requires a schema migration. Acceptable; just plan for it. The architectural refactor's R0 move adds three more (`macro`, `module`, `trait`) to remove the current coercion of Rust traits and Ruby modules into `interface`.
-- **`edges.kind` is a closed `CHECK` list of 7 kinds** (`calls`, `imports`, `extends`, `implements`, `instantiates`, `references`, `references_type`). Same — domain-edge expansion (section 6) requires migration. R0 lands the additions in one batch, including `contains` (universal lexical containment, currently absent from the whitelist even though every language plugin needs it).
+- **`edges.kind` is a closed `CHECK` list of 7 kinds** (`calls`, `imports`, `extends`, `implements`, `instantiates`, `references`, `references_type`). Same — domain-edge expansion (section 6) requires migration. R0 lands the additions in one batch (final whitelist: 38 kinds = 8 universal + 30 domain), including `contains` (universal lexical containment, currently absent from the whitelist even though every language plugin needs it).
 - **`edges` PK is `(from_id, to_id, kind)`**, which collapses multiple call sites between the same pair and prevents two HTTP routes binding to the same handler. R0 replaces the PK with a surrogate `edge_id` and a non-unique covering index, restoring per-line provenance.
 - **`symbol.id` format is `file::name::kind::line`** (`src/core/parser.rs:220`), where `line` is the declaration line, used as a uniqueness disambiguator. The earlier statement that the format was `file::name::kind` was a documentation gap; the line component is required for overload disambiguation and the ID is still stable across sessions because the declaration line moves only when the symbol itself is edited.
 - **`edges.to_id` is intentionally not a foreign key.** The schema explicitly tolerates dangling references. The resolution pass (section 6) is what closes this gap statically.

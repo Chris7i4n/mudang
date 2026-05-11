@@ -15,7 +15,6 @@ Entry point for the docs tree. If this is your first time, read in this order.
 
 - **`GLOSSARY.md`** — central term definitions across all docs (types, traits, processes, subcommands, classes of constraint).
 - **`CI-GATES.md`** — single source of truth for every CI gate the refactor turns on. Owned by R-moves; the `justfile` recipes mirror this doc.
-- **`SCHEMA-MIGRATION.md`** — user-facing UX for schema bumps (`scope migrate`, refusal messages, team workflow with committed `.scope/`).
 
 ## Static reference
 
@@ -30,7 +29,6 @@ These documents govern decisions; revise via explicit commit, not silent edit.
 | `POST-REFACTOR-PLAN.md` | Future work queued behind Phase E; does not authorize starting before |
 | `GLOSSARY.md` | Central term definitions |
 | `CI-GATES.md` | CI gate inventory; canonical script paths; allowlist convention |
-| `SCHEMA-MIGRATION.md` | User-facing UX for schema bumps (mismatch states, `scope migrate`, team workflow) |
 
 ## Runtime artifacts (created on demand, append-only)
 
@@ -66,7 +64,6 @@ The architectural refactor has not started shipping. Phase A (R0, R1) is the fir
 | A post-refactor work item | `POST-REFACTOR-PLAN.md` |
 | A refactor-move status transition | `REFACTOR-STATUS.md` |
 | An unfamiliar term used elsewhere | look up in `GLOSSARY.md`; if missing, add it |
-| User-facing schema-mismatch behavior | `SCHEMA-MIGRATION.md` |
 
 ## Outside this directory
 

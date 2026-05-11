@@ -644,7 +644,7 @@ With Tier 1 + Tier 2 kinds in R0, the following composition cases gain real powe
 | Case T `triggers` | Shows entry points (route / cron / queue) | Plus middleware chain, auth guards, error handlers — full reachability map |
 | Case M `api-surface` | Public symbols crossing module boundary | Plus the validation schema each endpoint accepts and the error responses it returns |
 | Case X `find-tests` | Tests calling the symbol | Plus tests calling the middleware / auth chain that wraps the symbol |
-| Case J `flow` cross-language | React component → ... → Django view | Plus React Router → API client → server route resolves cleanly via `client_route` ↔ `http_route` |
+| Case J `flow` cross-language | React component → ... → Django view | Plus React Router → API client → server route resolves cleanly via `client_route` ↔ `http_route`. Algorithm in `docs/CROSS-LANG-STITCHING.md` §4–§5; `args_text` + `framework` + `symbols.metadata` from this TODO are the inputs it consumes. |
 | Case W `xref-monorepo` | Cross-project refs | Plus middleware reuse across projects; auth guard sharing visible |
 | Case N `dead-code` | Symbols with zero inbound | Plus middleware never `.layer`ed; validators never bound |
 | Case P `health` | Diagnostics aggregate | Plus "this route has no auth_guard and no middleware" architectural lint |

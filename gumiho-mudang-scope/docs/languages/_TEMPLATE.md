@@ -68,7 +68,7 @@ For each edge kind, state the confidence rationale. Do not list a kind that this
 | implements | high \| medium | Direct `impl Trait for Type` (Rust): high. Method-set comparison (Go): medium. Document case-by-case. |
 | inherits_from | high | Type embedding (Go), mixin (where supported). |
 
-Language-specific edges (e.g., `goroutine_spawn`, `channel_send`, `hook_use`) are added here when applicable; each must already exist in the `edges.kind` whitelist (see `ARCHITECTURAL-REFACTOR.md` R0 for the post-refactor whitelist; the schema source of truth is `src/sql/schema.sql`).
+Language-specific edges (e.g., `green_thread_spawn`, `channel_send`, `hook_use`) are added here when applicable; each must already exist in the `edges.kind` whitelist (see `ARCHITECTURAL-REFACTOR.md` R0 for the post-refactor whitelist of 38 kinds — 8 universal + 30 domain across R0 baseline + Tier 1 + Tier 2 + Tier 3; the schema source of truth is `src/sql/schema.sql`).
 
 ---
 

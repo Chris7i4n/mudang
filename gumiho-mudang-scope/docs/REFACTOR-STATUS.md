@@ -18,7 +18,7 @@ Until the refactor closes (Phase E acceptance — see `ARCHITECTURAL-REFACTOR.md
 
 | ID | Title | Phase | Status | Commit | Date | Notes |
 |---|---|---|---|---|---|---|
-| R0 | Schema closures | A | unstarted | — | — | adds confidence/status/producer/pattern_id, surrogate edge_id PK, contains + 13 domain edge kinds, 3 new symbol kinds, skipped_ranges, schema_version 0→1 |
+| R0 | Schema closures | A | unstarted | — | — | adds confidence/status/producer/pattern_id/args_text, surrogate edge_id PK, contains + 30 domain edge kinds (R0 baseline 13 + Tier 1 5 + Tier 2 5 + Tier 3 7; final whitelist 38), `goroutine_spawn` renamed to `green_thread_spawn`, 4-kind concurrency split, 3 new symbol kinds, skipped_ranges. No in-place migration — old indexes are wiped and re-indexed |
 | R1 | Typed edge insertion API | A | unstarted | — | — | seals Edge; EdgeBuilder is sole producer of RawEdge; no .status() at extraction |
 | R2 | LanguagePlugin output type closure | B | unstarted | — | — | plugin returns RawCaptures; Extractor layer converts to Edge::builder() calls |
 | R3 | Pipeline ordering via type-state | B | unstarted | — | — | extract → resolve → write; resolution is sole producer of status |
@@ -31,15 +31,6 @@ Until the refactor closes (Phase E acceptance — see `ARCHITECTURAL-REFACTOR.md
 | R10 | Typed output schema | D | unstarted | — | — | output structs have no diagnostic-shaped fields |
 | R11 | Macro definition-only by trait shape | B | unstarted | — | — | LanguagePlugin trait has no expand_*/evaluate_* methods |
 | R12 | Type-system-free trait audit + spawn denylist | B | unstarted | — | — | trait-shape audit + Command::new denylist in plugin paths |
-
-## Schema version
-
-| Version | Status | R-move that bumped | Notes |
-|---|---|---|---|
-| 0 | current (legacy) | — | pre-R0; SQLite `PRAGMA user_version` unset, treated as 0 by R0's StatusData refusal logic |
-| 1 | target | R0 | bumps inside the R0 migration transaction |
-
-Subsequent schema-affecting refactors increment by 1 each. Future increments are recorded here when proposed; the binary's `EXPECTED_SCHEMA_VERSION` constant in `src/commands/status.rs` (introduced by R0) is the runtime source of truth.
 
 ## Status values
 

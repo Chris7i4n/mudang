@@ -20,7 +20,7 @@ When a term collides with a Rust crate name (`semver`, `tree-sitter`), the entry
 | **3-question test** | Quick eligibility check (no toolchain / static second pass / preserves invariants) | `CHARTER.md` §4 |
 | **4th question** | Priority booster: framework or domain semantics that LSP will never cover | `CHARTER.md` §4 |
 | **Universal edge** | Edge kind every language plugin emits: `calls`, `imports`, `contains`, `references`, `references_type`, `extends`, `implements`, `instantiates` | `LANGUAGE-PLAYBOOK.md` Step 5 + R0 |
-| **Domain edge** | Framework-specific edge: `http_route`, `queue_handler`, `orm_relation`, `goroutine_spawn`, `renders`, `hook_use`, `inherits_from`, `migration`, `cron`, `feature_flag`, `awaits_on`, `channel_send`, `channel_recv` | `CHARTER.md` §6 + R0 |
+| **Domain edge** | Framework-specific edge (30 total post-R0). R0 baseline (13): `http_route`, `queue_handler`, `orm_relation`, `green_thread_spawn`, `renders`, `hook_use`, `inherits_from`, `migration`, `cron`, `feature_flag`, `awaits_on`, `channel_send`, `channel_recv`. Tier 1 (5): `middleware`, `validates_with`, `error_handler`, `websocket_handler`, `client_route`. Tier 2 (5): `auth_guard`, `cache_binding`, `runtime_task_spawn`, `route_mount`, `store_select`. Tier 3 (7): `sse_stream`, `signal_handler`, `cancel_token`, `lazy_load`, `query_binding`, `os_process_spawn`, `os_thread_spawn`. | `CHARTER.md` §6 + R0 |
 | **Polyglot single graph** | All languages share one `symbols` / `edges` schema (charter invariant 4) | `CHARTER.md` §3 |
 | **Resolution pass** | Stage that lifts `RawEdge` to `InsertableEdge` by assigning `status` based on workspace symbol-table lookup | R3 |
 | **Typestate pipeline** | Extract → resolve → write enforced by Rust types: `RawCaptures` → `RawEdge` → `InsertableEdge` | R2 + R3 |
@@ -40,7 +40,7 @@ When a term collides with a Rust crate name (`semver`, `tree-sitter`), the entry
 | `MetadataField` | Entry inside `RawCaptures.metadata`: decorator / annotation / template_call | R2 + R0 |
 | `SkippedRange` | `{start_line, end_line, reason}` for partial-index recording | R0 + R6 |
 | `Symbol` | Graph node; carries `metadata: TEXT JSON` column | `CHARTER.md` Appendix A + R0 |
-| `Producer` | String identifier of producing plugin or layer (e.g., `rust_lang`, `python`, `framework:flask`, `resolution`, `legacy_backfill`) | R0 |
+| `Producer` | String identifier of producing plugin or layer (e.g., `rust_lang`, `python`, `framework:flask`, `resolution`) | R0 |
 | `pattern_id` | Short slug naming the pattern that produced the edge (e.g., `calls.method`, `http_route.decorator_literal`) | R0 |
 | `capture_id` | Tree-sitter capture name when applicable (`@call`, `@http_route`) | R0 |
 | `Pattern` | Framework pattern struct: `{id, edge_kind, available_in, predicate}` | R5 |
@@ -82,17 +82,15 @@ When a term collides with a Rust crate name (`semver`, `tree-sitter`), the entry
 
 ---
 
-## Schema and migration
+## Schema
 
 | Term | Definition | Source |
 |---|---|---|
-| `schema_version` | Field on `StatusData`; mirrors SQLite `PRAGMA user_version` | R0 |
-| `EXPECTED_SCHEMA_VERSION` | Binary's compiled constant; refusal happens when `user_version > EXPECTED_SCHEMA_VERSION` | R0 + `SCHEMA-MIGRATION.md` |
 | `StatusData` | Struct returned by `scope status` (`src/commands/status.rs`) | R0 |
 | `file_hashes.skipped_ranges` | JSON column with `[{start_line, end_line, reason}]` | R0 + R6 |
 | Surrogate PK | `edges.edge_id INTEGER PRIMARY KEY AUTOINCREMENT`; replaces composite `(from_id, to_id, kind)` | R0 |
-| Atomic migration | Single migration script wrapped in transaction with version bump | R0 + `SCHEMA-MIGRATION.md` |
-| Conservative backfill | Default values for legacy rows: `confidence='low'`, `status='dangling'`, `producer='legacy_backfill'`, `pattern_id='legacy'` | R0 |
+| `edges.args_text` | Optional TEXT NULL column carrying call-site / declaration-site argument literal capped at 2 KB. Mitigation 1: resolver skips fully-qualified targets. Mitigation 2: truncated literals end in `[truncated]`. Consumed by framework predicates and downstream cross-language stitching | R0 |
+| Schema bumps | No in-place migration. Scope is pre-1.0 single-user; old `.scope/` indexes are wiped (`rm -rf .scope/ && scope index`). Revisit when first external user files a trigger | R0 |
 
 ---
 
@@ -104,7 +102,8 @@ When a term collides with a Rust crate name (`semver`, `tree-sitter`), the entry
 | `FrameworkPlugin` | Trait owned by R5; consumes `&[Symbol]` and `&[Edge]`, never AST | R5 |
 | `Extractor` | Layer that converts `RawCaptures` to `EdgeBuilder` calls (post-R2) | R2 |
 | `SupportedLanguage` | Enum in `src/core/parser.rs`: `TypeScript`, `CSharp`, `Python`, `Go`, `Java`, `Rust`, `Ruby`. JavaScript is not a variant today | R5 + `FRAMEWORK-PLAYBOOK.md` § "Language scope" |
-| `EdgeKind` | Closed whitelist; post-R0 = 21 kinds (8 universal + 13 domain) | R0 |
+| `EdgeKind` | Closed whitelist; post-R0 = 38 kinds (8 universal + 30 domain across R0 baseline + Tier 1 + Tier 2 + Tier 3) | R0 |
+| 4-kind concurrency split | `os_process_spawn` / `os_thread_spawn` / `green_thread_spawn` / `runtime_task_spawn`; producer-side plugin picks one based on stack ownership + scheduler + sync-block safety, not surface API spelling | R0 |
 | `kind` (symbols) | Closed whitelist; post-R0 = 13 kinds (10 legacy + `macro`, `module`, `trait`) | R0 |
 | Reserved metadata keys | `decorators`, `annotations`, `template_calls`; populated by language plugin, consumed by framework plugin. All three template-system-agnostic — `template_calls` covers JSX, ERB partials, Jinja includes, HEEx components, etc. | R0 + R5 |
 
@@ -133,9 +132,8 @@ When a term collides with a Rust crate name (`semver`, `tree-sitter`), the entry
 
 | Term | Definition | Source |
 |---|---|---|
-| `scope status` | Reports schema version + index health; refuses newer schema | R0 + `SCHEMA-MIGRATION.md` |
+| `scope status` | Reports index health | R0 |
 | `scope index` | Builds `.scope/`; `--watch` mode polls filesystem | `CHARTER.md` §3 |
-| `scope migrate` | Runs forward schema migration in place; atomic | R0 + `SCHEMA-MIGRATION.md` |
 | `scope audit confidence` | Precision report per `(kind, tier, producer, pattern_id)`; not recall | R8 |
 | `scope audit coverage` (planned) | Recall-side report: edges emitted per pattern per fixture | `POST-REFACTOR-PLAN.md` |
 | `scope link` (planned) | Cross-project edges; mono-repo / microservice graph | `CHARTER.md` §6 |

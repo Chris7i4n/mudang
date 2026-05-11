@@ -14,7 +14,6 @@ When a gate is active, the script or test path listed below is the **authoritati
 | Builder requires fields | R1 | compile-fail test in `tests/compile_fail/` | `EdgeBuilder::build()` succeeds without `confidence` / `producer` / `pattern_id` | `just test-builder` | planned (Phase A) |
 | Builder forbids status | R1 | compile-fail test | `EdgeBuilder::status(...)` compiles | `just test-builder` | planned (Phase A) |
 | Insertable typestate | R3 | compile-fail test | `Graph::insert(RawEdge)` compiles; `InsertableEdge` constructor reachable outside resolver | `just test-typestate` | planned (Phase B) |
-| Schema-version refusal | R0 | integration test in `tests/integration/schema_version.rs` | `scope status` runs against index whose `user_version > EXPECTED_SCHEMA_VERSION` | `just test-schema` | planned (Phase A) |
 | Trait-shape audit | R12 | `scripts/audit_trait_shape.sh` | `LanguagePlugin` / `Extractor` has method named `infer_*`, `evaluate_*`, `solve_*`, `narrow_*`, `resolve_overload_*`, `expand_*` | `just ci-trait-shape` | planned (Phase B) |
 | Process-spawn denylist | R12 | `scripts/audit_no_spawn.sh` | `Command::new(`, `process::Command`, `std::process::Command` appears in `src/languages/`, `src/frameworks/`, `src/core/parser.rs`, `src/core/extract*.rs`, `src/core/resolve*.rs` (excluding allowlist-tagged sites) | `just ci-no-spawn` | planned (Phase B) |
 | Network denylist | R12 | `scripts/audit_no_network.sh` | `std::net::*`, `reqwest`, `hyper`, `tokio::net`, `ureq` linked into plugin / extractor / query paths | `just ci-no-network` | planned (Phase B) |
@@ -59,7 +58,7 @@ The recipes are thin. The doc is canonical; the recipes call out to the canonica
 
 ```just
 # Run every active CI gate. CI calls this; humans can too.
-ci-gates: ci-trait-shape ci-no-spawn ci-no-network ci-immutable ci-context-shape ci-no-fs ci-dispatch ci-edge-sealed ci-no-framework-scm ci-patterns ci-output-schema test-builder test-typestate test-schema test-malformed
+ci-gates: ci-trait-shape ci-no-spawn ci-no-network ci-immutable ci-context-shape ci-no-fs ci-dispatch ci-edge-sealed ci-no-framework-scm ci-patterns ci-output-schema test-builder test-typestate test-malformed
 
 ci-trait-shape:
     ./scripts/audit_trait_shape.sh
@@ -99,9 +98,6 @@ test-builder:
 
 test-typestate:
     cargo test --test compile_fail_typestate
-
-test-schema:
-    cargo test --test schema_version
 
 test-malformed:
     cargo test --test malformed_sources
