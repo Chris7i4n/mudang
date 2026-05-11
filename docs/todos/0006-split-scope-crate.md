@@ -2,7 +2,7 @@
 
 - **Status:** TODO (phase A internal)
 - **Decision:** decompose the current monolithic `gumiho-mudang-scope` crate into focused sub-crates so the AST edit crate (phase E) and the composer (phase C) can depend only on what they need.
-- **Tracking:** _<issue / PR link to be added>_
+- **Tracking:** branch `refactor/sprint-0000-crate-decomposition` (opened 2026-05-11)
 
 ## Decision
 
