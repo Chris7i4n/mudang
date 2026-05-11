@@ -18,27 +18,35 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-# Allowed construction sites (owning modules).
-ALLOW=(
+# Allowed construction sites (owning modules — exact relative paths,
+# not basename excludes, so accidental `types.rs` elsewhere in the
+# workspace is not silently allowlisted).
+ALLOW_PATHS=(
     "gumiho-mudang-scope/scope-core/src/edge.rs"
     "gumiho-mudang-scope/scope-core/src/types.rs"
 )
-
-# Build a grep --exclude argument for each allowed file.
-GREP_EXCLUDES=()
-for path in "${ALLOW[@]}"; do
-    GREP_EXCLUDES+=(--exclude="$(basename "$path")")
-done
 
 # Patterns that indicate struct-literal construction of the sealed types.
 # Match identifier boundary so we don't catch `EdgeKind {` or comments.
 PATTERN='\b(Edge|RawEdge|InsertableEdge)[[:space:]]*\{'
 
 cd "$ROOT"
+
+# Build an awk filter that strips lines whose file path matches one
+# of the exact allowlisted paths (grep -n emits `path:lineno:content`,
+# split on the first colon).
+ALLOW_AWK=$(printf '%s\n' "${ALLOW_PATHS[@]}" | awk 'BEGIN{ORS="|"}{print}' | sed 's/|$//')
+
 hits=$(grep -RnE "$PATTERN" \
     --include='*.rs' \
-    "${GREP_EXCLUDES[@]}" \
     gumiho-mudang-scope/ gumiho-mudang-cli/ gumiho-mudang-lsp/ 2>/dev/null \
+    | awk -F: -v allow="$ALLOW_AWK" '
+        BEGIN {
+            n = split(allow, a, "|")
+            for (i = 1; i <= n; i++) blocked[a[i]] = 1
+        }
+        { if (!($1 in blocked)) print }
+      ' \
     | grep -vE '^[^:]+:[0-9]+:[[:space:]]*//' \
     | grep -vE -- '->[[:space:]]*(Vec<)?(&\[)?(Edge|RawEdge|InsertableEdge)' \
     | grep -vE -- '(impl|for|trait|where|<|where[[:space:]]+[A-Za-z_]+:)[[:space:]]+(Edge|RawEdge|InsertableEdge)' \
@@ -49,7 +57,7 @@ if [[ -n "$hits" ]]; then
     echo "CI gate FAILED: Edge sealed (R1)" >&2
     echo "" >&2
     echo "Found struct-literal construction of Edge / RawEdge / InsertableEdge" >&2
-    echo "outside the owning modules (${ALLOW[*]}):" >&2
+    echo "outside the owning modules (${ALLOW_PATHS[*]}):" >&2
     echo "" >&2
     echo "$hits" >&2
     echo "" >&2
@@ -58,4 +66,4 @@ if [[ -n "$hits" ]]; then
     exit 1
 fi
 
-echo "edge-sealed: OK (no struct-literal construction outside ${ALLOW[*]})"
+echo "edge-sealed: OK (no struct-literal construction outside ${ALLOW_PATHS[*]})"
