@@ -10,7 +10,6 @@ publish.workspace = true
 [dependencies]
 # Sibling sub-crates
 scope-core = { path = "../scope-core" }
-scope-graph = { path = "../scope-graph" }
 
 # Storage (FTS5 lives in the same SQLite as the graph)
 rusqlite = { workspace = true }
