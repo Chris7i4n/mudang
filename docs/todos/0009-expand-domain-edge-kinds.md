@@ -1,8 +1,11 @@
 # 0009 — Expand domain edge kinds to maximize Rails / Tokio / Axum / React coverage
 
-- **Status:** TODO (reopens scope's `ARCHITECTURAL-REFACTOR.md` R0 whitelist before R0 ships)
+- **Status:** **ABSORBED** by `gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` R0. Every recommendation in this TODO (38-kind whitelist, 4-kind concurrency split, `green_thread_spawn` rename, `edges.args_text` column with Mitigations 1+2) is now part of R0's "Target state". R0 ships in sprint 0001 ([`gumiho-mudang-scope/docs/sprints/0001-phase-a-schema-and-storage.md`](../../gumiho-mudang-scope/docs/sprints/0001-phase-a-schema-and-storage.md)).
+- **Original request:** reopen scope's `ARCHITECTURAL-REFACTOR.md` R0 whitelist before R0 ships.
 - **Decision:** the 14 net-new edge kinds proposed by R0 cover the first-tier patterns of common stacks but leave production-critical patterns (middleware, validation, error handlers, websocket, client-side routing, auth guards, async task spawn naming) on `calls` generic, where scope's value-add over LSP collapses.
-- **Tracking:** _<scope-side issue / PR link to be added>_
+- **Tracking:** implementation moved to scope sprint 0001's R0 deliverables; this file remains the historical rationale.
+
+> **Reader note.** This document is kept for the audit trail — it captures the *why* behind R0's final whitelist. Cross-references to this file are historical rationale only; the live contract is R0 in `ARCHITECTURAL-REFACTOR.md`, shipped by sprint 0001.
 
 ---
 
@@ -19,7 +22,10 @@ Patterns that fall into the generic `calls` edge force consumers to re-derive st
 - **scope-side**: `gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` R0 whitelist + matching migration. The decision is scope's; this TODO is mudang's recorded position arguing for the expansion.
 - **mudang-side**: every composition case that depends on filtering by edge kind (Case T `triggers`, Case M `api-surface`, Case X `find-tests`, Case J `flow`, Case W `xref-monorepo`) gets richer when the kind list distinguishes middleware from handler, validation from data, auth-guard from route, etc.
 
-This is a **pre-R0 amendment** request, not a post-R0 follow-up. The cost of fixing later is another full migration pass.
+At the time this was written, it was a **pre-R0 amendment** request,
+not a post-R0 follow-up. That request is now resolved: the final R0
+target state carries the 38-kind whitelist, so implementation tracking
+lives in sprint 0001.
 
 ---
 
@@ -652,20 +658,22 @@ With Tier 1 + Tier 2 kinds in R0, the following composition cases gain real powe
 
 ---
 
-## Recommendation
+## Resolved handoff
 
-1. **Open scope-side issue** against `gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` R0 requesting:
-   - Rename `goroutine_spawn` → `green_thread_spawn` in the R0 baseline (no count change).
-   - Tier 1 (5 kinds) merged into the whitelist before R0 ships.
-   - Tier 2 (5 kinds, including `runtime_task_spawn`) merged in the same R0 transaction.
-   - Tier 3 (7 kinds, including `os_thread_spawn` and `os_process_spawn`) merged in the same R0 transaction so the spawn taxonomy is final at migration time.
-   - `edges.args_text TEXT NULL` column added to the R0 migration (per "R0 schema addition required").
+1. The scope-side R0 target state now owns the final whitelist:
+   `green_thread_spawn`, the Tier 1/2/3 domain kinds, and the full
+   spawn taxonomy are part of the R0 migration contract.
 
-2. **Cross-link** this TODO from `gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` R0 section once the scope-side discussion opens, so the audit trail is complete.
+2. `edges.args_text TEXT NULL`, including the truncation and
+   resolver-skip mitigations described above, is part of R0's schema
+   target state.
 
-3. **Lock R0 migration only after** the whitelist debate settles. Phase A of mudang's roadmap waits on R0 acceptance; expanding now is cheaper than re-migrating later.
+3. Phase A's implementation tracking is sprint 0001, not a separate
+   TODO or follow-up issue. Mudang's composer work waits for R0 to ship
+   on `main`.
 
-4. **Document the chosen tier list** in scope's CHARTER §6 soft-expansion zone update or in the per-framework docs under `gumiho-mudang-scope/docs/frameworks/`.
+4. This file is retained as audit rationale for why R0's whitelist is
+   broader than the initial 14-kind proposal.
 
 ---
 

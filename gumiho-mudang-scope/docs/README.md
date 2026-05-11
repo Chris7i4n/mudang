@@ -6,10 +6,11 @@ Entry point for the docs tree. If this is your first time, read in this order.
 
 1. **`CHARTER.md`** — what Scope is, what it is not, hard limits, soft expansion zone, per-language IN/OUT. Permanent constraints; revisions require explicit charter-amendment commits per CHARTER §11.
 2. **`ARCHITECTURAL-REFACTOR.md`** — the structural closure that mechanically enforces charter rules and the playbook boundaries (R0–R12 across phases A–E). **Active work item.** Until Phase E ships, feature work is paused.
-3. **`REFACTOR-STATUS.md`** — current state of each refactor move and phase. Append-only progress log.
-4. **`LANGUAGE-PLAYBOOK.md`** — how to add and maintain a language plugin within the 18 universal boundaries.
-5. **`FRAMEWORK-PLAYBOOK.md`** — how to add and maintain a framework plugin within the 15 gotcha categories. Includes version-strategy rules (A/B/C) and unknown-version policy.
-6. **`POST-REFACTOR-PLAN.md`** — work queued for after Phase E acceptance. No item starts before then.
+3. **`sprints/README.md`** — linear, sequential sprint plan that decomposes the refactor into shippable units. Source of truth for **ordering**; the R-moves' acceptance criteria still live in `ARCHITECTURAL-REFACTOR.md`.
+4. **`REFACTOR-STATUS.md`** — current state of each refactor move and phase. Append-only progress log. Sprints report into this document.
+5. **`LANGUAGE-PLAYBOOK.md`** — how to add and maintain a language plugin within the 18 universal boundaries.
+6. **`FRAMEWORK-PLAYBOOK.md`** — how to add and maintain a framework plugin within the 15 gotcha categories. Includes version-strategy rules (A/B/C) and unknown-version policy.
+7. **`POST-REFACTOR-PLAN.md`** — work queued for after Phase E acceptance. No item starts before then.
 
 ## Reference docs (read on demand)
 
@@ -24,6 +25,7 @@ These documents govern decisions; revise via explicit commit, not silent edit.
 |---|---|
 | `CHARTER.md` | Mission, hard limits, soft expansion, per-language IN/OUT, moats vs LSP, amendment rule |
 | `ARCHITECTURAL-REFACTOR.md` | R0–R12 mechanical/detectable closure, type-state pipeline, schema design, phase order |
+| `sprints/` | Sequential delivery plan; one file per sprint; links into the docs above; never restates rules |
 | `LANGUAGE-PLAYBOOK.md` | 18 universal language-plugin rules, language-adoption flow, per-language doc structure |
 | `FRAMEWORK-PLAYBOOK.md` | Framework adoption flow, version strategies, unknown-version policy, 15 gotcha categories |
 | `POST-REFACTOR-PLAN.md` | Future work queued behind Phase E; does not authorize starting before |
@@ -49,7 +51,12 @@ These documents govern decisions; revise via explicit commit, not silent edit.
 
 ## Current state
 
-The architectural refactor has not started shipping. Phase A (R0, R1) is the first batch. See `REFACTOR-STATUS.md` for the live snapshot. Until the refactor closes, plugin authoring follows the pre-refactor trait shapes (see `LANGUAGE-PLAYBOOK.md` Step 5 pre-R2 vs post-R2 sections).
+The architectural refactor has not started shipping. Sprint 0000
+(crate decomposition) is the structural prerequisite inside mudang's
+Phase A; sprint 0001 (R0, R1) is the first R-move batch. See
+`REFACTOR-STATUS.md` for the live R-move snapshot. Until the refactor
+closes, plugin authoring follows the pre-refactor trait shapes (see
+`LANGUAGE-PLAYBOOK.md` Step 5 pre-R2 vs post-R2 sections).
 
 ## Where to put a new note
 
@@ -58,11 +65,12 @@ The architectural refactor has not started shipping. Phase A (R0, R1) is the fir
 | Why a feature is permanent out-of-scope | `CHARTER.md` §5 (charter-amendment commit) |
 | A new mechanically enforced rule | propose a new R-move via amendment to `ARCHITECTURAL-REFACTOR.md` |
 | A new CI gate | row in `CI-GATES.md` (status `planned` until shipped) |
+| Sprint sequencing / scope / ordering | `sprints/` (one file per sprint; never duplicate rules) |
 | A friction event for a candidate plugin | the matching trigger log |
 | A verdict on a candidate plugin | the matching decision log |
 | A per-plugin gotcha or rule-temptation rejection | the per-instance doc (`languages/<name>.md` or `frameworks/<name>.md`) |
 | A post-refactor work item | `POST-REFACTOR-PLAN.md` |
-| A refactor-move status transition | `REFACTOR-STATUS.md` |
+| A refactor-move status transition | `REFACTOR-STATUS.md` (sprints report into this) |
 | An unfamiliar term used elsewhere | look up in `GLOSSARY.md`; if missing, add it |
 
 ## Outside this directory

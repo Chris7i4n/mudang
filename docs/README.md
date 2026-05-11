@@ -121,7 +121,7 @@ end-to-end cross-language relationships.
 - §6 confidence policy (`high` / `medium` / `low` / `drop`)
 - §7 failure modes (dynamic URL, microservices, wildcard route,
   version mismatch)
-- §8 required scope fields (post-R0 + 0009)
+- §8 required scope fields (post-R0; 0009 absorbed into R0)
 - §9 composer public API (`flow`, `stitched_edges`,
   `unresolved_anchors`)
 - §10 coverage estimates per anchor
@@ -166,7 +166,7 @@ architecture discussion. See `todos/README.md` for the index.
 | 0006 | Split `gumiho-mudang-scope` into focused sub-crates                            | TODO   |
 | 0007 | Create `gumiho-mudang-composer` crate                                          | TODO   |
 | 0008 | Constrain `gumiho-mudang-lsp` to basic-RPC primitives                          | TODO   |
-| 0009 | Expand R0 domain edge kinds to cover Rails/Tokio/Axum/React patterns          | TODO   |
+| 0009 | Expand R0 domain edge kinds to cover Rails/Tokio/Axum/React patterns          | ABSORBED into R0 (ships in scope sprint 0001) |
 
 ---
 
