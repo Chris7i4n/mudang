@@ -17,8 +17,8 @@ use anyhow::Result;
 use std::collections::HashMap;
 use tree_sitter::Language;
 
-use crate::core::graph::Edge;
-use crate::core::parser::SupportedLanguage;
+use crate::types::Edge;
+use crate::parser::SupportedLanguage;
 
 /// Trait that each language plugin implements.
 ///

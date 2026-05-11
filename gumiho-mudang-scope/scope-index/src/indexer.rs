@@ -10,10 +10,11 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::time::Instant;
 
-use crate::config::ProjectConfig;
-use crate::core::graph::{Edge, Graph, Symbol};
-use crate::core::parser::{CodeParser, SupportedLanguage};
-use crate::core::searcher::Searcher;
+use scope_core::config::ProjectConfig;
+use scope_core::{Edge, Symbol};
+use scope_graph::graph::Graph;
+use scope_core::parser::{CodeParser, SupportedLanguage};
+use scope_search::searcher::Searcher;
 
 /// Statistics from an indexing run.
 #[derive(Debug, Default)]

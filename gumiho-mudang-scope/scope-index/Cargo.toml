@@ -11,6 +11,7 @@ publish.workspace = true
 # Sibling sub-crates
 scope-core = { path = "../scope-core" }
 scope-graph = { path = "../scope-graph" }
+scope-search = { path = "../scope-search" }
 
 # Storage
 rusqlite = { workspace = true }
@@ -33,3 +34,6 @@ notify-debouncer-mini = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

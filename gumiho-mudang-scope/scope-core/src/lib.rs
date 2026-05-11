@@ -10,3 +10,6 @@
 pub mod config;
 pub mod languages;
 pub mod parser;
+pub mod types;
+
+pub use types::{Edge, Symbol};

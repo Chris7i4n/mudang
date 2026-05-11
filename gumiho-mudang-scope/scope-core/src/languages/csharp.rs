@@ -8,8 +8,8 @@ use serde::Serialize;
 use std::collections::HashMap;
 use tree_sitter::Language;
 
-use crate::core::graph::{Edge, Symbol};
-use crate::core::parser::SupportedLanguage;
+use crate::types::{Edge, Symbol};
+use crate::parser::SupportedLanguage;
 use crate::languages::{make_edge, resolve_scope_id, LanguagePlugin};
 
 /// C# language plugin.

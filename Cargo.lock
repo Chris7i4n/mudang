@@ -692,29 +692,11 @@ dependencies = [
 name = "gumiho-mudang-scope"
 version = "0.1.0"
 dependencies = [
- "anyhow",
- "hex",
- "ignore",
- "notify",
- "notify-debouncer-mini",
- "rayon",
- "rusqlite",
- "serde",
- "serde_json",
- "sha2",
- "streaming-iterator",
- "tempfile",
- "thiserror",
- "toml",
- "tracing",
- "tree-sitter",
- "tree-sitter-c-sharp",
- "tree-sitter-go",
- "tree-sitter-java",
- "tree-sitter-python",
- "tree-sitter-ruby",
- "tree-sitter-rust",
- "tree-sitter-typescript",
+ "scope-core",
+ "scope-graph",
+ "scope-index",
+ "scope-search",
+ "scope-workspace",
 ]
 
 [[package]]
@@ -1432,6 +1414,7 @@ dependencies = [
  "serde",
  "serde_json",
  "streaming-iterator",
+ "tempfile",
  "thiserror",
  "toml",
  "tracing",
@@ -1454,6 +1437,7 @@ dependencies = [
  "scope-core",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
  "tracing",
 ]
@@ -1471,9 +1455,11 @@ dependencies = [
  "rusqlite",
  "scope-core",
  "scope-graph",
+ "scope-search",
  "serde",
  "serde_json",
  "sha2",
+ "tempfile",
  "thiserror",
  "tracing",
 ]
@@ -1502,6 +1488,7 @@ dependencies = [
  "scope-graph",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
  "tracing",
 ]

@@ -9,8 +9,8 @@ use serde::Serialize;
 use std::collections::HashMap;
 use tree_sitter::Language;
 
-use crate::core::graph::Edge;
-use crate::core::parser::SupportedLanguage;
+use crate::types::Edge;
+use crate::parser::SupportedLanguage;
 use crate::languages::{make_edge, resolve_scope_id, LanguagePlugin};
 
 /// Java language plugin.

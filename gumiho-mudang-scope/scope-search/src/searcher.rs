@@ -14,9 +14,9 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::path::Path;
 
-use crate::core::embedder::build_embedding_text;
-use crate::core::graph::Symbol;
-use crate::languages::stopwords_for_language;
+use crate::embedder::build_embedding_text;
+use scope_core::Symbol;
+use scope_core::languages::stopwords_for_language;
 
 /// A single result from a search query.
 #[derive(Debug, Clone, Serialize)]
@@ -141,7 +141,7 @@ impl Searcher {
 
         let (first_party, vendor): (Vec<_>, Vec<_>) = results
             .into_iter()
-            .partition(|r| !crate::config::project::is_vendor_path(&r.file_path, vendor_patterns));
+            .partition(|r| !scope_core::config::project::is_vendor_path(&r.file_path, vendor_patterns));
 
         let mut combined = first_party;
         combined.extend(vendor);
@@ -324,7 +324,7 @@ fn expand_token(token: &str) -> Vec<String> {
     terms.push(format!("{cleaned}*"));
 
     // Also split camelCase and add component words (min 3 chars)
-    let split = crate::core::embedder::split_camel_case(&cleaned);
+    let split = crate::embedder::split_camel_case(&cleaned);
     for word in split.split_whitespace() {
         let lower = word.to_lowercase();
         if lower != cleaned.to_lowercase() && lower.len() >= 3 {
@@ -334,7 +334,7 @@ fn expand_token(token: &str) -> Vec<String> {
 
     // Also split snake_case and add component words
     if cleaned.contains('_') {
-        for word in crate::core::embedder::split_snake_case(&cleaned).split_whitespace() {
+        for word in crate::embedder::split_snake_case(&cleaned).split_whitespace() {
             let lower = word.to_lowercase();
             if lower.len() >= 3 {
                 terms.push(format!("{lower}*"));

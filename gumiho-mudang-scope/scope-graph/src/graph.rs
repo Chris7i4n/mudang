@@ -4,6 +4,12 @@
 //! for refs, deps, rdeps, and impact analysis.
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection, OptionalExtension};
+// Re-export so pre-split callers reaching for `scope_graph::graph::Symbol`
+// (and via the façade, `gumiho_mudang_scope::core::graph::Symbol`) keep
+// resolving. The structs themselves live in scope-core; this preserves
+// the 1:1 public-surface promise in TODO 0006 § Sprint 0000 ambiguity
+// resolutions § 2.
+pub use scope_core::{Edge, Symbol};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
@@ -11,48 +17,6 @@ use std::path::Path;
 /// The dependency graph backed by SQLite.
 pub struct Graph {
     conn: Connection,
-}
-
-/// A code symbol extracted from source and stored in the graph.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Symbol {
-    /// Unique identifier: `"{file_path}::{name}::{kind}"`.
-    pub id: String,
-    /// The symbol name (e.g. `PaymentService`, `processPayment`).
-    pub name: String,
-    /// The kind of symbol (function, class, method, etc.).
-    pub kind: String,
-    /// File path relative to project root, always forward slashes.
-    pub file_path: String,
-    /// First line of the symbol definition (1-based).
-    pub line_start: u32,
-    /// Last line of the symbol definition (1-based).
-    pub line_end: u32,
-    /// Full type signature where available.
-    pub signature: Option<String>,
-    /// Extracted doc comment.
-    pub docstring: Option<String>,
-    /// Parent symbol ID (e.g. class ID for a method).
-    pub parent_id: Option<String>,
-    /// Source language.
-    pub language: String,
-    /// JSON blob with modifiers, parameters, return type, etc.
-    pub metadata: String,
-}
-
-/// A relationship between two symbols.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Edge {
-    /// Source symbol ID.
-    pub from_id: String,
-    /// Target symbol ID (may reference external symbols not in the index).
-    pub to_id: String,
-    /// Edge kind: calls, imports, extends, implements, instantiates, references, references_type.
-    pub kind: String,
-    /// File where this edge was observed.
-    pub file_path: String,
-    /// Line number where the edge was observed.
-    pub line: Option<u32>,
 }
 
 /// Result of comparing current file hashes against the stored index.
@@ -188,23 +152,23 @@ pub struct TraceResult {
     pub paths: Vec<CallPath>,
 }
 
-impl Symbol {
-    /// Build a `Symbol` from a rusqlite row.
-    pub fn from_row(row: &rusqlite::Row) -> rusqlite::Result<Self> {
-        Ok(Self {
-            id: row.get("id")?,
-            name: row.get("name")?,
-            kind: row.get("kind")?,
-            file_path: row.get("file_path")?,
-            line_start: row.get("line_start")?,
-            line_end: row.get("line_end")?,
-            signature: row.get("signature")?,
-            docstring: row.get("docstring")?,
-            parent_id: row.get("parent_id")?,
-            language: row.get("language")?,
-            metadata: row.get("metadata")?,
-        })
-    }
+/// Build a `Symbol` from a rusqlite row. `Symbol` lives in `scope-core`
+/// (no rusqlite dep); this helper bridges the row → struct in
+/// scope-graph where `rusqlite` is already a dependency.
+fn symbol_from_row(row: &rusqlite::Row) -> rusqlite::Result<Symbol> {
+    Ok(Symbol {
+        id: row.get("id")?,
+        name: row.get("name")?,
+        kind: row.get("kind")?,
+        file_path: row.get("file_path")?,
+        line_start: row.get("line_start")?,
+        line_end: row.get("line_end")?,
+        signature: row.get("signature")?,
+        docstring: row.get("docstring")?,
+        parent_id: row.get("parent_id")?,
+        language: row.get("language")?,
+        metadata: row.get("metadata")?,
+    })
 }
 
 /// SQL `CASE` fragment that ranks file paths so canonical source dirs win
@@ -257,7 +221,7 @@ impl Graph {
 
     /// Create the schema tables and indexes if they do not exist.
     fn ensure_schema(conn: &Connection) -> Result<()> {
-        conn.execute_batch(include_str!("../sql/schema.sql"))?;
+        conn.execute_batch(include_str!("sql/schema.sql"))?;
         Ok(())
     }
 
@@ -284,7 +248,7 @@ impl Graph {
                     path_priority_sql = path_priority_case_sql("file_path"),
                 ),
                 params![name],
-                Symbol::from_row,
+                symbol_from_row,
             )
             .optional()?;
 
@@ -301,7 +265,7 @@ impl Graph {
                      JOIN symbols parent ON s.parent_id = parent.id
                      WHERE parent.name = ?1 AND s.name = ?2",
                     params![class, method],
-                    Symbol::from_row,
+                    symbol_from_row,
                 )
                 .optional()
                 .map_err(Into::into);
@@ -321,7 +285,7 @@ impl Graph {
                 // "find_symbol" matching "find_symbol_by_id_prefix".
                 "SELECT * FROM symbols WHERE (id = ?1 OR substr(id, 1, length(?1) + 2) = ?1 || '::') LIMIT 1",
                 params![prefix],
-                Symbol::from_row,
+                symbol_from_row,
             )
             .optional()
             .map_err(Into::into)
@@ -340,7 +304,7 @@ impl Graph {
             path_priority_sql = path_priority_case_sql("file_path"),
         );
         let mut stmt = self.conn.prepare(&sql)?;
-        let rows = stmt.query_map(params![name], Symbol::from_row)?;
+        let rows = stmt.query_map(params![name], symbol_from_row)?;
         let mut result = Vec::new();
         for row in rows {
             result.push(row?);
@@ -355,7 +319,7 @@ impl Graph {
         let mut stmt = self
             .conn
             .prepare("SELECT * FROM symbols WHERE parent_id = ?1 ORDER BY line_start")?;
-        let rows = stmt.query_map(params![class_id], Symbol::from_row)?;
+        let rows = stmt.query_map(params![class_id], symbol_from_row)?;
         let mut result = Vec::new();
         for row in rows {
             result.push(row?);
@@ -629,7 +593,7 @@ impl Graph {
         let mut stmt = self
             .conn
             .prepare("SELECT * FROM symbols WHERE file_path = ?1 ORDER BY line_start")?;
-        let rows = stmt.query_map(params![file_path], Symbol::from_row)?;
+        let rows = stmt.query_map(params![file_path], symbol_from_row)?;
         let mut result = Vec::new();
         for row in rows {
             result.push(row?);
@@ -650,7 +614,7 @@ impl Graph {
              ORDER BY file_path, line_start",
         )?;
         let all_symbols: Vec<Symbol> = stmt
-            .query_map([], Symbol::from_row)?
+            .query_map([], symbol_from_row)?
             .filter_map(|r| r.ok())
             .collect();
 
@@ -1840,7 +1804,7 @@ impl Graph {
             .conn
             .prepare("SELECT * FROM symbols WHERE kind IN ('function', 'method')")?;
         let all_symbols: Vec<Symbol> = stmt
-            .query_map([], Symbol::from_row)?
+            .query_map([], symbol_from_row)?
             .filter_map(|r| r.ok())
             .collect();
 

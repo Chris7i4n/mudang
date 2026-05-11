@@ -12,7 +12,7 @@ use std::path::Path;
 use streaming_iterator::StreamingIterator;
 use tree_sitter::{Parser, Query, QueryCursor};
 
-use crate::core::graph::{Edge, Symbol};
+use crate::types::{Edge, Symbol};
 use crate::languages::LanguagePlugin;
 
 /// Supported programming languages.

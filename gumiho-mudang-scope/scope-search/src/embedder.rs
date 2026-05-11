@@ -5,8 +5,8 @@
 //! context, ordered by importance. This is what gets indexed in the FTS5
 //! table and searched against user queries.
 
-use crate::core::graph::Symbol;
-use crate::languages::stopwords_for_language;
+use scope_core::Symbol;
+use scope_core::languages::stopwords_for_language;
 
 /// Build the searchable text representation of a symbol.
 ///
@@ -164,7 +164,7 @@ fn extract_name_from_id(id: &str) -> Option<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::graph::Symbol;
+    use scope_core::Symbol;
 
     fn make_symbol(name: &str, kind: &str) -> Symbol {
         Symbol {

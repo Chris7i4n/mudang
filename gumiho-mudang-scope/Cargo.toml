@@ -1,6 +1,6 @@
 [package]
 name = "gumiho-mudang-scope"
-description = "Syntactic engine for gumiho-mudang: tree-sitter parsing, per-language plugins, SQLite graph, and FTS5 search."
+description = "Façade crate for the scope family: re-exports scope-core, scope-index, scope-graph, scope-search, scope-workspace."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,39 +8,8 @@ authors.workspace = true
 publish.workspace = true
 
 [dependencies]
-# Tree-sitter core
-tree-sitter = { workspace = true }
-streaming-iterator = { workspace = true }
-tree-sitter-typescript = { workspace = true }
-tree-sitter-c-sharp = { workspace = true }
-tree-sitter-python = { workspace = true }
-tree-sitter-rust = { workspace = true }
-tree-sitter-go = { workspace = true }
-tree-sitter-java = { workspace = true }
-tree-sitter-ruby = { workspace = true }
-
-# Storage
-rusqlite = { workspace = true }
-
-# Serialisation
-serde = { workspace = true }
-serde_json = { workspace = true }
-toml = { workspace = true }
-
-# Parallelism
-rayon = { workspace = true }
-
-# Utilities
-ignore = { workspace = true }
-sha2 = { workspace = true }
-hex = { workspace = true }
-anyhow = { workspace = true }
-thiserror = { workspace = true }
-tracing = { workspace = true }
-
-# File watching (used by core::watcher)
-notify = { workspace = true }
-notify-debouncer-mini = { workspace = true }
-
-[dev-dependencies]
-tempfile = { workspace = true }
+scope-core = { path = "scope-core" }
+scope-index = { path = "scope-index" }
+scope-graph = { path = "scope-graph" }
+scope-search = { path = "scope-search" }
+scope-workspace = { path = "scope-workspace" }

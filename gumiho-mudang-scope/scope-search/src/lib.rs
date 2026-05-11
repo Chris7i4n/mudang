@@ -5,4 +5,5 @@
 //! FTS5 implementation only; trait + LanceDB landing is governed by
 //! `docs/todos/0004-onnx-and-lancedb-distinction.md`.
 
+pub mod embedder;
 pub mod searcher;

@@ -13,7 +13,8 @@ use std::path::PathBuf;
 use anyhow::Result;
 use serde::Serialize;
 
-use crate::core::graph::{Graph, Reference, Symbol};
+use scope_core::Symbol;
+use scope_graph::graph::{Graph, Reference};
 
 /// A workspace-level query facade over multiple independent project graphs.
 pub struct WorkspaceGraph {
@@ -297,7 +298,7 @@ pub fn workspace_display_id(project: &str, id: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::graph::Symbol;
+    use scope_core::Symbol;
     use tempfile::TempDir;
 
     /// Helper: create a test symbol.
