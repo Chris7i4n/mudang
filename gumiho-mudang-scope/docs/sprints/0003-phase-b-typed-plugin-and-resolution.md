@@ -111,10 +111,15 @@ and the plugin-skip channel feeding R6 all land here.
       ([`LANGUAGE-PLAYBOOK.md` D2 — orthogonality](../LANGUAGE-PLAYBOOK.md#category-d--resolution-discipline)).
 - [ ] The `symbol_name_from_id` text-fallback path is deleted. Status is
       no longer implicit.
-- [ ] The trivial / stub resolver from sprint 0001 (whichever variant
-      the human selected — see sprint 0001 § Ambiguity to clarify) is
-      replaced by the real resolver that consults
-      `LanguageWorkspaceContext`.
+- [ ] The Phase A resolver stub
+      ([`ARCHITECTURAL-REFACTOR.md` § R1 → Phase A resolver stub](../ARCHITECTURAL-REFACTOR.md#r1--typed-edge-insertion-api),
+      registered in
+      [`REFACTOR-STATUS.md` § Stubs outstanding](../REFACTOR-STATUS.md#stubs-outstanding)
+      as `resolver:phase-a`) is replaced **wholesale** — not patched
+      in place — by the real resolver that consults
+      `LanguageWorkspaceContext`. The stub's row in § Stubs outstanding
+      is struck in the same commit that lands the replacement; a
+      retirement log entry is appended.
 
 ---
 
@@ -216,6 +221,11 @@ Per [`README.md` § Reporting hooks](./README.md#4-reporting-hooks) and
    `NEEDS REVIEW` left for these rules on any active language plugin.
 6. Existing fixture suite produces edges identical to pre-refactor
    modulo `confidence` and `status`. Diff is reviewed and approved.
+7. `REFACTOR-STATUS.md § Stubs outstanding` no longer contains the
+   `resolver:phase-a` row (struck in the same commit that lands the
+   wholesale replacement; retirement log entry appended per
+   [`REFACTOR-STATUS.md § Update protocol`](../REFACTOR-STATUS.md#update-protocol)).
+   Phase B does not close until this row is gone.
 
 ## Out of scope for this sprint
 
