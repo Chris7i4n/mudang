@@ -32,6 +32,22 @@ Until the refactor closes (Phase E acceptance — see `ARCHITECTURAL-REFACTOR.md
 | R11 | Macro definition-only by trait shape | B | unstarted | — | — | LanguagePlugin trait has no expand_*/evaluate_* methods |
 | R12 | Type-system-free trait audit + spawn denylist | B | unstarted | — | — | trait-shape audit + Command::new denylist in plugin paths |
 
+## Stubs outstanding
+
+Stubs are intentional, time-bounded shortcuts that land in an earlier R-move to satisfy compilation or downstream-sprint prerequisites, with their **wholesale replacement** scheduled in a specific later R-move. They are tracked here so nothing is left behind.
+
+Rules:
+
+- **Append on stub introduction.** The sprint that lands the stub adds a row in the same commit that introduces the stub code.
+- **Strike on stub retirement.** The sprint whose R-move retires the stub wholesale removes the row in the same commit that lands the retiring code, and appends a log entry below.
+- **Phase-close gate.** A phase row in the snapshot above cannot transition to `shipped` while any row in this table is assigned a retiring R-move that belongs to that phase.
+- **Refactor-acceptance gate.** Phase E acceptance — and therefore [`ARCHITECTURAL-REFACTOR.md` § Acceptance for the refactor as a whole](./ARCHITECTURAL-REFACTOR.md#acceptance-for-the-refactor-as-a-whole) — does not hold while any row remains in this table. Stubs are by definition incompatible with refactor closure.
+- **No silent extension.** A sprint that needs behaviour from a stubbed code path beyond the stub's contract must escalate via [`sprints/README.md` § 3 ambiguity protocol](./sprints/README.md#3-ambiguity-protocol--consult-the-human-amend-the-source-doc). Patching the stub in place is forbidden; only the retiring R-move replaces it wholesale.
+
+| Stub | Introduced by | Retired by | Source-doc anchor | Status |
+|---|---|---|---|---|
+| (none yet) | — | — | — | — |
+
 ## Status values
 
 - `unstarted` — no commits referenced yet.
@@ -44,10 +60,12 @@ A phase transitions to `shipped` only when every move it owns is `shipped`. Part
 
 ## Update protocol
 
-Every status transition adds a row to the log below. Update the snapshot tables at the top in the same commit.
+Every status transition adds a row to the log below. Update the snapshot tables at the top in the same commit. Stub introductions and retirements use the same log channel:
 
 ```
 - YYYY-MM-DD | <id> | <old status> → <new status> | commit <sha> | notes: ...
+- YYYY-MM-DD | stub:<short-name> | introduced | commit <sha> | notes: retiring R-move = R<n>; anchor = ARCHITECTURAL-REFACTOR.md § R<m>
+- YYYY-MM-DD | stub:<short-name> | retired | commit <sha> | notes: wholesale replacement landed in R<n>
 ```
 
 ## Log
