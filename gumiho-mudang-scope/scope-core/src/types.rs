@@ -35,17 +35,12 @@ pub struct Symbol {
     pub metadata: String,
 }
 
-/// A relationship between two symbols.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Edge {
-    /// Source symbol ID.
-    pub from_id: String,
-    /// Target symbol ID (may reference external symbols not in the index).
-    pub to_id: String,
-    /// Edge kind: calls, imports, extends, implements, instantiates, references, references_type.
-    pub kind: String,
-    /// File where this edge was observed.
-    pub file_path: String,
-    /// Line number where the edge was observed.
-    pub line: Option<u32>,
-}
+/// Legacy `Edge` name re-aliased to [`crate::edge::RawEdge`] (R1).
+///
+/// Plugin return types and the façade re-export keep the historical
+/// name; production code holds either a `RawEdge` (extractor output)
+/// or an `InsertableEdge` (resolver output). External `Edge { … }`
+/// struct-literal construction is a compile error because the
+/// underlying `RawEdge` has `pub(crate)` fields; the only entry point
+/// is [`Edge::builder`] (provided as an inherent fn on `RawEdge`).
+pub type Edge = crate::edge::RawEdge;

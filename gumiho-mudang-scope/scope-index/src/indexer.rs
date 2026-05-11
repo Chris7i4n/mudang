@@ -118,7 +118,10 @@ impl Indexer {
 
         for pf in &parsed {
             // Store in graph (single-threaded — SQLite is single-writer)
-            graph.insert_file_data(&pf.rel_path, &pf.symbols, &pf.edges)?;
+            // R1: route raw edges through the Phase A resolver stub
+            // before insertion. R3 replaces the stub wholesale.
+            let insertable = graph.resolve_batch(pf.edges.clone())?;
+            graph.insert_file_data(&pf.rel_path, &pf.symbols, &insertable)?;
 
             file_hashes.insert(pf.rel_path.clone(), pf.hash.clone());
 
@@ -268,7 +271,10 @@ impl Indexer {
 
         for pf in &parsed {
             // Atomic per-file update: delete old data, insert new
-            graph.insert_file_data(&pf.rel_path, &pf.symbols, &pf.edges)?;
+            // R1: route raw edges through the Phase A resolver stub
+            // before insertion. R3 replaces the stub wholesale.
+            let insertable = graph.resolve_batch(pf.edges.clone())?;
+            graph.insert_file_data(&pf.rel_path, &pf.symbols, &insertable)?;
 
             // Delete old search entries for this file
             if let Some(s) = searcher {

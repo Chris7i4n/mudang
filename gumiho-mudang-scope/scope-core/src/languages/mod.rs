@@ -112,8 +112,13 @@ pub fn resolve_scope_id(enclosing_scope_id: Option<&str>, file_path: &str, kind:
 
 /// Build an [`Edge`] with the given fields.
 ///
-/// Convenience wrapper so individual language plugins don't have to repeat
-/// the full struct literal each time.
+/// Convenience wrapper for language plugins. R1: every plugin emission
+/// is funneled through the typed `EdgeBuilder` here. Phase A defaults
+/// `confidence=medium`, `producer=Lang(<derived from kind>)`,
+/// `pattern_id="legacy.<kind>"`; R2 (sprint 0003) refines per-pattern
+/// metadata when plugins switch to `RawCaptures` output.
+///
+/// Returns a `RawEdge`; the resolver assigns `status` downstream.
 pub fn make_edge(
     from_id: impl Into<String>,
     to_id: impl Into<String>,
@@ -121,13 +126,26 @@ pub fn make_edge(
     file_path: &str,
     line: u32,
 ) -> Edge {
-    Edge {
-        from_id: from_id.into(),
-        to_id: to_id.into(),
-        kind: kind.to_string(),
-        file_path: file_path.to_string(),
-        line: Some(line),
-    }
+    let kind_enum = crate::edge::EdgeKind::from_slug(kind)
+        .unwrap_or_else(|| panic!("make_edge called with unknown edge kind: {kind}"));
+    let language = match kind_enum {
+        // Until R2 ships per-plugin producer wiring, default to a
+        // generic indexer producer. Each plugin's own emission path
+        // is wrapped in its own helpers that should pass a more
+        // specific Producer; this fallback keeps Phase A indexable.
+        _ => crate::edge::Producer::Indexer,
+    };
+
+    Edge::builder()
+        .from(from_id)
+        .to(to_id)
+        .kind(kind_enum)
+        .confidence(crate::edge::Confidence::Medium)
+        .producer(language)
+        .pattern_id(format!("legacy.{kind}"))
+        .file_path(file_path)
+        .line(line)
+        .build()
 }
 
 /// Look up stopwords for a language by name string.

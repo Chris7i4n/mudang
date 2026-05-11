@@ -9,7 +9,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 // resolving. The structs themselves live in scope-core; this preserves
 // the 1:1 public-surface promise in TODO 0006 § Sprint 0000 ambiguity
 // resolutions § 2.
-pub use scope_core::{Edge, Symbol};
+pub use scope_core::{Edge, InsertableEdge, RawEdge, Symbol};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
@@ -1667,11 +1667,28 @@ impl Graph {
     /// Insert a batch of symbols and edges within a single transaction.
     ///
     /// Used during indexing to efficiently store all extracted data for a file.
+    /// R1: routes a `RawEdge` through the Phase A resolver stub to
+    /// produce an `InsertableEdge`. R3 replaces both the call sites
+    /// and the stub wholesale; see
+    /// `REFACTOR-STATUS.md` § Stubs outstanding.
+    pub fn resolve(&self, raw: RawEdge) -> Result<InsertableEdge> {
+        crate::resolver::resolve_stub(&self.conn, raw)
+    }
+
+    /// R1 batch variant of [`Graph::resolve`].
+    pub fn resolve_batch(&self, raws: Vec<RawEdge>) -> Result<Vec<InsertableEdge>> {
+        crate::resolver::resolve_stub_batch(&self.conn, raws)
+    }
+
+    /// R1: storage layer accepts only `InsertableEdge` (output of the
+    /// resolver). `RawEdge` does not implement `Insertable` and is
+    /// rejected at the type level. Callers must route through
+    /// [`Graph::resolve`] (Phase A trivial stub; R3 replaces it).
     pub fn insert_file_data(
         &mut self,
         file_path: &str,
         symbols: &[Symbol],
-        edges: &[Edge],
+        edges: &[InsertableEdge],
     ) -> Result<()> {
         let tx = self.conn.transaction()?;
 
@@ -1715,20 +1732,32 @@ impl Graph {
             }
         }
 
-        // Insert edges
+        // R0 surrogate edge_id PK + the new NOT NULL columns. The legacy
+        // INSERT OR IGNORE is replaced by plain INSERT — the surrogate PK
+        // never collides; multiplicity (one row per candidate target on
+        // ambiguous resolution, one row per call site) is preserved.
         {
             let mut stmt = tx.prepare(
-                "INSERT OR IGNORE INTO edges (from_id, to_id, kind, file_path, line)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                "INSERT INTO edges
+                 (from_id, to_id, kind, confidence, status, producer, pattern_id,
+                  capture_id, framework, args_text, file_path, line)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             )?;
 
             for edge in edges {
                 stmt.execute(params![
-                    edge.from_id,
-                    edge.to_id,
-                    edge.kind,
-                    edge.file_path,
-                    edge.line,
+                    edge.from_id(),
+                    edge.to_id(),
+                    edge.kind().as_slug(),
+                    edge.confidence().as_slug(),
+                    edge.status().as_slug(),
+                    edge.producer().as_slug(),
+                    edge.pattern_id(),
+                    edge.capture_id(),
+                    edge.framework(),
+                    edge.args_text(),
+                    edge.file_path(),
+                    edge.line(),
                 ])?;
             }
         }
@@ -2232,23 +2261,34 @@ mod tests {
             .insert_file_data("src/payment.ts", &[target], &[])
             .unwrap();
 
+        use scope_core::{Confidence, EdgeKind, Producer};
+
         // Edge uses bare name as to_id (the bug scenario)
-        let edge_bare = Edge {
-            from_id: "src/order.ts::checkout::function::5".to_string(),
-            to_id: "processPayment".to_string(),
-            kind: "calls".to_string(),
-            file_path: "src/order.ts".to_string(),
-            line: Some(8),
-        };
+        let raw_bare = Edge::builder()
+            .from("src/order.ts::checkout::function::5")
+            .to("processPayment")
+            .kind(EdgeKind::Calls)
+            .confidence(Confidence::Medium)
+            .producer(Producer::Lang("typescript".into()))
+            .pattern_id("test.calls.bare")
+            .file_path("src/order.ts")
+            .line(8)
+            .build();
 
         // Edge uses member-call pattern as to_id
-        let edge_member = Edge {
-            from_id: "src/order.ts::checkout::function::5".to_string(),
-            to_id: "svc.processPayment".to_string(),
-            kind: "calls".to_string(),
-            file_path: "src/order.ts".to_string(),
-            line: Some(9),
-        };
+        let raw_member = Edge::builder()
+            .from("src/order.ts::checkout::function::5")
+            .to("svc.processPayment")
+            .kind(EdgeKind::Calls)
+            .confidence(Confidence::Medium)
+            .producer(Producer::Lang("typescript".into()))
+            .pattern_id("test.calls.member")
+            .file_path("src/order.ts")
+            .line(9)
+            .build();
+
+        let edge_bare = graph.resolve(raw_bare).unwrap();
+        let edge_member = graph.resolve(raw_member).unwrap();
 
         graph
             .insert_file_data("src/order.ts", &[caller], &[edge_bare, edge_member])

@@ -8,8 +8,12 @@
 //! sibling sub-crate.
 
 pub mod config;
+pub mod edge;
 pub mod languages;
 pub mod parser;
 pub mod types;
 
+pub use edge::{
+    Confidence, EdgeBuilder, EdgeKind, InsertableEdge, Insertable, Producer, RawEdge, Status,
+};
 pub use types::{Edge, Symbol};

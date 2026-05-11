@@ -777,13 +777,13 @@ pub fn extract_rust_trait_impl_edges(
                 format!("{file_path}::__module__::class")
             });
 
-        edges.push(Edge {
+        edges.push(crate::languages::make_edge(
             from_id,
-            to_id: trait_name,
-            kind: "implements".to_string(),
-            file_path: file_path.to_string(),
-            line: Some(line),
-        });
+            trait_name,
+            "implements",
+            file_path,
+            line,
+        ));
     }
 
     edges
