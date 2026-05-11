@@ -128,20 +128,18 @@ pub fn make_edge(
 ) -> Edge {
     let kind_enum = crate::edge::EdgeKind::from_slug(kind)
         .unwrap_or_else(|| panic!("make_edge called with unknown edge kind: {kind}"));
-    let language = match kind_enum {
-        // Until R2 ships per-plugin producer wiring, default to a
-        // generic indexer producer. Each plugin's own emission path
-        // is wrapped in its own helpers that should pass a more
-        // specific Producer; this fallback keeps Phase A indexable.
-        _ => crate::edge::Producer::Indexer,
-    };
+    // Until R2 ships per-plugin producer wiring, default to a generic
+    // indexer producer. Each plugin's own emission path is wrapped in
+    // its own helpers that should pass a more specific Producer; this
+    // fallback keeps Phase A indexable.
+    let producer = crate::edge::Producer::Indexer;
 
     Edge::builder()
         .from(from_id)
         .to(to_id)
         .kind(kind_enum)
         .confidence(crate::edge::Confidence::Medium)
-        .producer(language)
+        .producer(producer)
         .pattern_id(format!("legacy.{kind}"))
         .file_path(file_path)
         .line(line)
