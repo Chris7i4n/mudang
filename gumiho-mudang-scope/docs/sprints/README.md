@@ -414,18 +414,42 @@ codex review \
   -c model="gpt-5.5" \
   -c model_reasoning_effort="medium" \
   --base <upstream> \
-  --title "sprint NNNN — <slug>" \
-  "Review this sprint against:
-   - ARCHITECTURAL-REFACTOR.md § R<n> 'Acceptance' bullets
-   - CHARTER.md §3 invariants, §5 hard limits
-   - CI-GATES.md gates this sprint activates
-   - sprint NNNN's Deliverables and Definition of done sections
-   Flag any acceptance bullet not demonstrably met, any charter
-   invariant at risk, and any CI gate not wired."
+  --title "sprint NNNN — <slug>"
 ```
 
 Where `<upstream>` is `main` for direct-to-main sprints and
 `refactor/phase-b` for Phase B sprints.
+
+**CLI-shape note** (codex CLI v0.130.0): `--base`, `--commit`, and
+`--uncommitted` are each mutually exclusive with the `[PROMPT]`
+positional argument. The diff-source flag (`--base`) and an inline
+review prompt cannot both be passed in a single invocation. The
+refactor opts for **diff-source mode**: codex receives the precise
+diff scope via `--base <upstream>` and produces its default review
+report against the diff. The acceptance-bullet checklist that would
+otherwise be the prompt body lives in the **PR description**
+instead (see "Review focus checklist" below) — the sprint author
+and the human reviewer cross-reference the codex report against
+that checklist when merging.
+
+**Review focus checklist** (added verbatim to the PR description
+under `### Codex review focus`, one bullet per area; the human
+reviewer uses this to verify codex's report covered each area):
+
+```
+- ARCHITECTURAL-REFACTOR.md § R<n> Acceptance bullets (list bullets explicitly)
+- CHARTER.md §3 invariants at risk in this sprint
+- CHARTER.md §5 hard limits this sprint approaches
+- CI-GATES.md gates this sprint flips from planned → active
+- Sprint NNNN's Deliverables and Definition of done sections
+- REFACTOR-STATUS.md § Stubs outstanding — any stub this sprint
+  introduces is registered; any stub this sprint retires is struck
+```
+
+The checklist is **mechanical** — every item is either covered by
+codex's report (annotate "✓ codex addressed: <one-line citation>")
+or surfaced as a gap and addressed in a follow-up commit
+(`refactor(scope): address codex review — <summary>`).
 
 **Why these flags**:
 

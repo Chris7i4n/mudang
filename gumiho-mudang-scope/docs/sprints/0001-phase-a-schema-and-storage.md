@@ -137,40 +137,29 @@ documented and committed for reference:
 
 ---
 
-## Ambiguity to clarify before code lands
+## Ambiguities resolved before this sprint opens
 
-This sprint surfaces one cross-phase coupling that the source document
-does not fully resolve:
+The cross-phase coupling that previously sat here — R1's
+`InsertableEdge` type vs R3's resolver behaviour — was resolved on
+`main` per [`README.md` § Ambiguity protocol](./README.md#3-ambiguity-protocol--consult-the-human-amend-the-source-doc)
+before this sprint's branch opens. The resolution lives in
+[`ARCHITECTURAL-REFACTOR.md` § R1 → Phase A resolver stub](../ARCHITECTURAL-REFACTOR.md#r1--typed-edge-insertion-api):
 
-> R1's acceptance bullet "`Graph::insert_*` accepts only `InsertableEdge`
-> (output of resolution)" requires the **type** `InsertableEdge` to exist
-> when Phase A ships. The **behavior** of the resolver that converts
-> `RawEdge → InsertableEdge` ships in R3 (Phase B,
-> [§ R3](../ARCHITECTURAL-REFACTOR.md#r3--pipeline-ordering-via-type-state)).
-> Phase A therefore needs a placeholder resolver of some kind to satisfy
-> compilation while still routing all production paths through it.
-
-**Question for the human before sprint 0001 starts**:
-
-- Does Phase A ship a *trivial* resolver stub
-  (e.g., every `RawEdge` is mapped to `InsertableEdge { status: Dangling, … }`
-  or similar) that R3 then replaces wholesale? — OR —
-- Does Phase A ship the type signatures only, with `unimplemented!()`
-  on every resolution path, leaving the binary unable to index until R3
-  ships?
-
-The acceptance bullet ("queries that filter `confidence='high' AND
-status='resolved'` are runnable against the re-indexed corpus") implies
-the binary must at least produce *some* `Resolved` rows after Phase A,
-which favors option 1 with a stub that assigns `status=Resolved` when
-the lookup is trivially unique and `status=Dangling` otherwise.
-
-**Do not proceed past this sprint definition** until the human selects.
-Per [`README.md` § Ambiguity protocol](./README.md#3-ambiguity-protocol--consult-the-human),
-the resolution is committed to `ARCHITECTURAL-REFACTOR.md` (the
-source-of-truth document for R-moves) on `main` **before** this sprint's
-branch opens. The rule lives in the source doc, not in the sprint
-branch.
+- Phase A ships a **trivial resolver** that maps every `RawEdge` to
+  `InsertableEdge` via a workspace-symbol-table name lookup against
+  `to_id` — single match → `Resolved`, multiple → `Ambiguous`,
+  zero → `Dangling`.
+- The stub **does not** consult `LanguageWorkspaceContext` (R4) and
+  **is not** a baseline for R8's audit.
+- R3 replaces the stub **wholesale**; no Phase B sprint may extend
+  or patch the stub in place.
+- The stub MUST be registered in
+  [`REFACTOR-STATUS.md` § Stubs outstanding](../REFACTOR-STATUS.md#stubs-outstanding)
+  in the same commit that lands the stub code, and removed from
+  that table when sprint 0003 closes (R3 retirement).
+- Phase B does not close while the stub row remains. The refactor
+  as a whole does not close while any row in the Stubs outstanding
+  table remains.
 
 ---
 
@@ -223,11 +212,17 @@ Per [`README.md` § Reporting hooks](./README.md#4-reporting-hooks) and
   with:
   - `--base main`
   - `--title "sprint 0001 — R0+R1"`
-  - Prompt focus: R0 and R1 acceptance bullets, charter §3 invariant 4
-    (polyglot single graph), §5 hard limits, CI gates this sprint
-    activates (Edge sealed, Builder requires fields, Builder forbids
-    status).
-  Attach report to PR body; address blockers.
+  - (No inline `[PROMPT]` — codex CLI rejects `--base` + `[PROMPT]`
+    in the same invocation; see §9 CLI-shape note.)
+  - PR-body **Codex review focus** checklist covers: R0 and R1
+    acceptance bullets; charter §3 invariant 4 (polyglot single
+    graph); §5 hard limits; CI gates this sprint activates (Edge
+    sealed, Builder requires fields, Builder forbids status);
+    REFACTOR-STATUS.md § Stubs outstanding — verify the Phase A
+    resolver stub row was appended in the same commit that landed
+    the stub code.
+  Attach report to PR body; cross-reference each checklist item
+  against the report; address blockers.
 - **Close**: flip both rows to `shipped` with commit SHAs and dates.
   Append log entries listing the acceptance bullets demonstrated.
   In the same commit, flip the **Phase A** row in the phase snapshot
@@ -242,15 +237,22 @@ All of the following hold simultaneously:
 1. Every checkbox in the **Deliverables** section above is checked.
 2. The cross-phase ambiguity above is resolved by an
    `ARCHITECTURAL-REFACTOR.md` amendment on `main`, merged before this
-   sprint's branch opens.
+   sprint's branch opens. (Resolution: trivial resolver stub per
+   §R1 → Phase A resolver stub.)
 3. The three CI gates listed above are `active` in `CI-GATES.md` and
    in CI itself.
 4. `REFACTOR-STATUS.md` shows R0, R1, and Phase A all `shipped`.
-5. No `NEEDS REVIEW` entry exists in any `docs/languages/<name>.md`
+5. `REFACTOR-STATUS.md § Stubs outstanding` contains exactly one
+   row introduced by this sprint, naming the Phase A resolver stub,
+   `Introduced by = R1`, `Retired by = R3`, anchor =
+   `ARCHITECTURAL-REFACTOR.md § R1 → Phase A resolver stub`. The
+   row's introduction commit and log entry land in the same commit
+   that lands the stub code.
+6. No `NEEDS REVIEW` entry exists in any `docs/languages/<name>.md`
    that this sprint's schema changes touch (plugins are still pre-R2
    shape; the compliance log entries for R0/R1 land here even though
    the per-language plugin's R2 work is in sprint 0003).
-6. Re-indexing the maintainer's reference corpus produces a `.scope/`
+7. Re-indexing the maintainer's reference corpus produces a `.scope/`
    that satisfies the R0 schema diff above and is queryable.
 
 ## Out of scope for this sprint
