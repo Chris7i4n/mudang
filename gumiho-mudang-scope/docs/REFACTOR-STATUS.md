@@ -8,7 +8,7 @@ Until the refactor closes (Phase E acceptance — see `ARCHITECTURAL-REFACTOR.md
 
 | Phase | Moves | Status | Started | Shipped | Notes |
 |---|---|---|---|---|---|
-| A — Schema and storage | R0, R1 | unstarted | — | — | first batch; everything else depends on it |
+| A — Schema and storage | R0, R1 | in-progress | 2026-05-11 | — | first batch; everything else depends on it |
 | B — Plugin layer | R2, R3, R4, R7, R9, R11, R12 | unstarted | — | — | depends on Phase A |
 | C — Framework layer | R5 | unstarted | — | — | lands when framework infrastructure is first introduced; design constraint until then |
 | D — Output and audit | R8, R10 | unstarted | — | — | adds detection layer for D2/E1 |
@@ -18,8 +18,8 @@ Until the refactor closes (Phase E acceptance — see `ARCHITECTURAL-REFACTOR.md
 
 | ID | Title | Phase | Status | Commit | Date | Notes |
 |---|---|---|---|---|---|---|
-| R0 | Schema closures | A | unstarted | — | — | adds confidence/status/producer/pattern_id/args_text, surrogate edge_id PK, contains + 30 domain edge kinds (R0 baseline 13 + Tier 1 5 + Tier 2 5 + Tier 3 7; final whitelist 38), `goroutine_spawn` renamed to `green_thread_spawn`, 4-kind concurrency split, 3 new symbol kinds, skipped_ranges. No in-place migration — old indexes are wiped and re-indexed |
-| R1 | Typed edge insertion API | A | unstarted | — | — | seals Edge; EdgeBuilder is sole producer of RawEdge; no .status() at extraction |
+| R0 | Schema closures | A | in-progress | — | — | adds confidence/status/producer/pattern_id/args_text, surrogate edge_id PK, contains + 30 domain edge kinds (R0 baseline 13 + Tier 1 5 + Tier 2 5 + Tier 3 7; final whitelist 38), `goroutine_spawn` renamed to `green_thread_spawn`, 4-kind concurrency split, 3 new symbol kinds, skipped_ranges. No in-place migration — old indexes are wiped and re-indexed |
+| R1 | Typed edge insertion API | A | in-progress | — | — | seals Edge; EdgeBuilder is sole producer of RawEdge; no .status() at extraction |
 | R2 | LanguagePlugin output type closure | B | unstarted | — | — | plugin returns RawCaptures; Extractor layer converts to Edge::builder() calls |
 | R3 | Pipeline ordering via type-state | B | unstarted | — | — | extract → resolve → write; resolution is sole producer of status |
 | R4 | WorkspaceContext typed access (split) | B | unstarted | — | — | LanguageWorkspaceContext / FrameworkWorkspaceContext split; mechanical safeguard for C2 |
@@ -70,4 +70,5 @@ Every status transition adds a row to the log below. Update the snapshot tables 
 
 ## Log
 
-(no transitions yet — every move is `unstarted`)
+- 2026-05-11 | R0 | unstarted → in-progress | branch refactor/sprint-0001-schema-storage | notes: sprint 0001 opened
+- 2026-05-11 | R1 | unstarted → in-progress | branch refactor/sprint-0001-schema-storage | notes: sprint 0001 opened
