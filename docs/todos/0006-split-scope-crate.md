@@ -89,3 +89,74 @@ sub-crate, not in the legacy monolith.
   and apply to every sub-crate equally;
 - this TODO does not introduce new public types beyond what already
   exists — it relocates them.
+
+## Sprint 0000 ambiguity resolutions
+
+Locked before sprint 0000 opens, per
+`gumiho-mudang-scope/docs/sprints/README.md` §3 ambiguity protocol.
+
+### 1. Crate naming and workspace layout
+
+- **Names**: `scope-core`, `scope-index`, `scope-graph`, `scope-search`,
+  `scope-workspace`. **No `gumiho-` prefix.** The façade crate keeps
+  its current name `gumiho-mudang-scope`. The workspace root remains
+  `publish = false`; sub-crate names need not be globally unique.
+- **Layout**: **nested** under the façade crate's directory.
+
+  ```
+  gumiho-mudang-scope/
+    Cargo.toml              # façade crate manifest
+    src/lib.rs              # re-exports
+    scope-core/
+      Cargo.toml
+      src/...
+    scope-index/
+      Cargo.toml
+      src/...
+    scope-graph/
+      Cargo.toml
+      src/...
+    scope-search/
+      Cargo.toml
+      src/...
+    scope-workspace/
+      Cargo.toml
+      src/...
+  ```
+
+  Rationale: the five sub-crates are an internal implementation detail
+  of the scope family; nesting keeps every refactor diff inside one
+  top-level directory and preserves the "scope = one family of crates"
+  mental model. The workspace root's `members` list gains the five
+  nested paths.
+
+### 2. Façade re-export depth
+
+The façade crate's `lib.rs` re-exports **every public item** currently
+exposed by `gumiho-mudang-scope::*` before the split. The split is a
+relocation, not a surface change. Curating the public surface is a
+separate, post-refactor decision; sprint 0000 ships a 1:1 re-export so
+that `gumiho-mudang-cli`, future composer code, and any external
+consumer compile without source changes.
+
+### 3. `scope-search` backends and feature gates
+
+Sprint 0000 moves `core/searcher.rs` → `scope-search/src/searcher.rs`
+**as-is**. Today that means FTS5 only. **No LanceDB code, no feature
+gates, no `Searcher` trait split lands in sprint 0000.** LanceDB
+adoption is mudang Phase D scope, governed by TODO 0004
+(`0004-onnx-and-lancedb-distinction.md`); the `Searcher` trait split
+and the `LanceSearcher` backend land then. Sprint 0000 is file moves
+only.
+
+### 4. `scope-workspace` content and R4 destination
+
+`workspace_graph.rs` moves to `scope-workspace`. **R4's
+`LanguageWorkspaceContext` / `FrameworkWorkspaceContext` split (sprint
+0002) lands inside `scope-workspace`**, not `scope-core`. This locks
+the destination for sprint 0002 so the ambiguity does not resurface
+when R4 implementation begins.
+
+This list is the canonical resolution. Any contradiction between
+sprint 0000's deliverables and this list is resolved in favour of this
+list; the sprint document is amended.
