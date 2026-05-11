@@ -240,7 +240,12 @@ All of the following hold simultaneously:
    sprint's branch opens. (Resolution: trivial resolver stub per
    §R1 → Phase A resolver stub.)
 3. The three CI gates listed above are `active` in `CI-GATES.md` and
-   in CI itself.
+   aggregated into the `just gate-refactor` recipe. The recipe passes
+   locally; running `just gate-refactor` is the durable contract until
+   repo-wide CI infrastructure lands (project-level bootstrap, out of
+   refactor scope). Each gate's authoritative script / test path in
+   `CI-GATES.md` remains the contract; the recipe is the convenience
+   wrapper per `CI-GATES.md` § Authority.
 4. `REFACTOR-STATUS.md` shows R0, R1, and Phase A all `shipped`.
 5. `REFACTOR-STATUS.md § Stubs outstanding` contains exactly one
    row introduced by this sprint, naming the Phase A resolver stub,
