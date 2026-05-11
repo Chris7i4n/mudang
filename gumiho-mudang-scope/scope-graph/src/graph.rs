@@ -220,9 +220,45 @@ impl Graph {
     }
 
     /// Create the schema tables and indexes if they do not exist.
+    ///
+    /// R0 has no in-place migration (pre-1.0 wipe policy). When a
+    /// pre-R0 index database is opened, the `edges` table exists but
+    /// has the legacy 5-column shape — the new CREATE INDEX statements
+    /// would then fail with a cryptic `no such column: confidence`.
+    /// Detect that case first and surface the wipe instruction to the
+    /// user before any DDL runs.
     fn ensure_schema(conn: &Connection) -> Result<()> {
+        if Self::has_legacy_edges_table(conn)? {
+            anyhow::bail!(
+                "scope index database has a pre-R0 schema (`edges` table lacks \
+                 the `confidence` column). R0 ships no in-place migration; \
+                 wipe the index and rebuild:\n    rm -rf .scope/ && scope index\n\
+                 See ARCHITECTURAL-REFACTOR.md § R0 → Migration."
+            );
+        }
         conn.execute_batch(include_str!("sql/schema.sql"))?;
         Ok(())
+    }
+
+    /// Returns true when an `edges` table exists but lacks the R0
+    /// `confidence` column — i.e., a pre-R0 schema is on disk.
+    fn has_legacy_edges_table(conn: &Connection) -> Result<bool> {
+        let table_exists: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='edges'",
+            [],
+            |row| row.get(0),
+        )?;
+        if table_exists == 0 {
+            return Ok(false);
+        }
+        // PRAGMA table_info returns a row per column; we look for a
+        // `confidence` row.
+        let mut stmt = conn.prepare("PRAGMA table_info(edges)")?;
+        let has_confidence = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .any(|col| col == "confidence");
+        Ok(!has_confidence)
     }
 
     /// Find a symbol by exact name match, or by qualified name (Class.method).
@@ -1680,10 +1716,97 @@ impl Graph {
         crate::resolver::resolve_stub_batch(&self.conn, raws)
     }
 
+    /// Insert (or replace) the symbols for a single file in their own
+    /// transaction. The two-pass indexer uses this to write every
+    /// file's symbols before the resolver runs over any file's edges,
+    /// so same-file and cross-file targets are visible to the Phase A
+    /// resolver stub.
+    pub fn insert_symbols_for_file(
+        &mut self,
+        file_path: &str,
+        symbols: &[Symbol],
+    ) -> Result<()> {
+        let tx = self.conn.transaction()?;
+        tx.execute(
+            "DELETE FROM symbols WHERE file_path = ?1",
+            params![file_path],
+        )?;
+        // Order so that parents (parent_id = NULL) are inserted before
+        // children. SQLite enforces the parent_id FK on each statement.
+        let mut ordered: Vec<&Symbol> = symbols.iter().collect();
+        ordered.sort_by_key(|s| s.parent_id.is_some());
+        {
+            let mut stmt = tx.prepare(
+                "INSERT INTO symbols
+                 (id, name, kind, file_path, line_start, line_end, signature, docstring, parent_id, language, metadata)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            )?;
+            for symbol in &ordered {
+                stmt.execute(params![
+                    symbol.id,
+                    symbol.name,
+                    symbol.kind,
+                    symbol.file_path,
+                    symbol.line_start,
+                    symbol.line_end,
+                    symbol.signature,
+                    symbol.docstring,
+                    symbol.parent_id,
+                    symbol.language,
+                    symbol.metadata,
+                ])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Insert (or replace) the edges for a single file in their own
+    /// transaction. Pairs with [`Graph::insert_symbols_for_file`].
+    pub fn insert_edges_for_file(
+        &mut self,
+        file_path: &str,
+        edges: &[InsertableEdge],
+    ) -> Result<()> {
+        let tx = self.conn.transaction()?;
+        tx.execute("DELETE FROM edges WHERE file_path = ?1", params![file_path])?;
+        {
+            let mut stmt = tx.prepare(
+                "INSERT INTO edges
+                 (from_id, to_id, kind, confidence, status, producer, pattern_id,
+                  capture_id, framework, args_text, file_path, line)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            )?;
+            for edge in edges {
+                stmt.execute(params![
+                    edge.from_id(),
+                    edge.to_id(),
+                    edge.kind().as_slug(),
+                    edge.confidence().as_slug(),
+                    edge.status().as_slug(),
+                    edge.producer().as_slug(),
+                    edge.pattern_id(),
+                    edge.capture_id(),
+                    edge.framework(),
+                    edge.args_text(),
+                    edge.file_path(),
+                    edge.line(),
+                ])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     /// R1: storage layer accepts only `InsertableEdge` (output of the
     /// resolver). `RawEdge` does not implement `Insertable` and is
     /// rejected at the type level. Callers must route through
     /// [`Graph::resolve`] (Phase A trivial stub; R3 replaces it).
+    ///
+    /// This single-shot path writes a file's symbols **then** its
+    /// edges atomically. For full-index runs use the two-pass
+    /// [`Graph::insert_symbols_for_file`] / [`Graph::insert_edges_for_file`]
+    /// pair so cross-file targets are visible to the resolver.
     pub fn insert_file_data(
         &mut self,
         file_path: &str,

@@ -2,8 +2,12 @@
 //!
 //! **STUB:phase-a-resolver — retired by R3 (sprint 0003).**
 //!
-//! Converts a `RawEdge` to an `InsertableEdge` by name-looking-up
-//! `to_id` against the workspace symbols table. Assigns:
+//! Converts a `RawEdge` to an `InsertableEdge` by looking up `to_id`
+//! against the workspace symbols table. `to_id` may be either a full
+//! synthetic ID (`src/payment.ts::processPayment::function::10`) or
+//! a bare name (`processPayment`) depending on what the extractor
+//! emitted; the stub accepts both via an `id = ? OR name = ?` match.
+//! Assigns:
 //!   * `Status::Resolved`  — exactly one row matches.
 //!   * `Status::Ambiguous` — more than one row matches.
 //!   * `Status::Dangling`  — zero rows match.
@@ -23,7 +27,7 @@ use scope_core::{InsertableEdge, RawEdge, Status};
 pub fn resolve_stub(conn: &Connection, raw: RawEdge) -> Result<InsertableEdge> {
     let to_id = raw.to_id();
     let count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM symbols WHERE id = ?1",
+        "SELECT COUNT(*) FROM symbols WHERE id = ?1 OR name = ?1",
         rusqlite::params![to_id],
         |row| row.get(0),
     )?;

@@ -116,12 +116,21 @@ impl Indexer {
         let mut lang_stats: HashMap<String, (usize, usize)> = HashMap::new();
         let mut all_symbols: Vec<Symbol> = Vec::new();
 
+        // Two-pass write so the Phase A resolver stub (R1) can see
+        // cross-file and same-file targets:
+        //   Pass 1 — write every file's symbols.
+        //   Pass 2 — resolve each file's raw edges against the now-
+        //            populated symbols table, then write the
+        //            InsertableEdge rows.
+        // R3 (sprint 0003) replaces the stub wholesale; the two-pass
+        // wiring stays as the natural write order for the real
+        // resolver too.
         for pf in &parsed {
-            // Store in graph (single-threaded — SQLite is single-writer)
-            // R1: route raw edges through the Phase A resolver stub
-            // before insertion. R3 replaces the stub wholesale.
+            graph.insert_symbols_for_file(&pf.rel_path, &pf.symbols)?;
+        }
+        for pf in &parsed {
             let insertable = graph.resolve_batch(pf.edges.clone())?;
-            graph.insert_file_data(&pf.rel_path, &pf.symbols, &insertable)?;
+            graph.insert_edges_for_file(&pf.rel_path, &insertable)?;
 
             file_hashes.insert(pf.rel_path.clone(), pf.hash.clone());
 
@@ -269,12 +278,17 @@ impl Indexer {
         let mut updated_hashes: HashMap<String, String> = HashMap::new();
         let mut all_reindexed_symbols: Vec<Symbol> = Vec::new();
 
+        // Two-pass write — symbols first across the changed batch so
+        // the Phase A resolver stub (R1) can see same-batch targets,
+        // then resolve+write edges. R3 replaces the stub wholesale;
+        // the two-pass wiring is the natural shape for the real
+        // resolver too.
         for pf in &parsed {
-            // Atomic per-file update: delete old data, insert new
-            // R1: route raw edges through the Phase A resolver stub
-            // before insertion. R3 replaces the stub wholesale.
+            graph.insert_symbols_for_file(&pf.rel_path, &pf.symbols)?;
+        }
+        for pf in &parsed {
             let insertable = graph.resolve_batch(pf.edges.clone())?;
-            graph.insert_file_data(&pf.rel_path, &pf.symbols, &insertable)?;
+            graph.insert_edges_for_file(&pf.rel_path, &insertable)?;
 
             // Delete old search entries for this file
             if let Some(s) = searcher {
