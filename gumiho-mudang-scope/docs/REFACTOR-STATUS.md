@@ -46,7 +46,7 @@ Rules:
 
 | Stub | Introduced by | Retired by | Source-doc anchor | Status |
 |---|---|---|---|---|
-| (none yet) | — | — | — | — |
+| `resolver:phase-a` (trivial workspace-name lookup in `scope-graph::resolver::resolve_stub`, exposed via `Graph::resolve`/`Graph::resolve_batch`) | R1 (sprint 0001) | R3 (sprint 0003) | [`ARCHITECTURAL-REFACTOR.md` § R1 → Phase A resolver stub](./ARCHITECTURAL-REFACTOR.md#r1--typed-edge-insertion-api) | introduced 2026-05-11 |
 
 ## Status values
 
@@ -72,3 +72,4 @@ Every status transition adds a row to the log below. Update the snapshot tables 
 
 - 2026-05-11 | R0 | unstarted → in-progress | branch refactor/sprint-0001-schema-storage | notes: sprint 0001 opened
 - 2026-05-11 | R1 | unstarted → in-progress | branch refactor/sprint-0001-schema-storage | notes: sprint 0001 opened
+- 2026-05-11 | stub:resolver:phase-a | introduced | commit (R1 implementation commit on sprint branch) | notes: retiring R-move = R3; anchor = ARCHITECTURAL-REFACTOR.md § R1 → Phase A resolver stub
