@@ -646,16 +646,86 @@ WHERE confidence = 'high'
 ```
 
 Consumers that want the full candidate set (recall-heavy, audit, or
-LSP-enrichment input) accept `status='ambiguous'` rows alongside, and
-disambiguate via the merge algorithms below.
+semantic-enrichment input) accept `status='ambiguous'` rows alongside,
+and disambiguate via the merge algorithms below.
 
-**LSP-enrichment hooks (planned).** Background LSP enrichment populates
-forward-compatible columns (`lsp_supersede_id`, `lsp_resolved_to`,
-`lsp_provenance`) that the composer reads to promote rows without
-mutating Scope's original output. The exact column shape is owned by
-the LSP-enrichment sprint (out of scope here); the contract this
-section locks is the **producer-side multi-row commitment** that makes
-enrichment representable.
+**Semantic enrichment lives in a separate table — `edge_enrichments`
+(planned).** Background enrichment (LSP today; potentially type-checker
+batch output, rust-analyzer JSON, AI annotation, or runtime trace in
+the future) **does not mutate Scope's `edges` rows**. Instead, each
+enrichment writes a row to a sibling `edge_enrichments` table that
+references the underlying scope edge via FK:
+
+```sql
+edge_enrichments
+  enrichment_id PK
+  edge_id            FK → edges     -- which Scope row this enrichment is about
+  evidence_kind      TEXT           -- 'semantic' (extensible: 'runtime-trace', 'ai-annotation', ...)
+  evidence_source    TEXT           -- 'lsp:rust-analyzer', 'lsp:typescript-language-server',
+                                    --   'type-checker:tsc', etc. — the TOOL is data, not column name
+  outcome            TEXT           -- 'confirmed' | 'superseded' | 'rejected' | 'resolved-from-dangling'
+  supersedes_with_edge_id  INTEGER  -- FK nullable → edges (when enrichment picks a different candidate
+                                    --   row from the multi-row Ambiguous set produced by Scope)
+  resolved_to_id     INTEGER        -- nullable; populated when enrichment resolves a dangling
+                                    --   to a target that Scope could not see syntactically
+  confidence         TEXT           -- enrichment's own confidence tier (orthogonal to edge.confidence)
+  produced_at        INTEGER        -- unix-ts; cache invalidation per row, mirrors §6 LSP cache rules
+```
+
+**Why a separate table, not `lsp_*` columns on `edges`:**
+
+- **Scope's row is pristine.** `edges` reflects only Scope's
+  syntactic+structural verdict. R8 confidence audit measures
+  scope-pattern precision without enrichment overlay polluting the
+  math; R3 typestate (`InsertableEdge` is the sole `Insertable` and
+  is constructed only inside `scope-graph::resolve`) stays airtight
+  because enrichment is a second writer into a different table, not
+  a second path into `edges`.
+- **The semantic dimension is a category, not a tool.** Column
+  naming carries semantics, not implementation. `lsp_` as a column
+  prefix bakes today's tool name into the schema; tomorrow a
+  rust-analyzer batch dumper, a type-checker JSON pipeline, or any
+  other type-aware engine would either misuse the column or force a
+  schema migration. With `evidence_kind` + `evidence_source` as data
+  columns, new engines add rows, not schema.
+- **Cache hygiene matches LSP cache (§6) one-to-one.** Each enrichment
+  row carries `produced_at`; invalidation rules from §6 map directly
+  onto deleting `edge_enrichments` rows by `(edge_id, evidence_source)`.
+- **Charter §5 mechanical reinforcement.** Scope cannot grow into LSP
+  territory because Scope's resolver has no write path into
+  `edge_enrichments`. The two layers' outputs live in different tables
+  by construction.
+
+**Composer query shapes:**
+
+```sql
+-- cleanest scope-only signal
+SELECT * FROM edges
+ WHERE confidence = 'high' AND status = 'resolved';
+
+-- scope-resolved OR semantically-confirmed
+SELECT e.* FROM edges e
+  LEFT JOIN edge_enrichments en
+    ON en.edge_id = e.edge_id
+   AND en.evidence_kind = 'semantic'
+ WHERE e.confidence = 'high'
+   AND (
+        e.status = 'resolved'
+     OR en.outcome IN ('confirmed', 'resolved-from-dangling')
+   );
+
+-- semantic supersession: enrichment picked a specific candidate from
+-- Scope's Ambiguous set
+SELECT e.* FROM edges e
+  JOIN edge_enrichments en
+    ON en.supersedes_with_edge_id = e.edge_id
+ WHERE en.outcome = 'superseded';
+```
+
+The exact column types and DDL ship in the enrichment sprint (out of
+scope for sprint 0003). This section locks the **shape contract** —
+separate table, tool name as data, scope's `edges` rows never mutated
+by enrichment.
 
 **What Mudang must not do:**
 
@@ -664,6 +734,9 @@ enrichment representable.
   provenance the caller may need).
 - Demand a "scope picked one for me" API. Scope's commitment is
   candidate-set fidelity; tiebreaks are mudang's job, governed by §5.4.
+- UPDATE `edges` rows from the enrichment pipeline. Enrichment writes
+  to `edge_enrichments` only; `edges` is append-only relative to the
+  scope indexer's own re-indexes.
 
 #### 5.4.1 compose-backfill (Scope leads, LSP fills)
 
