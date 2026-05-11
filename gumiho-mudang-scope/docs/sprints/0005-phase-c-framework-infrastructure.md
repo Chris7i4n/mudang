@@ -71,10 +71,10 @@ the refactor closes, following
 
 - [ ] `FrameworkPlugin` trait inspection shows **no** `tree_sitter::*`
       types and **no** `&Path` / `&str`-source parameters.
-- [ ] `Detection.applies_to_languages: Vec<SupportedLanguage>` is a
+- [ ] `Detection.applies_to_languages: Vec<LanguageId>` is a
       required field; an empty list with `detected: true` is rejected
       by CI gate. See [`GLOSSARY.md` · `Detection`](../GLOSSARY.md#refactor-types)
-      and [`GLOSSARY.md` · `SupportedLanguage`](../GLOSSARY.md#plugin-shapes).
+      and [`GLOSSARY.md` · `LanguageId`](../GLOSSARY.md#plugin-shapes).
 - [ ] `unknown_version_policy()` is a required method on
       `FrameworkPlugin`.
 - [ ] **No `queries/<lang>/frameworks/`** directory exists; CI grep
@@ -172,9 +172,9 @@ opens.
    it earlier (check by `grep -n 'pub trait FrameworkWorkspaceContext'
    scope-core/src/` — must appear only in the R5 first-impl commit).
 
-4. **`SupportedLanguage` and `.js`/`.jsx`.** R5 says
-   `applies_to_languages: Vec<SupportedLanguage>`. Today
-   `SupportedLanguage` does not include JavaScript
+4. **`LanguageId` and `.js`/`.jsx`.** R5 says
+   `applies_to_languages: Vec<LanguageId>`. Today
+   `LanguageId` does not include JavaScript
    ([`FRAMEWORK-PLAYBOOK.md` Step 4 → Language scope](../FRAMEWORK-PLAYBOOK.md#language-scope)).
    **Cheap-path** (extend `TypeScriptPlugin::extensions()` to include
    `js|jsx`) and **strict-path** (new `JavaScript` variant) are
@@ -198,7 +198,7 @@ From [`CI-GATES.md` § Gate inventory](../CI-GATES.md#gate-inventory):
 
 From [`GLOSSARY.md`](../GLOSSARY.md):
 
-- [`FrameworkPlugin`, `SupportedLanguage`](../GLOSSARY.md#plugin-shapes)
+- [`FrameworkPlugin`, `LanguageId`](../GLOSSARY.md#plugin-shapes)
 - [`Pattern`, `Detection`](../GLOSSARY.md#refactor-types)
 - [`DetectedVersion`, `ResolvedVersion`, `UnknownVersionPolicy`,
   `VersionReq`, `available_in`, Version coercion](../GLOSSARY.md#versioning)

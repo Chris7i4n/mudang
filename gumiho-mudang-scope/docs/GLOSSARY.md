@@ -98,10 +98,11 @@ When a term collides with a Rust crate name (`semver`, `tree-sitter`), the entry
 
 | Term | Definition | Source |
 |---|---|---|
-| `LanguagePlugin` | Trait owned by R2; output type `RawCaptures`; consumes `&dyn LanguageWorkspaceContext` | R2 + R4 |
+| `LanguageId` | Enum in `scope-core/src/languages/id.rs` (R7 rename of historical `SupportedLanguage`): `TypeScript`, `CSharp`, `Python`, `Go`, `Java`, `Rust`, `Ruby`. JavaScript is not a variant today. Post-R7 the enum **also carries all per-language behaviour** via inherent methods — there is no `trait LanguagePlugin` and no `*Plugin` unit structs. `LanguageId::extract_metadata`, `extract_edge`, `ts_language`, etc. are exhaustive matches that delegate to per-language modules. `as_str()` preserves the historical lowercase slugs (`"typescript"`, …) so database text columns and log output round-trip unchanged | R7 + `FRAMEWORK-PLAYBOOK.md` § "Language scope" |
+| `SupportedLanguage` | Historical name; replaced by `LanguageId` in R7. Do not introduce new uses | R7 |
+| `LanguagePlugin` | **Historical trait** that defined the per-language extraction interface in scope-core. **Removed in R7** — the trait and the seven `*Plugin` unit structs (`PythonPlugin`, `RustPlugin`, etc.) were deleted; behaviour moved to `LanguageId` inherent methods. The R2 + R4 commitment (consume `&dyn LanguageWorkspaceContext`) carried forward to the enum methods | R2 + R4 + R7 (removal) |
 | `FrameworkPlugin` | Trait owned by R5; consumes `&[Symbol]` and `&[Edge]`, never AST | R5 |
 | `Extractor` | Layer that converts `RawCaptures` to `EdgeBuilder` calls (post-R2) | R2 |
-| `SupportedLanguage` | Enum in `src/core/parser.rs`: `TypeScript`, `CSharp`, `Python`, `Go`, `Java`, `Rust`, `Ruby`. JavaScript is not a variant today | R5 + `FRAMEWORK-PLAYBOOK.md` § "Language scope" |
 | `EdgeKind` | Closed whitelist; post-R0 = 38 kinds (8 universal + 30 domain across R0 baseline + Tier 1 + Tier 2 + Tier 3) | R0 |
 | 4-kind concurrency split | `os_process_spawn` / `os_thread_spawn` / `green_thread_spawn` / `runtime_task_spawn`; producer-side plugin picks one based on stack ownership + scheduler + sync-block safety, not surface API spelling | R0 |
 | `kind` (symbols) | Closed whitelist; post-R0 = 13 kinds (10 legacy + `macro`, `module`, `trait`) | R0 |

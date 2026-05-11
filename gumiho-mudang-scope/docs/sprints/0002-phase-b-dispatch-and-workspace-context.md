@@ -60,44 +60,70 @@ Mirrored from each R-move's **Acceptance** section in
 ### R7 acceptance ([source](../ARCHITECTURAL-REFACTOR.md#r7--indexer-level-dispatch-enforcement))
 
 Per the amended R7 "Target state" — compile-time dispatch, no runtime
-election:
+election, no trait, no per-language unit struct:
 
-- [ ] `LanguageId` enum lands in `scope-core/src/languages/id.rs`,
-      exhaustive over the seven supported languages.
-- [ ] Every plugin type exposes `const ID: LanguageId`,
-      `const EXTENSIONS: &'static [&'static str]`, and
-      `const SHEBANGS: &'static [&'static str]`.
-- [ ] `LanguagePlugin` trait has **no** `extensions`,
-      `accepts_extension`, `accepts_shebang`, or any other runtime
-      opt-in method. Capability is `const`; plugin instance does not
-      decide at runtime.
+- [ ] `enum LanguageId` lands in `scope-core/src/languages/id.rs`,
+      exhaustive over the seven supported languages. Module home is
+      `languages/id.rs`, not `parser.rs`.
+- [ ] `enum SupportedLanguage` is **removed** workspace-wide (B.3
+      rename). Every former usage now references `LanguageId`.
+      Serialized slugs (`"typescript"`, `"csharp"`, `"python"`, `"go"`,
+      `"java"`, `"rust"`, `"ruby"`) are preserved verbatim — DB
+      `symbols.language` and `edges.producer` text columns continue to
+      round-trip the same values; no schema migration.
+- [ ] `trait LanguagePlugin` is **removed** workspace-wide (A.4 trait
+      collapse). The seven `*Plugin` unit structs (`PythonPlugin`,
+      `RustPlugin`, `TypeScriptPlugin`, `GoPlugin`, `JavaPlugin`,
+      `CSharpPlugin`, `RubyPlugin`) are **removed**. Their methods
+      migrate to `impl LanguageId` match arms that delegate to
+      per-language module functions; per-language module files retain
+      their existing extraction logic verbatim.
+- [ ] Every method on `LanguageId` is implemented with an **exhaustive
+      match** over the enum — adding a variant without adding arms fails
+      the build. This includes: `as_str`, `extensions` (const),
+      `shebangs` (const), `ts_language`, `symbol_query_source`,
+      `edge_query_source`, `extract_metadata`, `extract_edge`,
+      `extract_docstring`, `infer_symbol_kind`, `scope_node_types`,
+      `class_body_node_types`, `class_decl_node_types`,
+      `generic_name_stopwords` (const).
 - [ ] `scope-core/src/languages/dispatch.rs` exists and exposes
       `pub const fn dispatch_extension(&str) -> Option<LanguageId>`,
-      `pub const fn dispatch_shebang(&str) -> Option<LanguageId>`,
-      and `pub fn plugin_for(LanguageId) -> &'static dyn LanguagePlugin`
-      (exhaustive `match` — compiler forces an arm per variant).
+      `pub const fn dispatch_shebang(&str) -> Option<LanguageId>`.
+      There is no `plugin_for(LanguageId) -> &'static dyn LanguagePlugin`
+      function (no trait to be a `dyn` of). The `LanguageId` value
+      itself is the dispatch target; callers invoke methods on it
+      directly.
 - [ ] A declarative macro `register_languages!` is the single call site
-      naming all seven plugins together.
+      that names every `LanguageId` variant together for dispatch
+      generation.
 - [ ] A `const _: () = assert_no_extension_overlap(...);` block in
       `dispatch.rs` fails the build if any extension is claimed by two
-      plugins.
+      variants.
 - [ ] `scope-core/src/parser.rs::detect_language` hardcoded match is
-      removed; every caller goes through `dispatch_extension`.
-- [ ] Plugin code cannot self-activate: it cannot open a file, read its
-      contents, or decide whether to handle it. The indexer is the sole
-      dispatcher (CI grep gate: `just ci-dispatch`).
+      removed; every caller goes through `dispatch::dispatch_extension`.
+- [ ] `stopwords_for_language(&str)` is removed (C.1 signature
+      tightening). Callers use `lang.generic_name_stopwords()` directly
+      on the `LanguageId`.
+- [ ] Language code cannot self-activate: no language module can open a
+      file, read its contents, or decide whether to handle it. The
+      indexer is the sole dispatcher (CI grep gate: `just ci-dispatch`).
 
 ### R4 acceptance ([source](../ARCHITECTURAL-REFACTOR.md#r4--workspacecontext-typed-access-split-per-layer))
 
-- [ ] Plugin code contains no `std::fs::*` calls (CI grep gate flips
+- [ ] Language code contains no `std::fs::*` calls (CI grep gate flips
       to `active` — see below).
-- [ ] Language-plugin trait inspection shows it accepts
-      `&dyn LanguageWorkspaceContext` (or a generic bound thereon) and
-      **never** `FrameworkWorkspaceContext`.
-- [ ] Framework-plugin trait inspection shows it accepts
-      `&dyn FrameworkWorkspaceContext`. (The framework trait itself
-      lands in R5, sprint 0005 — but the **context trait** lands here
-      so that R5 has it available.)
+- [ ] `LanguageId` methods that emit symbols / edges /
+      metadata (`extract_metadata`, `extract_edge`) accept
+      `&dyn LanguageWorkspaceContext` and **never** bound on
+      `FrameworkWorkspaceContext`. Following the R7 A.4 trait collapse,
+      these are inherent methods on `LanguageId`, not trait methods —
+      the acceptance bullet shifts from "trait inspection" to "inherent
+      method signature inspection" but the mechanical safeguard is
+      identical.
+- [ ] Framework-plugin trait inspection (R5 — sprint 0005) shows it
+      accepts `&dyn FrameworkWorkspaceContext`. The framework trait
+      itself lands in R5, but the **context trait** lands here so
+      that R5 has it available.
 - [ ] `LanguageWorkspaceContext` ships as `pub` in `scope-core`.
       `FrameworkWorkspaceContext` ships as `pub(crate)` in `scope-core`
       per the amended R4 "Target state" (visibility safeguard during
@@ -141,6 +167,37 @@ this sprint's branch opens. The resolutions are now binding:
    `LanguagePlugin::extensions` and `parser.rs::detect_language` are
    removed. See
    [`ARCHITECTURAL-REFACTOR.md` § R7](../ARCHITECTURAL-REFACTOR.md#r7--indexer-level-dispatch-enforcement).
+
+3. **A.4 — trait + struct collapse (mid-sprint resolution).** Resolved:
+   `trait LanguagePlugin` and the seven `*Plugin` unit structs
+   (`PythonPlugin`, `RustPlugin`, etc.) are **removed**. All per-language
+   behaviour migrates to `impl LanguageId` match arms; per-language
+   module files retain their existing logic verbatim. Every method on
+   `LanguageId` is exhaustive over the enum; adding a variant without
+   adding arms fails the build. Mid-sprint amendment per `README.md`
+   § 3 ambiguity protocol — surfaced when the sprint author noticed
+   the historical struct-and-enum pair admits a representable-but-
+   incorrect state (`(SupportedLanguage::Python, &TypeScriptPlugin)`
+   typechecks). A.4 collapses both representations into the enum,
+   making the invalid state unrepresentable. See
+   [`ARCHITECTURAL-REFACTOR.md` § R7 → Target state](../ARCHITECTURAL-REFACTOR.md#r7--indexer-level-dispatch-enforcement).
+
+4. **B.3 — `SupportedLanguage` → `LanguageId` rename (mid-sprint).**
+   Resolved: `enum SupportedLanguage` is renamed to `enum LanguageId`
+   and moves from `scope-core/src/parser.rs` to
+   `scope-core/src/languages/id.rs`. Two names for the same concept
+   collapses into one. Serialized strings (database `symbols.language`
+   text column, log output) preserved verbatim via `as_str()` returning
+   the same lowercase slugs — **no schema migration**.
+
+5. **C.1 — `stopwords_for_language(&str)` signature tightening
+   (mid-sprint).** Resolved: the stringly-typed
+   `pub fn stopwords_for_language(language: &str)` is removed. Callers
+   use `lang.generic_name_stopwords()` directly on the `LanguageId`.
+   The silent `_ => &[]` fallback that would have left a new language
+   without stopwords on accidental omission is closed by exhaustive
+   match. Embedder / search callers already hold a `LanguageId`
+   (post-dispatch); migration is mechanical.
 
 ---
 
@@ -209,29 +266,41 @@ Per [`README.md` § Reporting hooks](./README.md#4-reporting-hooks) and
 ## Definition of done
 
 1. Every checkbox in **Deliverables** above is checked.
-2. The two ambiguities above are resolved before code lands; both
-   resolutions are committed to `ARCHITECTURAL-REFACTOR.md` on `main`
-   before this sprint's branch opens. (Done: R4 visibility = `pub(crate)`;
-   R7 = compile-time const dispatch via `register_languages!`.)
+2. The five ambiguities above are resolved before sprint close; the
+   pre-branch resolutions (R4 visibility, R7 dispatch shape) were
+   committed to `ARCHITECTURAL-REFACTOR.md` on `main` before this
+   sprint's branch opened; the three mid-sprint resolutions
+   (A.4 trait collapse, B.3 enum rename, C.1 stopwords signature)
+   were committed to `ARCHITECTURAL-REFACTOR.md` on `main` mid-sprint
+   per `README.md` § 3 ambiguity protocol and the sprint branch was
+   rebased onto the amended `refactor/phase-b`.
 3. The three CI gates listed above are `active` in `CI-GATES.md` and CI.
 4. `REFACTOR-STATUS.md` shows R7 and R4 `in-progress` on
    `refactor/phase-b`; they flip to `shipped` only in the Phase B
    phase-close commit that merges to `main`.
-5. Every existing language plugin (`scope-core/src/languages/rust_lang.rs`,
-   `python.rs`, `go_lang.rs`, `typescript.rs`, `java.rs`, `csharp.rs`,
-   `ruby.rs`) exposes the three associated consts (`ID`, `EXTENSIONS`,
-   `SHEBANGS`); the `extensions(&self) -> &[&str]` method is removed
-   from the `LanguagePlugin` trait; every plugin compiles against the
-   new context traits with zero direct filesystem access.
-6. Compile-time enforcement proven:
-   - Adding a duplicate extension to two plugins fails the build with a
-     const-panic from `assert_no_extension_overlap`.
-   - Adding a `LanguageId` variant without a matching arm in
-     `plugin_for` fails the build via the exhaustive `match`.
-   - Importing `FrameworkWorkspaceContext` from any plugin file outside
+5. `trait LanguagePlugin` and the seven `*Plugin` unit structs are
+   **removed** workspace-wide. Per-language modules
+   (`scope-core/src/languages/rust_lang.rs`, `python.rs`, `go_lang.rs`,
+   `typescript.rs`, `java.rs`, `csharp.rs`, `ruby.rs`) retain their
+   extraction functions; `impl LanguageId` match arms delegate to them.
+   No filesystem access from any language module.
+6. `enum SupportedLanguage` is **removed** workspace-wide; `enum
+   LanguageId` is the single language identifier. Database
+   `symbols.language` and `edges.producer` text values are
+   byte-identical to pre-R7 (verified by a regression test that
+   asserts `LanguageId::<V>.as_str()` returns the same slug for every
+   variant).
+7. Compile-time enforcement proven:
+   - Adding a duplicate extension to two `LanguageId` variants fails
+     the build with a const-panic from `assert_no_extension_overlap`.
+   - Adding a `LanguageId` variant without arms in every inherent
+     method fails the build via the exhaustive `match`.
+   - Importing `FrameworkWorkspaceContext` from any module outside
      `scope-core` fails the build (the trait is `pub(crate)` until R5).
-7. `scope-core/src/parser.rs::detect_language` hardcoded match is
+8. `scope-core/src/parser.rs::detect_language` hardcoded match is
    removed; every caller routes through `scope-core::languages::dispatch`.
+9. `stopwords_for_language(&str)` is removed; callers use
+   `lang.generic_name_stopwords()`.
 
 ## Out of scope for this sprint
 

@@ -555,7 +555,7 @@ For quick reference. The authoritative definitions live in
 - [`DetectedVersion` · `ResolvedVersion` · `UnknownVersionPolicy` · `VersionReq` · `available_in`](../GLOSSARY.md#versioning)
 - [`Confidence` · `status` · orthogonality · cleanest-signal filter](../GLOSSARY.md#confidence-and-status-orthogonal)
 - [`StatusData` · `file_hashes.skipped_ranges` · Surrogate PK · `edges.args_text` · Schema bumps](../GLOSSARY.md#schema)
-- [`LanguagePlugin` · `FrameworkPlugin` · `Extractor` · `SupportedLanguage` · `EdgeKind` · reserved metadata keys · 4-kind concurrency split](../GLOSSARY.md#plugin-shapes)
+- [`LanguagePlugin` · `FrameworkPlugin` · `Extractor` · `LanguageId` · `EdgeKind` · reserved metadata keys · 4-kind concurrency split](../GLOSSARY.md#plugin-shapes)
 
 ---
 

@@ -115,7 +115,7 @@ Recorded so they are not lost; their triggers are insufficient today.
 - **Module isolation** for stronger A1–A3 + B2 mechanical enforcement (`ARCHITECTURAL-REFACTOR.md` "Why detectable, not mechanical"; charter-amendment-grade follow-up).
 - **Byte-level lossy file reading** for invalid UTF-8 (`ARCHITECTURAL-REFACTOR.md` R6 known limitation; separate refactor with its own trigger).
 - **`scope audit coverage`** subcommand for recall-side detection (separate from R8; trigger-deferred).
-- **`.js` / `.jsx` indexing** via cheap path (extend TypeScriptPlugin extensions) or strict path (new `JavaScript` SupportedLanguage variant) — governed by `LANGUAGE-PLAYBOOK.md` adoption flow when triggers prove the need.
+- **`.js` / `.jsx` indexing** via cheap path (extend `LanguageId::TypeScript.extensions()` arm) or strict path (new `JavaScript` variant of `LanguageId` — `scope-core/src/languages/id.rs`) — governed by `LANGUAGE-PLAYBOOK.md` adoption flow when triggers prove the need.
 - **Optional symbol-kind renames** (`const` → `constant`, `type` → `type_alias`) — deferred to a post-R0 follow-up migration; not a blocker.
 
 ---
