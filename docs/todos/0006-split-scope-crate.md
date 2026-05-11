@@ -51,6 +51,22 @@ composer and the CLI) keep working through the same import path.
 - `gumiho-mudang-scope/src/core/searcher.rs` → moves to `scope-search`.
 - `gumiho-mudang-scope/src/core/workspace_graph.rs` → moves to
   `scope-workspace`.
+- `gumiho-mudang-scope/src/core/watcher.rs` → moves to `scope-index`
+  (tightly coupled to the indexer; reindex is the watcher's only
+  consumer). TODO 0005 deletes it during mudang phase C; until then,
+  it lives next to its sole client.
+- `gumiho-mudang-scope/src/core/mod.rs` → **deleted**. The `core`
+  namespace dissolves; each sub-crate is its own root.
+- `gumiho-mudang-scope/src/config/` (entire directory: `mod.rs`,
+  `project.rs`, `workspace.rs`) → moves to `scope-core`. Reason:
+  `indexer` (scope-index) and the CLI both consume the config types,
+  so they live in the dependency root (scope-core). The façade
+  re-exports `scope_core::config::*` so existing CLI imports continue
+  to resolve through `gumiho_mudang_scope::config::*`.
+- `gumiho-mudang-scope/src/queries/<lang>/*.scm` → moves to
+  `scope-core/src/queries/<lang>/`. The language plugins (also in
+  scope-core) load these via `include_str!`; they belong with their
+  sole consumer.
 - `gumiho-mudang-scope/src/lib.rs` → becomes a façade re-export.
 
 ## Ordering with the R-moves
