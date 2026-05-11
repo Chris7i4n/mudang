@@ -159,11 +159,18 @@ opens.
    fixture trees is unspecified. Resolution amends
    `ARCHITECTURAL-REFACTOR.md` R5 "Acceptance".
 
-3. **`FrameworkWorkspaceContext` visibility flip.** Sprint 0002's
-   ambiguity #1 may have landed the framework context trait
-   `pub(crate)`. This sprint widens it to `pub` if needed. Confirm
-   the recorded answer in `ARCHITECTURAL-REFACTOR.md` R4 "Target state"
-   before R5 ships.
+3. **`FrameworkWorkspaceContext` visibility flip — mandatory.** Sprint
+   0002 landed `FrameworkWorkspaceContext` as `pub(crate)` in
+   `scope-core` per the resolution recorded in
+   `ARCHITECTURAL-REFACTOR.md` § R4 "Target state". **This sprint
+   widens it to `pub` in the same commit that lands the first
+   `FrameworkPlugin` impl** — not a later commit, not a separate PR.
+   The flip is mechanical (one keyword) and unconditional. It is not a
+   stub and is not tracked in `REFACTOR-STATUS.md` § Stubs outstanding;
+   it is legitimate visibility staging. Sprint-close checklist verifies
+   the keyword changed and that no Phase B sprint accidentally widened
+   it earlier (check by `grep -n 'pub trait FrameworkWorkspaceContext'
+   scope-core/src/` — must appear only in the R5 first-impl commit).
 
 4. **`SupportedLanguage` and `.js`/`.jsx`.** R5 says
    `applies_to_languages: Vec<SupportedLanguage>`. Today
