@@ -608,6 +608,63 @@ When mode 3 produces a Level 2 result, mudang executes one of two merge
 algorithms depending on the query shape. The §1.2 verb sub-variants
 (compose-merge / compose-backfill) map directly onto these algorithms.
 
+#### 5.4.0 Scope's producer contract — multi-row Ambiguous
+
+Composer correctness depends on Scope's row contract. Scope commits the
+following producer-side guarantees (locked by
+`ARCHITECTURAL-REFACTOR.md` § R3 → "Multi-row Ambiguous — scope's
+producer commitment"):
+
+- **One row per candidate target on `status='ambiguous'`.** When the
+  resolver finds N candidate targets for a single source edge, it
+  emits N rows — same `(from_id, kind, source_position)`, different
+  `to_id` per candidate. The candidate set is preserved on disk as
+  evidence; Scope never picks a tiebreak.
+- **`confidence` is orthogonal to `status`.** A row's `confidence`
+  reflects pattern precision (extractor output, immutable through
+  resolution). A row's `status` reflects lookup outcome
+  (`resolved` / `ambiguous` / `dangling`). Composer code must not
+  treat low-confidence-ambiguous and high-confidence-ambiguous as
+  the same signal.
+- **Surrogate `edge_id` PK (R0).** Multi-row Ambiguous coexists with
+  uniqueness because the PK is a surrogate, not the natural
+  `(from_id, to_id, kind)` tuple. Composer reads MUST use `edge_id`
+  for stable row identity; queries that join on
+  `(from_id, to_id, kind)` may return multiple rows by design.
+- **`dangling` rows are evidence too.** When Scope sees a call site
+  but cannot find any candidate in the workspace, it emits one row
+  with `status='dangling'`. The composer's LSP-enrichment pass
+  promotes such rows when LSP resolves them (`compose-backfill`,
+  §5.4.1) — Scope never drops the row at production time.
+
+**Cleanest-signal filter shape.** Mudang consumers that want the
+highest-confidence, unambiguous signal apply:
+
+```sql
+WHERE confidence = 'high'
+  AND status = 'resolved'
+```
+
+Consumers that want the full candidate set (recall-heavy, audit, or
+LSP-enrichment input) accept `status='ambiguous'` rows alongside, and
+disambiguate via the merge algorithms below.
+
+**LSP-enrichment hooks (planned).** Background LSP enrichment populates
+forward-compatible columns (`lsp_supersede_id`, `lsp_resolved_to`,
+`lsp_provenance`) that the composer reads to promote rows without
+mutating Scope's original output. The exact column shape is owned by
+the LSP-enrichment sprint (out of scope here); the contract this
+section locks is the **producer-side multi-row commitment** that makes
+enrichment representable.
+
+**What Mudang must not do:**
+
+- Collapse multi-row Ambiguous to a single row at read time without
+  applying the merge algorithms below (the row choice carries
+  provenance the caller may need).
+- Demand a "scope picked one for me" API. Scope's commitment is
+  candidate-set fidelity; tiebreaks are mudang's job, governed by §5.4.
+
 #### 5.4.1 compose-backfill (Scope leads, LSP fills)
 
 Used by: `refs --strict`, `impact --strict`, `sketch --semantic`,
