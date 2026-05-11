@@ -1,0 +1,25 @@
+[package]
+name = "scope-search"
+description = "Scope's search backend. Today: FTS5 over the SQLite graph. Future (mudang Phase D): LanceDB vector search alongside, governed by TODO 0004."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+# Sibling sub-crates
+scope-core = { path = "../scope-core" }
+scope-graph = { path = "../scope-graph" }
+
+# Storage (FTS5 lives in the same SQLite as the graph)
+rusqlite = { workspace = true }
+
+# Serialisation
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Utilities
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

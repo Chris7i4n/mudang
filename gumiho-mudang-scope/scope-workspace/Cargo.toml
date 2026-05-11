@@ -1,0 +1,25 @@
+[package]
+name = "scope-workspace"
+description = "Scope's federated workspace facade. Owns the multi-graph query layer; R4 (sprint 0002) lands LanguageWorkspaceContext / FrameworkWorkspaceContext here."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+# Sibling sub-crates
+scope-core = { path = "../scope-core" }
+scope-graph = { path = "../scope-graph" }
+
+# Storage (workspace_graph queries SQLite directly today)
+rusqlite = { workspace = true }
+
+# Serialisation
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Utilities
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

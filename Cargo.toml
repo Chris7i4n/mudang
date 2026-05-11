@@ -2,6 +2,11 @@
 resolver = "2"
 members = [
     "gumiho-mudang-scope",
+    "gumiho-mudang-scope/scope-core",
+    "gumiho-mudang-scope/scope-index",
+    "gumiho-mudang-scope/scope-graph",
+    "gumiho-mudang-scope/scope-search",
+    "gumiho-mudang-scope/scope-workspace",
     "gumiho-mudang-lsp",
     "gumiho-mudang-cli",
 ]

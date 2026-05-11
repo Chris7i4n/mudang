@@ -1425,6 +1425,88 @@ dependencies = [
 ]
 
 [[package]]
+name = "scope-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "streaming-iterator",
+ "thiserror",
+ "toml",
+ "tracing",
+ "tree-sitter",
+ "tree-sitter-c-sharp",
+ "tree-sitter-go",
+ "tree-sitter-java",
+ "tree-sitter-python",
+ "tree-sitter-ruby",
+ "tree-sitter-rust",
+ "tree-sitter-typescript",
+]
+
+[[package]]
+name = "scope-graph"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "rusqlite",
+ "scope-core",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "scope-index"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "hex",
+ "ignore",
+ "notify",
+ "notify-debouncer-mini",
+ "rayon",
+ "rusqlite",
+ "scope-core",
+ "scope-graph",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "scope-search"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "rusqlite",
+ "scope-core",
+ "scope-graph",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "scope-workspace"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "rusqlite",
+ "scope-core",
+ "scope-graph",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
 name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
