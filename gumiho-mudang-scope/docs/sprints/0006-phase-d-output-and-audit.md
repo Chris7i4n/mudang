@@ -99,26 +99,37 @@ source-of-truth document on `main` **before** this sprint's branch
 opens. Resolutions amend `ARCHITECTURAL-REFACTOR.md` R8 or R10
 "Target state" / "Acceptance" as relevant.
 
-1. **Reference fixture corpus location and provenance.** R8 says
-   "the maintainer's reference fixture corpus" but the path is not
-   specified, and the source of the fixtures (anonymized real
-   projects vs synthetic) is not specified either.
-   [`LANGUAGE-PLAYBOOK.md` Step 5 → Implementation procedure](../LANGUAGE-PLAYBOOK.md#step-5--implementation-procedure-within-bounds)
-   says "real-world fixtures, not synthetic toy code." Confirm:
-   - Where does the corpus live? (e.g., `tests/fixtures/reference/<language>/`)
-   - Real anonymized snippets from maintainer projects, or a curated
-     external dataset?
-   - Anonymization rules (secrets, proprietary names) — recorded
-     where?
-2. **Sampling size N.** R8 mentions "samples N edges per (kind,
-   confidence) combination" without specifying N. Confirm a default
-   (e.g., 30) and whether the subcommand exposes `--sample-size N`.
-3. **Labelling channel.** Manual labelling vs LLM-labelling. R8 says
-   "the user (or an LLM agent) marks correct/incorrect" — confirm
-   which is the default and whether both are supported.
-4. **Output format for the precision report.** Parseable, yes — but
-   JSON? TSV? Both? Confirm before the subcommand ships so downstream
-   consumers (CI gates, dashboards) can rely on the shape.
+1. **Reference fixture corpus location and provenance.** ✅ Resolved
+   on main via [`ARCHITECTURAL-REFACTOR.md` § R8 → Operational shape
+   → Reference fixture corpus](../ARCHITECTURAL-REFACTOR.md#r8--confidence-audit-subcommand).
+   Corpus lives at `gumiho-mudang-scope/scope-core/tests/fixtures/reference/<language_slug>/`,
+   one subtree per supported `LanguageId`. Provenance: real anonymized
+   snippets from the maintainer's projects (per `LANGUAGE-PLAYBOOK.md`
+   Step 5). Anonymization rules — strip secrets, replace proprietary
+   identifiers with shape-preserving placeholders — recorded in
+   `tests/fixtures/reference/README.md` (authored alongside the first
+   fixture).
+2. **Sampling size N.** ✅ Resolved on main via [§ R8 → Operational
+   shape → Sampling protocol](../ARCHITECTURAL-REFACTOR.md#r8--confidence-audit-subcommand).
+   Default `N = 30` per `(kind, confidence)`; `--sample-size N`
+   override; `--seed N` for reproducibility (default fixed
+   compile-time constant). 30 chosen as binomial-proportion lower
+   bound for early tier-drift signal.
+3. **Labelling channel.** ✅ Resolved on main via [§ R8 →
+   Operational shape → Labelling channel](../ARCHITECTURAL-REFACTOR.md#r8--confidence-audit-subcommand).
+   Manual labelling is the default and only channel shipped in R8.
+   Two-phase workflow: `--emit-sample <path>` writes unlabelled
+   sample, maintainer fills `label` slot, `--label <path>` reads
+   labelled file and produces precision report. LLM-assisted
+   labelling deferred post-refactor per `POST-REFACTOR-PLAN.md` §
+   Items deliberately deferred.
+4. **Output format for the precision report.** ✅ Resolved on main
+   via [§ R8 → Operational shape → Output format](../ARCHITECTURAL-REFACTOR.md#r8--confidence-audit-subcommand).
+   Default `--format json` with top-level `schema_version: "1"` field
+   plus a `report` array of `(kind, tier, producer, pattern_id,
+   sample_size, correct_count, precision)` rows. `--format tsv`
+   available for shell pipelines (same columns). JSON shape is the
+   contract.
 
 ---
 
