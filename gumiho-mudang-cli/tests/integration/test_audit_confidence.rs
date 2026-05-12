@@ -475,6 +475,58 @@ fn test_audit_confidence_label_rejects_tampered_confidence_field() {
 }
 
 #[test]
+fn test_audit_confidence_label_rejects_records_missing_label_field() {
+    // Codex round-6 P2: `serde` deserializes a missing `label` key
+    // identically to `label: null` — both become `Option::None`. The
+    // schema doc names `label` as required (with value null / true /
+    // false), so a labeller bug that drops the key entirely should
+    // surface as a contract failure, not silently flow through the
+    // partial-coverage skip path.
+    let (_dir, root) = setup_indexed_fixture();
+    let sample = root.join("sample.jsonl");
+
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--emit-sample"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .success();
+
+    // Remove the `label` field from the first record entirely (not
+    // just set to null). This is the "labeller serializer drops nulls"
+    // scenario the codex finding describes.
+    let raw = std::fs::read_to_string(&sample).unwrap();
+    let mut out_lines = Vec::new();
+    let mut stripped = false;
+    for l in raw
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+    {
+        let mut line = l.to_string();
+        if !stripped {
+            // Remove `,"label":null` (the trailing field; emit always
+            // serializes label last per the struct field order).
+            line = line.replace(",\"label\":null", "");
+            stripped = true;
+        }
+        out_lines.push(line);
+    }
+    assert!(stripped);
+    std::fs::write(&sample, out_lines.join("\n") + "\n").unwrap();
+
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--label"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .failure()
+        .stderr(contains("required field `label` is missing"))
+        .stderr(contains("missing field is not the same as an explicit null"));
+}
+
+#[test]
 fn test_audit_confidence_default_no_flags_succeeds_with_usage_hint() {
     // Codex round-5 P3: the documented `scope audit confidence`
     // no-flag invocation must succeed and surface usage instructions,

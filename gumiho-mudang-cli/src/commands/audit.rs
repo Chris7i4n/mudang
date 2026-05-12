@@ -449,9 +449,42 @@ fn label_pass(
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
         }
-        let record: SampleRecord = serde_json::from_str(trimmed).with_context(|| {
+        // Pre-typed key-presence check (post-codex P2 round 6):
+        // `SampleRecord.label` is `Option<bool>`, which serde
+        // deserializes identically for an explicit `"label":null`
+        // and for a record that *omits* `label` entirely. Per
+        // `docs/AUDIT-LABEL-SCHEMA.md` the field is required (with
+        // value `null`, `true`, or `false`) — a missing field is a
+        // malformed sample, not a "skip me" signal. Parse to
+        // `serde_json::Value` first to verify the key is present,
+        // then continue to the typed record.
+        let raw: serde_json::Value = serde_json::from_str(trimmed).with_context(|| {
             format!(
                 "{}: line {}: invalid JSON record (schema: docs/AUDIT-LABEL-SCHEMA.md)",
+                in_path.display(),
+                idx + 1
+            )
+        })?;
+        let raw_obj = raw.as_object().ok_or_else(|| {
+            anyhow::anyhow!(
+                "{}: line {}: JSON record must be an object per docs/AUDIT-LABEL-SCHEMA.md",
+                in_path.display(),
+                idx + 1
+            )
+        })?;
+        if !raw_obj.contains_key("label") {
+            anyhow::bail!(
+                "{}: line {}: required field `label` is missing; per docs/AUDIT-LABEL-SCHEMA.md \
+                 every record must carry an explicit `label` set to `null` (undecided), \
+                 `true` (correct), or `false` (incorrect). A missing field is not the same as \
+                 an explicit null and is rejected to surface labeller-side serializer bugs.",
+                in_path.display(),
+                idx + 1
+            );
+        }
+        let record: SampleRecord = serde_json::from_value(raw).with_context(|| {
+            format!(
+                "{}: line {}: record does not match SampleRecord schema (schema: docs/AUDIT-LABEL-SCHEMA.md)",
                 in_path.display(),
                 idx + 1
             )
