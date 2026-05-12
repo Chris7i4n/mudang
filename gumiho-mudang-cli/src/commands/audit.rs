@@ -138,10 +138,15 @@ pub struct ReportRow {
 /// sample-side contract in `docs/AUDIT-LABEL-SCHEMA.md`, though both
 /// happen to be locked at "1" today). `disclaimer` is the verbatim
 /// precision-only framing — see [`PRECISION_ONLY_DISCLAIMER`].
+/// `sample_schema_doc` carries the inline pointer to the sample-file
+/// contract so external labeller authors (LLM / LSP / hybrid) can
+/// discover it directly from the report rather than from out-of-band
+/// docs — see [`SCHEMA_DOC_POINTER`] and `docs/AUDIT-LABEL-SCHEMA.md`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PrecisionReport {
     pub schema_version: String,
     pub disclaimer: String,
+    pub sample_schema_doc: String,
     pub report: Vec<ReportRow>,
 }
 
@@ -559,6 +564,7 @@ pub fn compute_precision_report(records: &[SampleRecord]) -> PrecisionReport {
     PrecisionReport {
         schema_version: SCHEMA_VERSION.to_string(),
         disclaimer: PRECISION_ONLY_DISCLAIMER.to_string(),
+        sample_schema_doc: SCHEMA_DOC_POINTER.to_string(),
         report: rows,
     }
 }
@@ -585,6 +591,15 @@ pub fn write_report<W: Write>(
             writeln!(out)?;
         }
         ReportFormat::Tsv => {
+            // Preamble: `#`-prefixed comments carrying the disclaimer
+            // and sample-file schema doc pointer. Standard TSV consumers
+            // (awk / cut / Miller / csvkit) either ignore `#` lines via
+            // a `--comment` flag or can be teed through `grep -v '^#'`
+            // before parsing. Both surfaces (JSON top-level fields, TSV
+            // comment preamble) carry the same pointer so external
+            // labeller authors discover the contract from either format.
+            writeln!(out, "# {}", report.disclaimer)?;
+            writeln!(out, "# {}", report.sample_schema_doc)?;
             writeln!(
                 out,
                 "kind\ttier\tproducer\tpattern_id\tsample_size\tcorrect_count\tprecision"
@@ -1059,6 +1074,7 @@ mod tests {
         let report = PrecisionReport {
             schema_version: "1".to_string(),
             disclaimer: PRECISION_ONLY_DISCLAIMER.to_string(),
+            sample_schema_doc: SCHEMA_DOC_POINTER.to_string(),
             report: vec![ReportRow {
                 kind: "calls".to_string(),
                 tier: "high".to_string(),
@@ -1086,6 +1102,7 @@ mod tests {
         let report = PrecisionReport {
             schema_version: "1".to_string(),
             disclaimer: PRECISION_ONLY_DISCLAIMER.to_string(),
+            sample_schema_doc: SCHEMA_DOC_POINTER.to_string(),
             report: vec![
                 ReportRow {
                     kind: "calls".to_string(),
@@ -1111,19 +1128,58 @@ mod tests {
         write_report(&report, ReportFormat::Tsv, &mut buf).unwrap();
         let s = String::from_utf8(buf).unwrap();
         let lines: Vec<_> = s.lines().collect();
-        assert_eq!(lines.len(), 3); // header + 2 rows
+        // 2 preamble (`#` disclaimer + `#` schema-doc pointer) + 1 header + 2 rows.
+        assert_eq!(lines.len(), 5);
+        assert_eq!(lines[0], format!("# {PRECISION_ONLY_DISCLAIMER}"));
+        assert_eq!(lines[1], format!("# {SCHEMA_DOC_POINTER}"));
         assert_eq!(
-            lines[0],
+            lines[2],
             "kind\ttier\tproducer\tpattern_id\tsample_size\tcorrect_count\tprecision"
         );
         assert_eq!(
-            lines[1],
+            lines[3],
             "calls\thigh\trust\trust.calls.method\t30\t29\t0.9667"
         );
         assert_eq!(
-            lines[2],
+            lines[4],
             "imports\tmedium\tpython\tp.imports.from\t12\t9\t0.7500"
         );
+    }
+
+    #[test]
+    fn write_report_json_carries_sample_schema_doc_field() {
+        let report = compute_precision_report(&[]);
+        let mut buf = Vec::new();
+        write_report(&report, ReportFormat::Json, &mut buf).unwrap();
+        let s = String::from_utf8(buf).unwrap();
+        // Field name + AUDIT-LABEL-SCHEMA.md path both present.
+        assert!(s.contains("\"sample_schema_doc\""));
+        assert!(s.contains("docs/AUDIT-LABEL-SCHEMA.md"));
+    }
+
+    #[test]
+    fn write_report_tsv_preamble_uses_hash_prefix_for_consumers() {
+        // Standard TSV consumers (awk / Miller / csvkit) recognise `#`
+        // comment prefix; assert the preamble lines are `#`-prefixed so
+        // a future format change that loses the prefix fails here.
+        let report = compute_precision_report(&[]);
+        let mut buf = Vec::new();
+        write_report(&report, ReportFormat::Tsv, &mut buf).unwrap();
+        let s = String::from_utf8(buf).unwrap();
+        for line in s.lines().take(2) {
+            assert!(
+                line.starts_with("# "),
+                "preamble line must start with `# `: {line:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn precision_report_carries_sample_schema_doc_pointer() {
+        let report = compute_precision_report(&[]);
+        assert_eq!(report.sample_schema_doc, SCHEMA_DOC_POINTER);
+        assert!(report.sample_schema_doc.contains("AUDIT-LABEL-SCHEMA.md"));
+        assert!(report.sample_schema_doc.contains("schema_version"));
     }
 
     // -- Chunk 6: tier gate --
@@ -1132,6 +1188,7 @@ mod tests {
         PrecisionReport {
             schema_version: "1".to_string(),
             disclaimer: PRECISION_ONLY_DISCLAIMER.to_string(),
+            sample_schema_doc: SCHEMA_DOC_POINTER.to_string(),
             report: rows,
         }
     }
@@ -1224,6 +1281,7 @@ mod tests {
         let report = PrecisionReport {
             schema_version: "1".to_string(),
             disclaimer: PRECISION_ONLY_DISCLAIMER.to_string(),
+            sample_schema_doc: SCHEMA_DOC_POINTER.to_string(),
             report: vec![
                 ReportRow {
                     kind: "calls".to_string(),

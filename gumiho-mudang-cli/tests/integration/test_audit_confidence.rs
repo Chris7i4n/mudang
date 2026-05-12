@@ -176,7 +176,22 @@ fn test_audit_confidence_label_format_tsv() {
         .success();
     let stdout = String::from_utf8_lossy(&out.get_output().stdout).to_string();
 
+    // Preamble (chunk 8): two `#`-prefixed lines carrying the
+    // precision-only disclaimer and the sample-file schema pointer.
     let mut lines = stdout.lines();
+    let p1 = lines.next().expect("preamble line 1");
+    let p2 = lines.next().expect("preamble line 2");
+    assert!(p1.starts_with("# "), "preamble must be #-prefixed: {p1:?}");
+    assert!(p2.starts_with("# "), "preamble must be #-prefixed: {p2:?}");
+    assert!(
+        p1.contains("precision report") && p1.contains("recall"),
+        "first preamble line must carry the precision-only disclaimer: {p1:?}"
+    );
+    assert!(
+        p2.contains("docs/AUDIT-LABEL-SCHEMA.md"),
+        "second preamble line must point to the sample-file schema doc: {p2:?}"
+    );
+
     let header = lines.next().expect("header line");
     assert_eq!(
         header,
@@ -190,6 +205,36 @@ fn test_audit_confidence_label_format_tsv() {
         // All-true labelling => precision rendered as 1.0000.
         assert_eq!(cols[6], "1.0000", "row: {row}");
     }
+}
+
+#[test]
+fn test_audit_confidence_label_json_carries_sample_schema_doc() {
+    // Chunk 8: external labeller authors must discover the sample-file
+    // contract directly from the report header. Verify the JSON shape
+    // includes `sample_schema_doc` pointing at docs/AUDIT-LABEL-SCHEMA.md.
+    let (_dir, root) = setup_indexed_fixture();
+    let sample = emit_and_label_all_true(&root);
+
+    let out = Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--label"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .success();
+    let stdout = String::from_utf8_lossy(&out.get_output().stdout).to_string();
+    let report: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let doc = report["sample_schema_doc"]
+        .as_str()
+        .expect("sample_schema_doc must be a string");
+    assert!(
+        doc.contains("docs/AUDIT-LABEL-SCHEMA.md"),
+        "expected AUDIT-LABEL-SCHEMA.md pointer: {doc:?}"
+    );
+    assert!(
+        doc.contains("schema_version"),
+        "doc pointer must cite schema_version: {doc:?}"
+    );
 }
 
 #[test]
