@@ -1,0 +1,16 @@
+---
+source: gumiho-mudang-scope/scope-core/tests/malformed_sources.rs
+expression: snapshot_data
+---
+[
+    SkippedRangeRepr {
+        reason: "tree_sitter_error:syntax_error",
+        start_line: 7,
+        end_line: 7,
+    },
+    SkippedRangeRepr {
+        reason: "tree_sitter_error:missing_node",
+        start_line: 10,
+        end_line: 10,
+    },
+]

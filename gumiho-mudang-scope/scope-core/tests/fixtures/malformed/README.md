@@ -105,6 +105,40 @@ language × 7 languages); chunks 3–4 wire the harness against them.
 
 ---
 
+## Parseable-prefix preamble
+
+Several fixtures carry a small **preamble probe** at the very top of
+`source.<ext>` — a complete, syntactically valid top-level
+declaration that lives **outside** the recovery span of the broken
+content below it. Examples (one per language convention):
+
+- C# / Java: `class PreambleProbe { ... Ping() / ping() }` ahead of
+  the broken class.
+- Go / Rust / TypeScript: `fn PreambleProbe() / preambleProbe()` /
+  `pub fn preamble_probe()` ahead of the broken declaration.
+- Python: `def preamble_probe(): return "ok"` ahead of the broken
+  module-level construct.
+- Ruby: `def preamble_probe; "ok"; end` ahead of the broken module.
+
+The preamble is the mechanical "parseable prefix" the harness asserts
+against ([§ Purpose](#purpose) contract 2 — *the parseable prefix
+produces ≥ 1 symbol*). It exists because tree-sitter recovery can
+sweep an entire containing class/module/function up into the ERROR
+span when a body-internal failure cascades; without a preamble at
+the file's top, the harness sees 0 symbols even though a human would
+say "the class header is clearly intact". The preamble pins a
+declaration that is mechanically guaranteed to survive recovery so
+the contract is enforceable per fixture without relying on
+grammar-version-specific recovery heuristics.
+
+Each fixture's `expected.md` describes the broken section's failure
+mode in source terms; the **authoritative line ranges** for the
+`skipped_ranges` recording are the `insta` snapshot files under
+`tests/snapshots/malformed_sources/<lang>__<case>.snap`. When the
+preamble shifts source line numbers, `expected.md` prose stays
+intent-level (e.g., *"the broken token at the truncated `+=`
+expression"*); the snapshot pins the concrete tree-sitter output.
+
 ## Fixture provenance — hand-crafted synthetic
 
 The fixtures here are **hand-crafted synthetic**, not anonymized

@@ -1,5 +1,9 @@
 package acme
 
+func PreambleProbe() string {
+	return "ok"
+}
+
 import (
 	"fmt"
 	"strings"

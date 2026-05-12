@@ -1,3 +1,7 @@
+pub fn preamble_probe() -> &'static str {
+    "ok"
+}
+
 pub fn build_router() {
     routes! {
         GET "/health" => health_handler,

@@ -1,3 +1,8 @@
+def preamble_probe
+  "ok"
+end
+
+
 module Acme
   class OrderProcessor
     attr_accessor :total

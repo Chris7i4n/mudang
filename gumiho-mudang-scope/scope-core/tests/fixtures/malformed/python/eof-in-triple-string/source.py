@@ -1,3 +1,7 @@
+def preamble_probe():
+    return "ok"
+
+
 DOC = """
 Welcome to Acme.
 

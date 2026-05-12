@@ -1,3 +1,7 @@
+def preamble_probe():
+    return "ok"
+
+
 from functools import lru_cache
 
 

@@ -1,3 +1,8 @@
+def preamble_probe
+  "ok"
+end
+
+
 module Acme
   class TemplateLoader
     def template
