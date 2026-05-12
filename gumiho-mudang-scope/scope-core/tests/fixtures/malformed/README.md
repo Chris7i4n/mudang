@@ -165,7 +165,7 @@ Per-language category index (filled in as chunk 2 lands fixtures):
 
 | Language | 5 categories selected | Notes |
 |---|---|---|
-| C# | _TBD chunk 2_ | Brace-balanced grammar; truncated, unbalanced, eof-in-string, eof-in-verbatim-string, eof-in-attribute-list are the natural picks. |
+| C# | `truncated-mid-method`, `unbalanced-brace`, `eof-in-string`, `eof-in-verbatim-string`, `eof-in-attribute-list` | Brace-balanced grammar; verbatim string exercises C#-specific multi-line `@"..."` recovery, attribute list exercises bracketed-call recovery in attribute position. |
 | Go | _TBD chunk 2_ | Brace-balanced; truncated, unbalanced, eof-in-raw-string, missing-closing-paren-on-call, eof-in-import-block are natural. |
 | Java | _TBD chunk 2_ | Brace-balanced; truncated, unbalanced, eof-in-string, eof-in-annotation, eof-in-generics-angle are natural. |
 | Python | _TBD chunk 2_ | No braces. Truncated, mixed-indent-collapse, eof-in-triple-string, eof-in-bracketed-call, eof-in-decorator are natural. |
