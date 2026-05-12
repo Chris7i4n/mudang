@@ -92,29 +92,43 @@ if [[ -n "$hits" ]]; then
                "$hits"
 fi
 
-# Check 4 — `pub type Edge = RawEdge` transitional alias.
+# Check 4 — Transitional `Edge` alias re-introduction.
 #
 # Retired in sprint 0009 chunk 1 row 3 (commit 9184302). The R1
 # split is complete; production code uses `RawEdge` (extractor
 # output) or `InsertableEdge` (resolver output) directly.
-hits=$(grep -RnE '^pub type Edge\b' --include='*.rs' "${EXCLUDES[@]}" "${SCOPE_PATHS[@]}" 2>/dev/null || true)
+#
+# Catches both alias shapes:
+#   - `pub type Edge = RawEdge;`
+#   - `pub use scope_core::RawEdge as Edge;`
+# `\bEdge\b` is the precise token boundary — `RawEdge`, `EdgeKind`,
+# `EdgeBuilder`, `EdgeSummary`, `EdgeId`, and `InsertableEdge` all
+# have a word-char immediately abutting the four letters, so the
+# boundary anchor excludes them automatically.
+hits=$(grep -RnE '^pub (type Edge\b|use [^;]*\bas Edge\b)' --include='*.rs' "${EXCLUDES[@]}" "${SCOPE_PATHS[@]}" 2>/dev/null || true)
 if [[ -n "$hits" ]]; then
-    fail_block "transitional type alias \`pub type Edge = …\`" \
+    fail_block "transitional \`Edge\` alias (\`pub type Edge = …\` or \`pub use … as Edge\`)" \
                "sprint 0009 chunk 1 row 3 (commit 9184302)" \
                "$hits"
 fi
 
-# Check 5 — Importing `Edge` from scope_core / types.
+# Check 5 — Importing the retired `Edge` token in any `use` line.
 #
-# Companion to check 4: the alias is gone, so any import is broken.
-# This check fires on lines that explicitly request the `Edge` name
-# from the core types surface.
-hits=$(grep -RnE '\b(scope_core|crate)::types::\{[^}]*\bEdge\b' --include='*.rs' "${EXCLUDES[@]}" "${SCOPE_PATHS[@]}" 2>/dev/null || true)
-hits_alt=$(grep -RnE '\bscope_core::\{[^}]*\bEdge\b' --include='*.rs' "${EXCLUDES[@]}" "${SCOPE_PATHS[@]}" 2>/dev/null || true)
-if [[ -n "$hits$hits_alt" ]]; then
+# Companion to check 4: the alias is gone, so any import that names
+# `Edge` directly is broken. Catches every import shape:
+#   - direct:   `use scope_core::Edge;`
+#   - qualified `use scope_core::types::Edge;` / `use crate::types::Edge;`
+#   - braced:   `use scope_core::{Edge, Symbol};`
+#   - braced+ws `use scope_core::{Confidence, Edge, RawEdge, ...};`
+# `\bEdge\b` is the precise token boundary — see check 4 for the
+# rationale that excludes `RawEdge` / `EdgeKind` / `EdgeBuilder` /
+# `EdgeSummary` / `EdgeId` / `InsertableEdge` automatically. `[^;]*`
+# crosses brace boundaries so braced imports surface alongside direct.
+hits=$(grep -RnE '^use [^;]*\bEdge\b' --include='*.rs' "${EXCLUDES[@]}" "${SCOPE_PATHS[@]}" 2>/dev/null || true)
+if [[ -n "$hits" ]]; then
     fail_block "import of retired \`Edge\` type alias" \
                "sprint 0009 chunk 1 row 3 (commit 9184302) — switch to \`RawEdge\`" \
-               "${hits}${hits:+$'\n'}${hits_alt}"
+               "$hits"
 fi
 
 # Check 6 — `INSERT OR IGNORE` in production SQL.
