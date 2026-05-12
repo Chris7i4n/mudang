@@ -71,6 +71,37 @@ Close the output side and the detection layer for D2 / E1:
       preserve their token budgets — the typed shape does not balloon
       output.
 
+#### R10 scope decision (mid-sprint amendment)
+
+The R10 target-state phrase *"Formatters serialize structs; they do not
+concatenate strings"* is read **strictly** in sprint 0006:
+
+- Every output renderer in `gumiho-mudang-cli` — sketch, summary,
+  compact, json envelope, plus the per-command surfaces (refs, deps,
+  impact, trace, flow, entrypoints, status, workspace, map, find,
+  similar, source, diff) — converts to a `#[derive(Serialize)]` struct
+  or enum at the output boundary.
+- Procedural `println!`/`format!` collapses into `impl Display` on the
+  typed output struct.
+- `serde_json::json!()` ad-hoc tree construction is removed from the
+  codebase. Every JSON-emitting path serializes a concrete typed value.
+
+Rationale: maximises the "make illegal states unrepresentable" Rust
+idiom (sum types over render variants prevent constructing a
+`ClassSketch`-shaped output for a method-shaped symbol); enables
+compile-time-optimized marshaling (`#[derive(Serialize)]` streams
+directly to the writer with no `serde_json::Value` intermediate); opens
+the door to schema-export for LSP composition (recorded in
+[`gumiho-mudang-lsp/docs/SCOPE_OUTPUT_INTEROP.md`](../../../gumiho-mudang-lsp/docs/SCOPE_OUTPUT_INTEROP.md)
+and `SCOPE-LSP-COMPOSITION.md` § 5.4).
+
+Costs accepted: ~3-5 days work; all 28 `insta` snapshot tests
+re-anchor; ~50 KB binary size from serde-derive monomorphization.
+
+The strict reading is locked in
+[`ARCHITECTURAL-REFACTOR.md` § R10 → Sprint 0006 scope decision](../ARCHITECTURAL-REFACTOR.md#r10--typed-output-schema)
+for codex review and downstream sprint references.
+
 ### R8 acceptance ([source](../ARCHITECTURAL-REFACTOR.md#r8--confidence-audit-subcommand))
 
 - [ ] `scope audit confidence` subcommand exists, runs against the
