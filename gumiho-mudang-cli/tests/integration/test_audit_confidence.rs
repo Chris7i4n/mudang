@@ -193,6 +193,61 @@ fn test_audit_confidence_label_format_tsv() {
 }
 
 #[test]
+fn test_audit_confidence_tier_gate_fails_on_low_precision_high_tier() {
+    let (_dir, root) = setup_indexed_fixture();
+    let sample = root.join("sample.jsonl");
+
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--emit-sample"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .success();
+
+    // Label every record `false`: every high-tier group's precision = 0,
+    // which is far below the 95% target. Tier gate must fail the run.
+    let raw = std::fs::read_to_string(&sample).unwrap();
+    let labelled: String = raw
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+        .map(|l| l.replace("\"label\":null", "\"label\":false"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    std::fs::write(&sample, format!("{labelled}\n")).unwrap();
+
+    let out = Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--label"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .failure();
+
+    let stdout = String::from_utf8_lossy(&out.get_output().stdout).to_string();
+    let stderr = String::from_utf8_lossy(&out.get_output().stderr).to_string();
+
+    // Report still printed (so the operator sees every offender).
+    let report: serde_json::Value =
+        serde_json::from_str(&stdout).expect("stdout must still carry the JSON report");
+    assert_eq!(report["schema_version"], "1");
+
+    // Tier gate error printed to stderr with target percentages and remediation.
+    assert!(
+        stderr.contains("tier gate"),
+        "stderr must mention tier gate; got: {stderr}"
+    );
+    assert!(
+        stderr.contains("95%") || stderr.contains("0.9500"),
+        "stderr must reference the high-tier target; got: {stderr}"
+    );
+    assert!(
+        stderr.contains("Remediation"),
+        "stderr must include remediation; got: {stderr}"
+    );
+}
+
+#[test]
 fn test_audit_confidence_label_rejects_null_labels() {
     let (_dir, root) = setup_indexed_fixture();
     let sample = root.join("sample.jsonl");

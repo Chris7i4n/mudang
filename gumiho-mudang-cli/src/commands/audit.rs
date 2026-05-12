@@ -51,6 +51,19 @@ pub const SCHEMA_DOC_POINTER: &str =
 /// `producer_captured_args` field addition with the `args_text` cap drop).
 pub const SCHEMA_VERSION: &str = "1";
 
+/// Minimum precision the **high** tier must hit, per R8 acceptance
+/// (`docs/ARCHITECTURAL-REFACTOR.md` § R8). The CI gate enforces this:
+/// any high-tier row whose `precision < HIGH_TIER_MIN` is a build
+/// failure. The number itself is the pre-Phase-D ambiguity #2 anchor —
+/// `high` exists to mean "this edge is almost certainly correct" and
+/// 95% is the operational floor for that claim.
+pub const HIGH_TIER_MIN: f64 = 0.95;
+
+/// Minimum precision the **medium** tier must hit, per R8 acceptance.
+/// Below this, the producer either downgrades the stamp to `low` or
+/// fixes the pattern.
+pub const MEDIUM_TIER_MIN: f64 = 0.70;
+
 /// JSONL record per `docs/AUDIT-LABEL-SCHEMA.md` (schema_version "1").
 ///
 /// Field order in this struct matches the order declared in the schema
@@ -421,7 +434,82 @@ fn label_pass(
 
     let report = compute_precision_report(&records);
     write_report(&report, args.format, &mut std::io::stdout().lock())?;
+    check_tier_gate(&report)?;
     Ok(())
+}
+
+/// Enforce the R8 tier targets against a computed precision report.
+///
+/// Returns `Ok(())` if every row passes its tier's minimum, or an error
+/// listing every offender (kind, tier, producer, pattern_id, precision)
+/// otherwise. The error message is multi-line and intentionally verbose:
+/// the operator needs to see every failing pattern to decide whether to
+/// downgrade the confidence stamp or fix the pattern, not just the first
+/// offender.
+///
+/// Tier targets per `docs/ARCHITECTURAL-REFACTOR.md` § R8 (verbatim):
+/// - `high ≥ 95%`
+/// - `medium ≥ 70%`
+/// - `low` has no minimum
+///
+/// Unknown tier strings produce an error — better to fail loudly than
+/// silently accept a tier that was never reviewed against a target.
+pub fn check_tier_gate(report: &PrecisionReport) -> Result<()> {
+    use std::fmt::Write as _;
+    let mut failures: Vec<&ReportRow> = Vec::new();
+    for row in &report.report {
+        let min = match row.tier.as_str() {
+            "high" => HIGH_TIER_MIN,
+            "medium" => MEDIUM_TIER_MIN,
+            "low" => continue,
+            other => anyhow::bail!(
+                "unknown tier {other:?} in report row (kind={}, producer={}, pattern_id={}); \
+                 expected `high` / `medium` / `low` per docs/ARCHITECTURAL-REFACTOR.md § R8",
+                row.kind,
+                row.producer,
+                row.pattern_id
+            ),
+        };
+        if row.precision < min {
+            failures.push(row);
+        }
+    }
+    if failures.is_empty() {
+        return Ok(());
+    }
+    let mut msg = String::new();
+    let _ = writeln!(
+        msg,
+        "tier gate: {} row(s) below precision target (high >= {:.0}%, medium >= {:.0}%, low no minimum):",
+        failures.len(),
+        HIGH_TIER_MIN * 100.0,
+        MEDIUM_TIER_MIN * 100.0
+    );
+    for row in &failures {
+        let min = if row.tier == "high" {
+            HIGH_TIER_MIN
+        } else {
+            MEDIUM_TIER_MIN
+        };
+        let _ = writeln!(
+            msg,
+            "  {} / {} / {} / {} -> precision {:.4} (target {:.4}; {}/{} correct)",
+            row.kind,
+            row.tier,
+            row.producer,
+            row.pattern_id,
+            row.precision,
+            min,
+            row.correct_count,
+            row.sample_size,
+        );
+    }
+    msg.push_str(
+        "Remediation: either downgrade the confidence stamp at the producer \
+         (so the pattern lands in a lower tier with a lower target) or fix \
+         the pattern so the labelled precision rises.",
+    );
+    Err(anyhow::anyhow!(msg))
 }
 
 /// Group records by `(kind, tier, producer, pattern_id)` and compute
@@ -1036,6 +1124,97 @@ mod tests {
             lines[2],
             "imports\tmedium\tpython\tp.imports.from\t12\t9\t0.7500"
         );
+    }
+
+    // -- Chunk 6: tier gate --
+
+    fn report_with_rows(rows: Vec<ReportRow>) -> PrecisionReport {
+        PrecisionReport {
+            schema_version: "1".to_string(),
+            disclaimer: PRECISION_ONLY_DISCLAIMER.to_string(),
+            report: rows,
+        }
+    }
+
+    fn row(kind: &str, tier: &str, pattern_id: &str, n: usize, k: usize) -> ReportRow {
+        ReportRow {
+            kind: kind.to_string(),
+            tier: tier.to_string(),
+            producer: "rust".to_string(),
+            pattern_id: pattern_id.to_string(),
+            sample_size: n,
+            correct_count: k,
+            precision: if n == 0 { 0.0 } else { k as f64 / n as f64 },
+        }
+    }
+
+    #[test]
+    fn tier_gate_passes_when_every_row_meets_target() {
+        let report = report_with_rows(vec![
+            row("calls", "high", "p1", 20, 19),   // 0.95 — exactly at boundary
+            row("imports", "medium", "p2", 10, 7), // 0.70 — exactly at boundary
+            row("extends", "low", "p3", 5, 0),    // low: no minimum
+        ]);
+        check_tier_gate(&report).expect("gate should pass at exact boundaries");
+    }
+
+    #[test]
+    fn tier_gate_fails_on_high_tier_below_95() {
+        let report = report_with_rows(vec![row("calls", "high", "p1", 100, 94)]); // 0.94
+        let err = check_tier_gate(&report).unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("tier gate"));
+        assert!(msg.contains("p1"));
+        assert!(msg.contains("0.9400"));
+        assert!(msg.contains("Remediation"));
+    }
+
+    #[test]
+    fn tier_gate_fails_on_medium_tier_below_70() {
+        let report = report_with_rows(vec![row("imports", "medium", "p2", 10, 6)]); // 0.60
+        let err = check_tier_gate(&report).unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("medium"));
+        assert!(msg.contains("p2"));
+        assert!(msg.contains("0.6000"));
+    }
+
+    #[test]
+    fn tier_gate_does_not_fail_on_low_tier_at_zero_precision() {
+        let report = report_with_rows(vec![row("calls", "low", "p3", 10, 0)]); // 0.0
+        check_tier_gate(&report).expect("low tier has no minimum");
+    }
+
+    #[test]
+    fn tier_gate_reports_every_offender_not_just_first() {
+        let report = report_with_rows(vec![
+            row("calls", "high", "p1", 100, 90),    // 0.90 fail
+            row("imports", "medium", "p2", 10, 5),  // 0.50 fail
+            row("extends", "high", "p3", 100, 100), // 1.00 pass
+            row("calls", "high", "p4", 100, 80),    // 0.80 fail
+        ]);
+        let err = check_tier_gate(&report).unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("3 row(s)"), "expected 3 failures: {msg}");
+        for pattern in ["p1", "p2", "p4"] {
+            assert!(msg.contains(pattern), "missing {pattern}: {msg}");
+        }
+        assert!(!msg.contains("p3"));
+    }
+
+    #[test]
+    fn tier_gate_rejects_unknown_tier_string() {
+        let report = report_with_rows(vec![row("calls", "ultra", "p1", 10, 10)]);
+        let err = check_tier_gate(&report).unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("unknown tier"));
+        assert!(msg.contains("\"ultra\""));
+    }
+
+    #[test]
+    fn tier_gate_constants_match_r8_targets() {
+        assert_eq!(HIGH_TIER_MIN, 0.95);
+        assert_eq!(MEDIUM_TIER_MIN, 0.70);
     }
 
     #[test]
