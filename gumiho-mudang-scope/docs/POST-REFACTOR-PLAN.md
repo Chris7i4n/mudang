@@ -43,6 +43,49 @@ Phase E acceptance (per "Gate" section above). Specifically: R8 must be `shipped
 
 ---
 
+## Priority 2 (immediately post-refactor) — Honesty audit: eliminate non-essential approximations
+
+### Principle (charter-grade)
+
+Scope is a code analyser. The quality and size of the code submitted to it can legitimately impact the **cost** of analysis — analysing a 1-megabyte SQL literal embedded in source costs more I/O than analysing a 50-byte one, full stop. But cost-driven choices may **never** introduce **silent inaccuracy** into the analysis itself. A code analyser that lies is worse than one that is slow: a slow analyser tells the truth eventually; a lying one corrupts every downstream decision (refactor, LSP, audit, agent reasoning).
+
+The **only** acceptable trade-offs against fidelity are **hard runtime constraints**:
+
+- The un-approximated version would **panic** (integer overflow, stack overflow, unwrap on `None` we cannot eliminate at the type level).
+- The un-approximated version would **OOM** on realistic input (not on pathological input — on the kind of input we genuinely expect to handle).
+- The un-approximated version would **not run at all** (filesystem, syscall, transport, OS-imposed bound).
+
+Anything weaker than that — *"this might be slow on bad code"*, *"literals are usually small anyway"*, *"the truncated form is good enough for the common case"*, *"99% of cases fit in N bytes"* — is **not** a valid justification for sacrificing fidelity. Bad code is exactly the input Scope must analyse honestly.
+
+This principle has been implicit throughout every refactor sprint (Charter, R-move acceptance bullets, sprint deliverables consistently chose fidelity over speed). Priority 2 makes it explicit and re-validates every prior choice against it.
+
+### Known offender (Priority 2 sprint opens here)
+
+- **R0 `edges.args_text` 2 KB cap** — see [`ARCHITECTURAL-REFACTOR.md` § R0 → Mitigation 2](ARCHITECTURAL-REFACTOR.md#r0--schema-closures--edge-kind-additions--symbols-metadata-shape) and the const `ARGS_TEXT_CAP_BYTES = 2048` in [`scope-core/src/edge.rs`](../scope-core/src/edge.rs). Truncating call-site / declaration-site argument literals at 2 KB plus a `[truncated]` marker is an approximation justified by *"common case fits"* — **not** by any hard runtime constraint. SQLite TEXT holds up to ~1 GB; long literals make Scope slower on pathological codebases but cannot panic, OOM, or fail to run. The fix is to drop the cap and the truncation marker; the pre-1.0 wipe-and-reindex policy (CHARTER §2) absorbs the schema impact for existing local DBs.
+
+### Sub-items (sequenced — (a) and (b) feed (c) and (d))
+
+- **(a) Charter-grade audit.** Walk every R-move acceptance bullet, every schema comment, every doc rationale. Flag every use of the words *cap*, *truncate*, *limit*, *approximate*, *sample*, *heuristic*, *good enough*, *common case*, *roughly*. For each: is the trade-off justified by a hard runtime constraint (panic / OOM / won't-run)? If yes — leave it and surface the constraint verbatim in the doc. If no — queue for fix.
+- **(b) Code-grade audit.** Grep every workspace crate for `const .*: usize = ` whose name contains `CAP`, `LIMIT`, `MAX`, `TRUNC`, `BUDGET`, `THRESHOLD`, or that is followed by truncation / sampling / fallback logic. Same triage as (a).
+- **(c) Drop the R0 `args_text` 2 KB cap** (known offender above). One commit, charter-grade amendment on `main`:
+  - Delete `ARGS_TEXT_CAP_BYTES`, `TRUNCATION_MARKER`, and the truncation logic in `scope-core/src/edge.rs`.
+  - Delete the matching unit test (currently asserts the truncation byte length).
+  - Update the schema comment in `scope-graph/src/sql/schema.sql` (drop "capped at 2 KB / truncation marker" text).
+  - Update [`ARCHITECTURAL-REFACTOR.md` § R0 → Mitigation 2](ARCHITECTURAL-REFACTOR.md#r0--schema-closures--edge-kind-additions--symbols-metadata-shape) (replace with a note recording the original cap was dropped by Priority 2; honesty over performance; pre-1.0 wipe policy stands).
+  - Log entry in `REFACTOR-STATUS.md` documenting the amendment (paper-trail discipline per §3 ambiguity protocol).
+- **(d) Fix any further offenders found by (a) + (b).** Each fix lands as its own charter-grade amendment with paper trail.
+- **(e) Capture remaining justified approximations as explicit invariants.** Where (a) or (b) finds a trade-off that *is* justified by a hard runtime constraint, the constraint moves into the document as a first-class invariant (not a footnote). Future sprints know the line was drawn deliberately and where.
+
+### Gate to start
+
+Phase E acceptance (per "Gate" section above). Runs in parallel with Priority 1 — independent surfaces (Priority 1 builds the self-correction actuator on top of R8; Priority 2 audits the data the actuator measures). Neither blocks the other.
+
+### Why this is **not** absorbed by Priority 1 (self-correction cycle)
+
+Priority 1's labelling pipeline reads `source_snippet` directly from the source file at audit time — it deliberately sidesteps `args_text` precisely because R8's design recognised the approximation issue. So Priority 1 ships safely even before Priority 2 lands. But every **other** consumer of `args_text` (resolver, framework plugins, future LSP integration, time-travel queries) is still reading a possibly-truncated string. Priority 2 plugs the leak system-wide.
+
+---
+
 ## Cross-cutting items (charter §6 soft-expansion zone, not absorbed by refactor)
 
 The refactor absorbed several soft-expansion items into its R-moves (resolution pass → R3, domain edge kinds → R0, config-file readers → R4, confidence/provenance metadata → R0, decorator/annotation argument capture → R0 + R5). The items below are the **remainder**: they sit in the soft-expansion zone but require new work after the refactor closes.
