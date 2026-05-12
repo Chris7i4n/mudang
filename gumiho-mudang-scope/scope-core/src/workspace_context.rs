@@ -13,10 +13,12 @@
 //!   / `tsconfig_target` / `framework_versions`. Reading those would
 //!   let a plugin branch on language or framework version, weakening
 //!   C2.
-//! - `FrameworkWorkspaceContext` (`pub(crate)` during Phase B —
-//!   sprints 0002, 0003, 0004) — extends `LanguageWorkspaceContext`
-//!   with framework-version and lockfile access. Visibility widens to
-//!   `pub` in R5 (sprint 0005, Phase C) in the same commit that
+//! - `FrameworkWorkspaceContext` (`pub` since sprint 0005, Phase C
+//!   first-impl commit) — extends `LanguageWorkspaceContext` with
+//!   framework-version and lockfile access. Phase B (sprints 0002,
+//!   0003, 0004) shipped this as `pub(crate)` so the compiler refused
+//!   language-plugin code that tried to bound on framework-version
+//!   accessors; sprint 0005 widens to `pub` in the same commit that
 //!   lands the first `FrameworkPlugin` impl. See
 //!   `ARCHITECTURAL-REFACTOR.md` § R4 → "Visibility of
 //!   FrameworkWorkspaceContext".
@@ -144,19 +146,16 @@ pub trait LanguageWorkspaceContext: Send + Sync {
 /// asymmetry with the language layer (see C2 in
 /// `LANGUAGE-PLAYBOOK.md` Step 4).
 ///
-/// **Phase B visibility:** `pub(crate)` for sprints 0002, 0003, 0004.
-/// The Rust compiler refuses any language-plugin code that tries to
-/// import or bound on this trait during Phase B. R5 (sprint 0005)
-/// widens to `pub` in the same commit that lands the first
-/// `FrameworkPlugin` impl. Visibility flip is mechanical (one keyword)
-/// and unconditional. See `ARCHITECTURAL-REFACTOR.md` § R4 →
-/// "Visibility of FrameworkWorkspaceContext".
-///
-/// `dead_code` is allowed here because the trait has no consumer until
-/// R5 lands `FrameworkPlugin`. This is the visibility-staging form of
-/// "ahead-of-need scaffolding" — intentional, not a stub.
-#[allow(dead_code)]
-pub(crate) trait FrameworkWorkspaceContext: LanguageWorkspaceContext {
+/// **Visibility:** `pub` since sprint 0005, Phase C first-impl commit
+/// (this commit). Phase B (sprints 0002, 0003, 0004) shipped this as
+/// `pub(crate)` so the Rust compiler refused language-plugin code that
+/// tried to bound on framework-version accessors. Sprint 0005 widens
+/// to `pub` in the same commit as the first `FrameworkPlugin` impl —
+/// mechanical one-keyword flip, unconditional, recorded in the sprint
+/// plan ambiguity register (#3) as mandatory not conditional. See
+/// `ARCHITECTURAL-REFACTOR.md` § R4 → "Visibility of
+/// FrameworkWorkspaceContext".
+pub trait FrameworkWorkspaceContext: LanguageWorkspaceContext {
     /// Framework versions resolved from manifest + lockfile pairs.
     fn framework_versions(&self) -> &FrameworkVersions;
 

@@ -82,6 +82,9 @@ assert_cmd = "2"
 predicates = "3"
 insta = "1"
 
+# semver (R5 — framework version handling)
+semver = "1"
+
 [profile.release]
 strip = true
 lto = "thin"

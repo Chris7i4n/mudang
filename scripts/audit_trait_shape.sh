@@ -2,9 +2,12 @@
 # CI gate: Trait-shape audit (R12) + Macro definition-only (R11 subset).
 #
 # Rule (CI-GATES.md):
-#   No function in scope-core/src/languages/ or scope-core/src/extract/
-#   has a name implying type-system inference, evaluation, narrowing,
-#   overload resolution, or macro expansion.
+#   No function in scope-core/src/languages/, scope-core/src/extract/,
+#   or scope-core/src/frameworks/ has a name implying type-system
+#   inference, evaluation, narrowing, overload resolution, or macro
+#   expansion. R5 (sprint 0005) extends the gate to `frameworks/` so
+#   future `FrameworkPlugin` impls cannot regress the negative trait
+#   shape.
 #
 # Forbidden prefixes (R12 + R11):
 #   infer_*           — implies type inference
@@ -34,6 +37,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SCAN_PATHS=(
     "$ROOT/gumiho-mudang-scope/scope-core/src/languages"
     "$ROOT/gumiho-mudang-scope/scope-core/src/extract"
+    "$ROOT/gumiho-mudang-scope/scope-core/src/frameworks"
 )
 
 for p in "${SCAN_PATHS[@]}"; do

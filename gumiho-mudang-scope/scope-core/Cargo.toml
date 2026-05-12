@@ -29,6 +29,9 @@ anyhow = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 
+# R5 — framework version handling
+semver = { workspace = true }
+
 [dev-dependencies]
 tempfile = { workspace = true }
 # R1 CI gates: compile-fail tests for EdgeBuilder typestate and the
