@@ -451,20 +451,11 @@ impl Graph {
     pub fn get_class_relationships(&self, class_id: &str) -> Result<ClassRelationships> {
         let mut rels = ClassRelationships::default();
 
-        // Build the set of source IDs to check: the class itself and the
-        // __module__::class synthetic ID. Also check __module__ synthetic ID
-        // for backward compatibility with pre-fix indexes and for import edges
-        // which intentionally use module-level from_id.
-        let file_path = class_id.split("::").next().unwrap_or("");
-        let module_class_id = format!("{file_path}::__module__::class");
-
         // Get 'extends' edges from this class
         let mut stmt = self
             .conn
-            .prepare("SELECT to_id FROM edges WHERE from_id IN (?1, ?2) AND kind = 'extends'")?;
-        let rows = stmt.query_map(params![class_id, module_class_id], |row| {
-            row.get::<_, String>(0)
-        })?;
+            .prepare("SELECT to_id FROM edges WHERE from_id = ?1 AND kind = 'extends'")?;
+        let rows = stmt.query_map(params![class_id], |row| row.get::<_, String>(0))?;
         for row in rows {
             let to_id = row?;
             let name = self.symbol_name_from_id(&to_id);
@@ -476,10 +467,8 @@ impl Graph {
         // Get 'implements' edges from this class
         let mut stmt = self
             .conn
-            .prepare("SELECT to_id FROM edges WHERE from_id IN (?1, ?2) AND kind = 'implements'")?;
-        let rows = stmt.query_map(params![class_id, module_class_id], |row| {
-            row.get::<_, String>(0)
-        })?;
+            .prepare("SELECT to_id FROM edges WHERE from_id = ?1 AND kind = 'implements'")?;
+        let rows = stmt.query_map(params![class_id], |row| row.get::<_, String>(0))?;
         for row in rows {
             let to_id = row?;
             let name = self.symbol_name_from_id(&to_id);
@@ -1109,8 +1098,11 @@ impl Graph {
     /// For depth > 1: uses a recursive CTE to traverse transitive dependencies.
     /// For classes: includes dependencies from all child methods.
     ///
-    /// Also includes edges from the `__module__` synthetic node for the symbol's
-    /// file, since tree-sitter extractors often attribute edges to the module level.
+    /// Also surfaces file-level imports — `resolve_scope_id` attributes
+    /// import edges to `<file>::__module__::function` since imports have
+    /// no enclosing function or class scope. The module synthetic is
+    /// included only for `kind = 'imports'`; other module-level edges
+    /// belong to `find_file_deps`.
     pub fn find_deps(&self, symbol_name: &str, max_depth: usize) -> Result<Vec<Dependency>> {
         let symbol = self.find_symbol(symbol_name)?.ok_or_else(|| {
             anyhow::anyhow!(
@@ -1121,7 +1113,6 @@ impl Graph {
             )
         })?;
 
-        // Collect source IDs: symbol itself, child methods, and __module__ synthetic IDs
         let mut source_ids = vec![symbol.id.clone()];
         if symbol.kind == "class" || symbol.kind == "struct" || symbol.kind == "interface" {
             let methods = self.get_methods(&symbol.id)?;
@@ -1130,17 +1121,12 @@ impl Graph {
             }
         }
 
-        // Also check __module__ synthetic ID for backward compatibility with
-        // pre-fix indexes and for import edges which intentionally use module-level from_id.
-        let module_id = format!("{}::__module__::function", symbol.file_path);
-        if !source_ids.contains(&module_id) {
-            source_ids.push(module_id);
-        }
+        let imports_module_id = format!("{}::__module__::function", symbol.file_path);
 
         if max_depth <= 1 {
-            self.find_direct_deps(&source_ids)
+            self.find_direct_deps(&source_ids, Some(&imports_module_id))
         } else {
-            self.find_transitive_deps(&source_ids, max_depth)
+            self.find_transitive_deps(&source_ids, Some(&imports_module_id), max_depth)
         }
     }
 
@@ -1157,37 +1143,62 @@ impl Graph {
 
         let mut source_ids: Vec<String> = symbols.iter().map(|s| s.id.clone()).collect();
 
-        // Also check __module__ synthetic ID for backward compatibility with
-        // pre-fix indexes and for import edges which intentionally use module-level from_id.
+        // Include the module-level synthetic ID so file-scoped edges
+        // surface — chiefly imports, which `resolve_scope_id` attributes
+        // to `<file>::__module__::function` when no enclosing function
+        // or class scope exists.
         let module_id = format!("{file_path}::__module__::function");
         if !source_ids.contains(&module_id) {
             source_ids.push(module_id);
         }
 
         if max_depth <= 1 {
-            self.find_direct_deps(&source_ids)
+            self.find_direct_deps(&source_ids, None)
         } else {
-            self.find_transitive_deps(&source_ids, max_depth)
+            self.find_transitive_deps(&source_ids, None, max_depth)
         }
     }
 
     /// Get direct (depth-1) dependencies from a set of source symbol IDs.
-    fn find_direct_deps(&self, source_ids: &[String]) -> Result<Vec<Dependency>> {
+    ///
+    /// `imports_only_id`, if present, contributes an additional source
+    /// whose edges are restricted to `kind = 'imports'`. Used by
+    /// [`find_deps`] to surface a symbol's file-level imports without
+    /// pulling in unrelated module-level edges.
+    fn find_direct_deps(
+        &self,
+        source_ids: &[String],
+        imports_only_id: Option<&str>,
+    ) -> Result<Vec<Dependency>> {
         let placeholders: Vec<String> = (1..=source_ids.len()).map(|i| format!("?{i}")).collect();
         let id_clause = placeholders.join(", ");
+
+        let where_clause = match imports_only_id {
+            Some(_) => {
+                let imports_slot = source_ids.len() + 1;
+                format!(
+                    "(e.from_id IN ({id_clause})) OR \
+                     (e.from_id = ?{imports_slot} AND e.kind = 'imports')"
+                )
+            }
+            None => format!("e.from_id IN ({id_clause})"),
+        };
 
         let sql = format!(
             "SELECT DISTINCT e.to_id, e.kind
              FROM edges e
-             WHERE e.from_id IN ({id_clause})
+             WHERE {where_clause}
              ORDER BY e.kind, e.to_id"
         );
 
         let mut stmt = self.conn.prepare(&sql)?;
-        let params: Vec<&dyn rusqlite::ToSql> = source_ids
+        let mut params: Vec<&dyn rusqlite::ToSql> = source_ids
             .iter()
             .map(|id| id as &dyn rusqlite::ToSql)
             .collect();
+        if let Some(id) = imports_only_id.as_ref() {
+            params.push(id);
+        }
 
         let rows = stmt.query_map(params.as_slice(), |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
@@ -1269,19 +1280,34 @@ impl Graph {
     }
 
     /// Get transitive dependencies using a recursive CTE.
+    ///
+    /// `imports_only_id`, if present, adds a seed restricted to
+    /// `kind = 'imports'` so file-level imports surface alongside the
+    /// symbol's own transitive deps without dragging in unrelated
+    /// module-level edges. The recursive step is unrestricted — once
+    /// an imported symbol is seeded, its own deps are followed
+    /// normally.
     fn find_transitive_deps(
         &self,
         source_ids: &[String],
+        imports_only_id: Option<&str>,
         max_depth: usize,
     ) -> Result<Vec<Dependency>> {
         // We need a temp table approach since CTEs can't easily take dynamic IN clauses
         // for recursive seeds. Instead, build the seed UNION for all source IDs.
-        let seed_conditions: Vec<String> = (1..=source_ids.len())
+        let mut seed_conditions: Vec<String> = (1..=source_ids.len())
             .map(|i| format!("SELECT e.to_id, e.kind, 1 FROM edges e WHERE e.from_id = ?{i}"))
             .collect();
+        let imports_slot_opt = imports_only_id.map(|_| source_ids.len() + 1);
+        if let Some(imports_slot) = imports_slot_opt {
+            seed_conditions.push(format!(
+                "SELECT e.to_id, e.kind, 1 FROM edges e \
+                 WHERE e.from_id = ?{imports_slot} AND e.kind = 'imports'"
+            ));
+        }
         let seed_union = seed_conditions.join(" UNION ALL ");
 
-        let depth_param_idx = source_ids.len() + 1;
+        let depth_param_idx = source_ids.len() + imports_only_id.map_or(0, |_| 1) + 1;
         let sql = format!(
             "WITH RECURSIVE deps(id, kind, depth) AS (
                 {seed_union}
@@ -1301,6 +1327,9 @@ impl Graph {
         let mut param_values: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
         for id in source_ids {
             param_values.push(Box::new(id.clone()));
+        }
+        if let Some(id) = imports_only_id {
+            param_values.push(Box::new(id.to_string()));
         }
         param_values.push(Box::new(max_depth as i64));
         let params_ref: Vec<&dyn rusqlite::ToSql> = param_values
