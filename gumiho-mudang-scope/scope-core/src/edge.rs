@@ -1,18 +1,20 @@
 //! R1 typed-edge insertion API.
 //!
-//! Sole producer of edges that reach the graph storage layer. Plugins
-//! construct a `RawEdge` via `Edge::builder()` (six required setters,
-//! enforced by typestate at compile time) and a resolver converts the
-//! `RawEdge` to an `InsertableEdge` by assigning `status`. The graph
-//! storage layer accepts only `InsertableEdge` via the sealed
-//! [`Insertable`] trait.
+//! Plugins construct a `RawEdge` via `Edge::builder()` (six required
+//! setters, enforced by typestate at compile time). A resolver in
+//! `scope-graph::resolve` converts the `RawEdge` to an
+//! `InsertableEdge` by assigning `status`; the graph storage layer
+//! accepts only `InsertableEdge` via the sealed `Insertable` trait.
+//!
+//! `InsertableEdge` and `Insertable` deliberately live in
+//! `scope-graph::resolve`, not here — sprint 0003 chunk 6 moved them
+//! out of `scope-core` so the resolver-only construction site is
+//! module-private to `scope_graph::resolve`. See
+//! `docs/ARCHITECTURAL-REFACTOR.md` § R3 ("Resolver location") and
+//! `docs/CI-GATES.md` § Insertable typestate.
 //!
 //! See `docs/ARCHITECTURAL-REFACTOR.md` § R1 (typed edge insertion API)
 //! for the contract and § R0 (schema closures) for the column layout.
-//!
-//! The Phase A resolver is a trivial workspace-name-lookup stub
-//! introduced in sprint 0001 and retired wholesale in R3 (sprint 0003).
-//! See `docs/REFACTOR-STATUS.md` § Stubs outstanding.
 
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
@@ -256,70 +258,58 @@ impl RawEdge {
         EdgeBuilder::new()
     }
 
-    pub fn from_id(&self) -> &str { &self.from_id }
-    pub fn to_id(&self) -> &str { &self.to_id }
-    pub fn kind(&self) -> EdgeKind { self.kind }
-    pub fn confidence(&self) -> Confidence { self.confidence }
-    pub fn producer(&self) -> &Producer { &self.producer }
-    pub fn pattern_id(&self) -> &str { &self.pattern_id }
-    pub fn capture_id(&self) -> Option<&str> { self.capture_id.as_deref() }
-    pub fn framework(&self) -> Option<&str> { self.framework.as_deref() }
-    pub fn args_text(&self) -> Option<&str> { self.args_text.as_deref() }
-    pub fn file_path(&self) -> &str { &self.file_path }
-    pub fn line(&self) -> Option<u32> { self.line }
-}
-
-/// Output of the resolver. Sole type accepted by the graph storage
-/// layer via the sealed [`Insertable`] trait. Fields are `pub(crate)`;
-/// construction goes through resolver code paths only (R3 tightens
-/// the visibility; Phase A's stub uses the package-internal
-/// constructor [`InsertableEdge::__phase_a_new`]).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InsertableEdge {
-    pub(crate) raw: RawEdge,
-    pub(crate) status: Status,
-}
-
-impl InsertableEdge {
-    /// Phase A resolver-stub constructor. Marked with the
-    /// `__phase_a` prefix and reachable only via
-    /// `scope-graph::resolver::resolve_stub`. R3 replaces both the
-    /// stub call site and this constructor wholesale.
-    ///
-    /// **Do not call from new code.** R3 retires this entry point
-    /// per `docs/REFACTOR-STATUS.md` § Stubs outstanding.
-    #[doc(hidden)]
-    pub fn __phase_a_new(raw: RawEdge, status: Status) -> Self {
-        Self { raw, status }
+    pub fn from_id(&self) -> &str {
+        &self.from_id
+    }
+    pub fn to_id(&self) -> &str {
+        &self.to_id
+    }
+    pub fn kind(&self) -> EdgeKind {
+        self.kind
+    }
+    pub fn confidence(&self) -> Confidence {
+        self.confidence
+    }
+    pub fn producer(&self) -> &Producer {
+        &self.producer
+    }
+    pub fn pattern_id(&self) -> &str {
+        &self.pattern_id
+    }
+    pub fn capture_id(&self) -> Option<&str> {
+        self.capture_id.as_deref()
+    }
+    pub fn framework(&self) -> Option<&str> {
+        self.framework.as_deref()
+    }
+    pub fn args_text(&self) -> Option<&str> {
+        self.args_text.as_deref()
+    }
+    pub fn file_path(&self) -> &str {
+        &self.file_path
+    }
+    pub fn line(&self) -> Option<u32> {
+        self.line
     }
 
-    pub fn raw(&self) -> &RawEdge { &self.raw }
-    pub fn status(&self) -> Status { self.status }
-    pub fn from_id(&self) -> &str { &self.raw.from_id }
-    pub fn to_id(&self) -> &str { &self.raw.to_id }
-    pub fn kind(&self) -> EdgeKind { self.raw.kind }
-    pub fn confidence(&self) -> Confidence { self.raw.confidence }
-    pub fn producer(&self) -> &Producer { &self.raw.producer }
-    pub fn pattern_id(&self) -> &str { &self.raw.pattern_id }
-    pub fn capture_id(&self) -> Option<&str> { self.raw.capture_id.as_deref() }
-    pub fn framework(&self) -> Option<&str> { self.raw.framework.as_deref() }
-    pub fn args_text(&self) -> Option<&str> { self.raw.args_text.as_deref() }
-    pub fn file_path(&self) -> &str { &self.raw.file_path }
-    pub fn line(&self) -> Option<u32> { self.raw.line }
+    /// Rebind `to_id` to a concrete candidate symbol id. Used by the
+    /// resolver when an extractor-emitted bare name matches multiple
+    /// rows in the symbols table: each Ambiguous candidate gets its own
+    /// `InsertableEdge`, all sharing the original
+    /// `(from_id, kind, confidence, producer, pattern_id)` but pointing
+    /// at distinct candidate `to_id`s. Not for use outside resolver
+    /// code paths (R3, sprint 0003).
+    pub fn with_to_id(mut self, to_id: impl Into<String>) -> Self {
+        self.to_id = to_id.into();
+        self
+    }
 }
 
-/// Sealed marker trait: the graph storage layer accepts only types
-/// implementing `Insertable`. Only [`InsertableEdge`] implements it.
-/// `RawEdge` deliberately does not — the type system forbids inserting
-/// an edge that has not been through the resolver.
-pub trait Insertable: insertable_sealed::Sealed {}
-
-mod insertable_sealed {
-    pub trait Sealed {}
-}
-
-impl insertable_sealed::Sealed for InsertableEdge {}
-impl Insertable for InsertableEdge {}
+// `InsertableEdge` and `Insertable` live in `scope-graph::resolve`
+// (R3, sprint 0003 chunk 6 migration). Constructor is module-private
+// to the resolver — the compile-fail CI gate in
+// `scope-graph/tests/compile_fail/typestate/` enforces it
+// mechanically.
 
 // ---------- Typestate builder ----------
 
@@ -349,7 +339,9 @@ pub struct EdgeBuilder<F = No, T = No, K = No, C = No, P = No, I = No> {
 }
 
 impl Default for EdgeBuilder<No, No, No, No, No, No> {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl EdgeBuilder<No, No, No, No, No, No> {
@@ -549,19 +541,46 @@ mod tests {
     #[test]
     fn slug_roundtrip_all_38_edge_kinds() {
         for slug in [
-            "calls","imports","extends","implements","instantiates",
-            "references","references_type","contains",
-            "http_route","queue_handler","orm_relation","green_thread_spawn",
-            "renders","hook_use","inherits_from","migration","cron",
-            "feature_flag","awaits_on","channel_send","channel_recv",
-            "middleware","validates_with","error_handler",
-            "websocket_handler","client_route","auth_guard","cache_binding",
-            "runtime_task_spawn","route_mount","store_select",
-            "sse_stream","signal_handler","cancel_token","lazy_load",
-            "query_binding","os_process_spawn","os_thread_spawn",
+            "calls",
+            "imports",
+            "extends",
+            "implements",
+            "instantiates",
+            "references",
+            "references_type",
+            "contains",
+            "http_route",
+            "queue_handler",
+            "orm_relation",
+            "green_thread_spawn",
+            "renders",
+            "hook_use",
+            "inherits_from",
+            "migration",
+            "cron",
+            "feature_flag",
+            "awaits_on",
+            "channel_send",
+            "channel_recv",
+            "middleware",
+            "validates_with",
+            "error_handler",
+            "websocket_handler",
+            "client_route",
+            "auth_guard",
+            "cache_binding",
+            "runtime_task_spawn",
+            "route_mount",
+            "store_select",
+            "sse_stream",
+            "signal_handler",
+            "cancel_token",
+            "lazy_load",
+            "query_binding",
+            "os_process_spawn",
+            "os_thread_spawn",
         ] {
-            let kind = EdgeKind::from_slug(slug)
-                .unwrap_or_else(|| panic!("unknown slug {slug}"));
+            let kind = EdgeKind::from_slug(slug).unwrap_or_else(|| panic!("unknown slug {slug}"));
             assert_eq!(kind.as_slug(), slug);
         }
     }

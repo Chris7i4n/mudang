@@ -4,94 +4,8 @@
 /// from TypeScript AST nodes. TypeScript defaults to public access.
 use anyhow::Result;
 use serde::Serialize;
-use std::collections::HashMap;
-use tree_sitter::Language;
 
-use crate::types::Edge;
-use crate::parser::SupportedLanguage;
-use crate::languages::{make_edge, resolve_scope_id, LanguagePlugin};
-
-/// TypeScript language plugin.
-pub struct TypeScriptPlugin;
-
-impl LanguagePlugin for TypeScriptPlugin {
-    fn language(&self) -> SupportedLanguage {
-        SupportedLanguage::TypeScript
-    }
-
-    fn extensions(&self) -> &[&str] {
-        &["ts", "tsx"]
-    }
-
-    fn ts_language(&self) -> Language {
-        tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()
-    }
-
-    fn symbol_query_source(&self) -> &str {
-        include_str!("../queries/typescript/symbols.scm")
-    }
-
-    fn edge_query_source(&self) -> &str {
-        include_str!("../queries/typescript/edges.scm")
-    }
-
-    fn infer_symbol_kind(&self, node_kind: &str) -> &str {
-        match node_kind {
-            "function_declaration" => "function",
-            "class_declaration" => "class",
-            "method_definition" => "method",
-            "interface_declaration" => "interface",
-            "enum_declaration" => "enum",
-            "type_alias_declaration" => "type",
-            "public_field_definition" => "property",
-            "lexical_declaration" | "arrow_function" | "function_expression" => "function",
-            "enum_assignment" | "property_identifier" => "variant",
-            _ => "function",
-        }
-    }
-
-    fn scope_node_types(&self) -> &[&str] {
-        &[
-            "function_declaration",
-            "method_definition",
-            "arrow_function",
-            "function_expression",
-            "class_declaration",
-            "interface_declaration",
-        ]
-    }
-
-    fn class_body_node_types(&self) -> &[&str] {
-        &["class_body", "enum_body"]
-    }
-
-    fn class_decl_node_types(&self) -> &[&str] {
-        &["class_declaration", "enum_declaration"]
-    }
-
-    fn extract_metadata(
-        &self,
-        node: &tree_sitter::Node,
-        source: &str,
-        kind: &str,
-    ) -> Result<String> {
-        extract_metadata(node, source, kind)
-    }
-
-    fn extract_edge(
-        &self,
-        pattern_index: usize,
-        captures: &HashMap<String, (String, u32)>,
-        file_path: &str,
-        enclosing_scope_id: Option<&str>,
-    ) -> Vec<Edge> {
-        extract_ts_edge(pattern_index, captures, file_path, enclosing_scope_id)
-    }
-
-    fn generic_name_stopwords(&self) -> &[&str] {
-        &["constructor", "toString", "valueOf", "render", "default"]
-    }
-}
+use crate::extract::MetadataEntry;
 
 /// Structured metadata for a TypeScript symbol.
 #[derive(Debug, Clone, Serialize, Default)]
@@ -110,6 +24,21 @@ pub struct SymbolMetadata {
     pub return_type: Option<String>,
     /// Parameter list with names, types, and optionality.
     pub parameters: Vec<ParameterInfo>,
+    /// Decorators applied to this symbol — reserved key per
+    /// `LANGUAGE-PLAYBOOK.md` § Step 5. Empty array means "looked, found
+    /// none". TypeScript's AST exposes `decorator` nodes (legacy
+    /// `@Decorator(...)` form on classes and methods), so the key is
+    /// always present.
+    ///
+    /// `template_calls` is **omitted** at this layer: the project parses
+    /// `.ts` and `.tsx` files with `tree_sitter_typescript::LANGUAGE_TYPESCRIPT`
+    /// which does not expose JSX AST nodes. Per the playbook
+    /// (§ Step 5), absent-vs-empty distinction is meaningful, so
+    /// omitting accurately records "language plugin did not implement
+    /// this surface" rather than "looked, found none". When TSX parsing
+    /// lands in a future sprint, the field gains a struct entry and the
+    /// JSON shape opts in.
+    pub decorators: Vec<MetadataEntry>,
 }
 
 /// Information about a single function/method parameter.
@@ -133,7 +62,7 @@ pub fn extract_metadata(node: &tree_sitter::Node, source: &str, kind: &str) -> R
         ..Default::default()
     };
 
-    // Walk direct children to find modifiers
+    // Walk direct children to find modifiers + decorators.
     let mut child_cursor = node.walk();
     for child in node.children(&mut child_cursor) {
         match child.kind() {
@@ -146,9 +75,81 @@ pub fn extract_metadata(node: &tree_sitter::Node, source: &str, kind: &str) -> R
                     meta.access = text.to_string();
                 }
             }
+            "decorator" => {
+                if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                    // `@Component`              → name="Component", args_text=None
+                    // `@Component({selector:…})` → name="Component",
+                    //                              args_text=Some(`({selector:…})`)
+                    let stripped = text.trim_start_matches('@').trim();
+                    let (dec_name, args_text) = match stripped.find('(') {
+                        Some(idx) => (
+                            stripped[..idx].trim().to_string(),
+                            Some(stripped[idx..].trim().to_string()),
+                        ),
+                        None => (stripped.to_string(), None),
+                    };
+                    if !dec_name.is_empty() {
+                        meta.decorators.push(MetadataEntry {
+                            name: dec_name,
+                            args_text,
+                        });
+                    }
+                }
+            }
             _ => {}
         }
     }
+
+    // tree-sitter-typescript places `decorator` nodes either as direct
+    // children of the wrapped declaration (some grammar versions / some
+    // shapes) OR as **adjacent preceding siblings** inside the enclosing
+    // block (the more common shape for class members:
+    // `class C { @Get(...) a(){} }` parses the decorator as a sibling of
+    // `method_definition` inside `class_body`). The direct-child loop
+    // above handles the first case; the prev-sibling walk below handles
+    // the second.
+    //
+    // Ownership rule (mirrors the chunk-3b codex-fix for Rust
+    // `attribute_item`): only **contiguous** preceding `decorator`
+    // siblings attach to this node. Comment siblings (`comment`) are
+    // transparent. The walk stops at the first sibling whose kind is
+    // neither `decorator` nor a comment kind — guaranteeing no cross-
+    // method bleed (`class C { @A a(){}; @B b(){}; c(){} }` gives
+    // a → [A], b → [B], c → []). Decorators are collected in walk order
+    // (newest-first while moving leftward) and reversed at the end to
+    // match source order.
+    let mut prev_decorators: Vec<MetadataEntry> = Vec::new();
+    let mut sibling = node.prev_sibling();
+    while let Some(s) = sibling {
+        match s.kind() {
+            "decorator" => {
+                if let Ok(text) = s.utf8_text(source.as_bytes()) {
+                    let stripped = text.trim_start_matches('@').trim();
+                    let (dec_name, args_text) = match stripped.find('(') {
+                        Some(idx) => (
+                            stripped[..idx].trim().to_string(),
+                            Some(stripped[idx..].trim().to_string()),
+                        ),
+                        None => (stripped.to_string(), None),
+                    };
+                    if !dec_name.is_empty() {
+                        prev_decorators.push(MetadataEntry {
+                            name: dec_name,
+                            args_text,
+                        });
+                    }
+                }
+                sibling = s.prev_sibling();
+            }
+            "comment" => {
+                // Comments are transparent — keep walking.
+                sibling = s.prev_sibling();
+            }
+            _ => break,
+        }
+    }
+    prev_decorators.reverse();
+    meta.decorators.append(&mut prev_decorators);
 
     // Extract return type from type_annotation field
     if let Some(return_type_node) = node.child_by_field_name("return_type") {
@@ -203,127 +204,236 @@ fn extract_parameters(params_node: &tree_sitter::Node, source: &str) -> Vec<Para
     params
 }
 
-/// TypeScript edge extraction by pattern index.
-///
-/// Pattern indices map to the order of patterns in `queries/typescript/edges.scm`:
-/// 0 = import, 1 = direct call, 2 = member call, 3 = chained member call,
-/// 4 = new expression, 5 = extends, 6 = implements, 7 = this.method() call,
-/// 8 = type reference
-fn extract_ts_edge(
-    pattern: usize,
-    captures: &HashMap<String, (String, u32)>,
-    file_path: &str,
-    enclosing_scope_id: Option<&str>,
-) -> Vec<Edge> {
-    let mut edges = Vec::new();
+#[cfg(test)]
+mod ts_decorator_tests {
+    use super::*;
+    use tree_sitter::Parser;
 
-    let from_fn = resolve_scope_id(enclosing_scope_id, file_path, "function");
-    let from_cls = resolve_scope_id(enclosing_scope_id, file_path, "class");
-
-    match pattern {
-        // Import statement — always module-level, use __module__ synthetic ID
-        0 => {
-            if let (Some((imported_name, line)), Some((source, _))) =
-                (captures.get("imported_name"), captures.get("source"))
-            {
-                let source_clean = source.trim_matches(|c| c == '\'' || c == '"');
-                edges.push(make_edge(
-                    format!("{file_path}::__module__::function"),
-                    format!("{source_clean}::{imported_name}"),
-                    "imports",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // Direct call expression
-        1 => {
-            if let Some((callee, line)) = captures.get("callee") {
-                edges.push(make_edge(
-                    from_fn.clone(),
-                    callee,
-                    "calls",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // Member call expression / chained member access call (patterns 2 and 3)
-        2 | 3 => {
-            if let (Some((object, line)), Some((method, _))) =
-                (captures.get("object"), captures.get("method"))
-            {
-                edges.push(make_edge(
-                    from_fn.clone(),
-                    format!("{object}.{method}"),
-                    "calls",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // New expression (instantiation)
-        4 => {
-            if let Some((class_name, line)) = captures.get("class_name") {
-                edges.push(make_edge(
-                    from_fn.clone(),
-                    class_name,
-                    "instantiates",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // Extends clause
-        5 => {
-            if let Some((base_class, line)) = captures.get("base_class") {
-                edges.push(make_edge(
-                    from_cls.clone(),
-                    base_class,
-                    "extends",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // Implements clause
-        6 => {
-            if let Some((iface_name, line)) = captures.get("interface_name") {
-                edges.push(make_edge(
-                    from_cls.clone(),
-                    iface_name,
-                    "implements",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // this.method() call — captures method name only
-        7 => {
-            if let Some((method, line)) = captures.get("method") {
-                edges.push(make_edge(
-                    from_fn.clone(),
-                    method,
-                    "calls",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // Type reference
-        8 => {
-            if let Some((type_ref, line)) = captures.get("type_ref") {
-                edges.push(make_edge(
-                    from_fn.clone(),
-                    type_ref,
-                    "references_type",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        _ => {}
+    fn parse_ts(source: &str) -> tree_sitter::Tree {
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into())
+            .unwrap();
+        parser.parse(source, None).unwrap()
     }
 
-    edges
+    fn find_first<'a>(node: tree_sitter::Node<'a>, kind: &str) -> Option<tree_sitter::Node<'a>> {
+        if node.kind() == kind {
+            return Some(node);
+        }
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            if let Some(hit) = find_first(child, kind) {
+                return Some(hit);
+            }
+        }
+        None
+    }
+
+    fn extract_for_node(source: &str, node: tree_sitter::Node, kind: &str) -> serde_json::Value {
+        let json = extract_metadata(&node, source, kind).unwrap();
+        serde_json::from_str(&json).unwrap()
+    }
+
+    #[test]
+    fn sibling_decorators_do_not_bleed_across_methods() {
+        // Regression test for the codex-review P1 #2 fix. Each method must
+        // see only the decorators belonging to it; the undecorated `c()` must
+        // see none.
+        let source = r#"class C {
+  @Get("/a")
+  a() {}
+
+  @Post("/b")
+  b() {}
+
+  c() {}
+}"#;
+        let tree = parse_ts(source);
+        let class = find_first(tree.root_node(), "class_body").unwrap();
+
+        let mut decorators_per_method: Vec<(String, Vec<String>)> = Vec::new();
+        let mut cursor = class.walk();
+        for child in class.children(&mut cursor) {
+            if child.kind() != "method_definition" {
+                continue;
+            }
+            let name = child
+                .child_by_field_name("name")
+                .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+                .unwrap_or_default()
+                .to_string();
+            let meta = extract_for_node(source, child, "method");
+            let names: Vec<String> = meta
+                .get("decorators")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|e| e.get("name").and_then(|v| v.as_str()).map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+            decorators_per_method.push((name, names));
+        }
+
+        // Exact ownership: a→[Get], b→[Post], c→[].
+        // We cannot pin grammar-version-specific decorator placement without
+        // brittleness, so we assert the BLEED-PREVENTION invariant: no method
+        // sees BOTH Get and Post; the undecorated `c` sees neither.
+        for (name, decs) in &decorators_per_method {
+            let has_get = decs.iter().any(|d| d == "Get");
+            let has_post = decs.iter().any(|d| d == "Post");
+            assert!(
+                !(has_get && has_post),
+                "method `{name}` saw both Get and Post — decorators bled across siblings: {decs:?}"
+            );
+            if name == "c" {
+                assert!(
+                    !has_get && !has_post,
+                    "undecorated `c` saw decorators: {decs:?}"
+                );
+            }
+        }
+    }
+
+    /// Codex review P2 (chunks 4–5 round): class-member decorators are
+    /// preceding siblings of the method inside `class_body`, not direct
+    /// children. The prev-sibling walk must capture them.
+    #[test]
+    fn class_member_decorator_is_captured_for_owning_method() {
+        let source = r#"class C {
+  @Get("/a")
+  a() {}
+
+  @Post("/b")
+  b() {}
+
+  c() {}
+}"#;
+        let tree = parse_ts(source);
+        let class = find_first(tree.root_node(), "class_body").unwrap();
+
+        let mut decorators_per_method: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+        let mut cursor = class.walk();
+        for child in class.children(&mut cursor) {
+            if child.kind() != "method_definition" {
+                continue;
+            }
+            let name = child
+                .child_by_field_name("name")
+                .and_then(|n| n.utf8_text(source.as_bytes()).ok())
+                .unwrap_or_default()
+                .to_string();
+            let meta = extract_for_node(source, child, "method");
+            let names: Vec<String> = meta
+                .get("decorators")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|e| e.get("name").and_then(|v| v.as_str()).map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+            decorators_per_method.insert(name, names);
+        }
+
+        assert_eq!(
+            decorators_per_method.get("a").map(|v| v.as_slice()),
+            Some(["Get".to_string()].as_slice()),
+            "method `a` should see exactly [Get]; got {:?}",
+            decorators_per_method.get("a")
+        );
+        assert_eq!(
+            decorators_per_method.get("b").map(|v| v.as_slice()),
+            Some(["Post".to_string()].as_slice()),
+            "method `b` should see exactly [Post]; got {:?}",
+            decorators_per_method.get("b")
+        );
+        assert_eq!(
+            decorators_per_method.get("c").map(|v| v.as_slice()),
+            Some([].as_slice()),
+            "undecorated method `c` should see no decorators; got {:?}",
+            decorators_per_method.get("c")
+        );
+    }
+
+    /// Multi-decorator + args_text source-order capture on a single method.
+    #[test]
+    fn multiple_decorators_on_one_method_preserve_source_order() {
+        let source = r#"class C {
+  @Auth
+  @Get("/users")
+  list() {}
+}"#;
+        let tree = parse_ts(source);
+        let class = find_first(tree.root_node(), "class_body").unwrap();
+        let method = class
+            .children(&mut class.walk())
+            .find(|c| c.kind() == "method_definition")
+            .unwrap();
+
+        let meta = extract_for_node(source, method, "method");
+        let decorators = meta.get("decorators").and_then(|v| v.as_array()).unwrap();
+        let names: Vec<&str> = decorators
+            .iter()
+            .filter_map(|e| e.get("name").and_then(|v| v.as_str()))
+            .collect();
+        assert_eq!(names, vec!["Auth", "Get"], "source order: @Auth then @Get");
+
+        let get_args = decorators
+            .iter()
+            .find(|e| e.get("name").and_then(|v| v.as_str()) == Some("Get"))
+            .and_then(|e| e.get("args_text"))
+            .and_then(|v| v.as_str());
+        assert_eq!(get_args, Some("(\"/users\")"));
+    }
+
+    /// Comment between decorator and method must be transparent.
+    #[test]
+    fn comment_between_decorator_and_method_is_transparent() {
+        let source = r#"class C {
+  @Get("/a")
+  // route handler
+  a() {}
+}"#;
+        let tree = parse_ts(source);
+        let class = find_first(tree.root_node(), "class_body").unwrap();
+        let method = class
+            .children(&mut class.walk())
+            .find(|c| c.kind() == "method_definition")
+            .unwrap();
+
+        let meta = extract_for_node(source, method, "method");
+        let names: Vec<&str> = meta
+            .get("decorators")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|e| e.get("name").and_then(|v| v.as_str()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        assert_eq!(names, vec!["Get"]);
+    }
+
+    /// Top-level class with class decorator (the direct-child path).
+    #[test]
+    fn class_level_decorator_still_captured_via_direct_child() {
+        let source = r#"@Component({ selector: "app-root" })
+class App {}"#;
+        let tree = parse_ts(source);
+        let class = find_first(tree.root_node(), "class_declaration").unwrap();
+        let meta = extract_for_node(source, class, "class");
+
+        let decorators = meta.get("decorators").and_then(|v| v.as_array()).unwrap();
+        let names: Vec<&str> = decorators
+            .iter()
+            .filter_map(|e| e.get("name").and_then(|v| v.as_str()))
+            .collect();
+        assert!(
+            names.contains(&"Component"),
+            "class decorator should be captured (direct-child or prev-sibling), got {names:?}"
+        );
+    }
 }

@@ -1,73 +1,23 @@
 /// tree-sitter parsing and symbol/edge extraction.
 ///
-/// Uses tree-sitter queries stored in `src/queries/<language>/` to extract
-/// symbol definitions and relationships from source code.
-///
-/// Language-specific logic is provided by `LanguagePlugin` implementations
-/// in `src/languages/`. Adding a new language requires only implementing
-/// the trait and registering it in `CodeParser::new()`.
+/// Per R7 (A.4): a single `LanguageId` enum drives every per-language
+/// decision via exhaustive inherent methods. Each registered language
+/// holds its compiled queries in a `LanguageEntry`; the indexer routes
+/// files through `dispatch::dispatch_extension` (compile-time table) and
+/// dispatches behaviour through `LanguageId::*` calls.
 use anyhow::{Context, Result};
-use std::collections::HashMap;
 use std::path::Path;
 use streaming_iterator::StreamingIterator;
 use tree_sitter::{Parser, Query, QueryCursor};
 
+use crate::extract::Capture;
+use crate::languages::dispatch;
+use crate::languages::id::LanguageId;
 use crate::types::{Edge, Symbol};
-use crate::languages::LanguagePlugin;
 
-/// Supported programming languages.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum SupportedLanguage {
-    /// TypeScript (.ts, .tsx)
-    TypeScript,
-    /// C# (.cs)
-    CSharp,
-    /// Python (.py)
-    Python,
-    /// Go (.go)
-    Go,
-    /// Java (.java)
-    Java,
-    /// Rust (.rs)
-    Rust,
-    /// Ruby (.rb)
-    Ruby,
-}
-
-impl SupportedLanguage {
-    /// Returns the language name as a lowercase string.
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::TypeScript => "typescript",
-            Self::CSharp => "csharp",
-            Self::Python => "python",
-            Self::Go => "go",
-            Self::Java => "java",
-            Self::Rust => "rust",
-            Self::Ruby => "ruby",
-        }
-    }
-}
-
-impl std::fmt::Display for SupportedLanguage {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let name = match self {
-            Self::TypeScript => "TypeScript",
-            Self::CSharp => "C#",
-            Self::Python => "Python",
-            Self::Go => "Go",
-            Self::Java => "Java",
-            Self::Rust => "Rust",
-            Self::Ruby => "Ruby",
-        };
-        write!(f, "{name}")
-    }
-}
-
-/// A registered language plugin with its compiled queries.
-struct PluginEntry {
-    /// The language plugin implementation.
-    plugin: Box<dyn LanguagePlugin>,
+/// A registered language with its compiled queries.
+struct LanguageEntry {
+    lang: LanguageId,
     /// Compiled query for extracting symbol definitions.
     symbol_query: Query,
     /// Compiled query for extracting edges (calls, imports, etc.).
@@ -77,79 +27,60 @@ struct PluginEntry {
 /// The code parser that uses tree-sitter to extract symbols and edges.
 pub struct CodeParser {
     parser: Parser,
-    plugins: Vec<PluginEntry>,
+    entries: Vec<LanguageEntry>,
 }
 
 impl CodeParser {
-    /// Create a new parser with all supported language plugins registered.
+    /// Create a new parser with every registered language pre-compiled.
+    ///
+    /// The registry is the const-fn list from
+    /// [`crate::languages::dispatch::REGISTERED`]; no separate registration
+    /// step exists.
     pub fn new() -> Result<Self> {
         let parser = Parser::new();
-        let mut plugins = Vec::new();
+        let mut entries = Vec::with_capacity(dispatch::REGISTERED.len());
 
-        // Register all language plugins.
-        // To add a new language, create a LanguagePlugin impl and add it here.
-        let all_plugins: Vec<Box<dyn LanguagePlugin>> = vec![
-            Box::new(crate::languages::typescript::TypeScriptPlugin),
-            Box::new(crate::languages::csharp::CSharpPlugin),
-            Box::new(crate::languages::python::PythonPlugin),
-            Box::new(crate::languages::rust_lang::RustPlugin),
-            Box::new(crate::languages::go_lang::GoPlugin),
-            Box::new(crate::languages::java::JavaPlugin),
-            Box::new(crate::languages::ruby::RubyPlugin),
-        ];
+        for &lang in dispatch::REGISTERED {
+            let ts_lang = lang.ts_language();
+            let symbol_query = Query::new(&ts_lang, lang.symbol_query_source())
+                .with_context(|| format!("Failed to compile {lang} symbol query"))?;
+            let edge_query = Query::new(&ts_lang, lang.edge_query_source())
+                .with_context(|| format!("Failed to compile {lang} edge query"))?;
 
-        for plugin in all_plugins {
-            let ts_lang = plugin.ts_language();
-            let lang_name = plugin.language().to_string();
-
-            let symbol_query = Query::new(&ts_lang, plugin.symbol_query_source())
-                .with_context(|| format!("Failed to compile {lang_name} symbol query"))?;
-            let edge_query = Query::new(&ts_lang, plugin.edge_query_source())
-                .with_context(|| format!("Failed to compile {lang_name} edge query"))?;
-
-            plugins.push(PluginEntry {
-                plugin,
+            entries.push(LanguageEntry {
+                lang,
                 symbol_query,
                 edge_query,
             });
         }
 
-        Ok(Self { parser, plugins })
+        Ok(Self { parser, entries })
     }
 
-    /// Find the plugin entry for a given language.
-    fn find_plugin(&self, lang: SupportedLanguage) -> Option<&PluginEntry> {
-        self.plugins.iter().find(|e| e.plugin.language() == lang)
+    fn find_entry(&self, lang: LanguageId) -> Option<&LanguageEntry> {
+        self.entries.iter().find(|e| e.lang == lang)
     }
 
     /// Detect the language of a file based on its extension.
-    pub fn detect_language(path: &Path) -> Result<SupportedLanguage> {
+    ///
+    /// Delegates to the compile-time dispatch table in `dispatch.rs`;
+    /// there is no separate match block to keep in sync.
+    pub fn detect_language(path: &Path) -> Result<LanguageId> {
         let ext = path
             .extension()
             .and_then(|e| e.to_str())
             .ok_or_else(|| anyhow::anyhow!("No file extension: {}", path.display()))?;
 
-        match ext {
-            "ts" | "tsx" => Ok(SupportedLanguage::TypeScript),
-            "cs" => Ok(SupportedLanguage::CSharp),
-            "py" => Ok(SupportedLanguage::Python),
-            "go" => Ok(SupportedLanguage::Go),
-            "java" => Ok(SupportedLanguage::Java),
-            "rs" => Ok(SupportedLanguage::Rust),
-            "rb" => Ok(SupportedLanguage::Ruby),
-            other => anyhow::bail!("Unsupported file extension: .{other}"),
-        }
+        dispatch::dispatch_extension(ext)
+            .ok_or_else(|| anyhow::anyhow!("Unsupported file extension: .{ext}"))
     }
 
     /// Check if a file extension is supported for parsing (has a loaded grammar).
     pub fn is_supported(&self, path: &Path) -> bool {
-        let ext = match path.extension().and_then(|e| e.to_str()) {
-            Some(e) => e,
-            None => return false,
+        let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
+            return false;
         };
-        self.plugins
-            .iter()
-            .any(|entry| entry.plugin.extensions().contains(&ext))
+        dispatch::dispatch_extension(ext).is_some()
     }
 
     /// Extract symbol definitions from a source file.
@@ -157,13 +88,13 @@ impl CodeParser {
         &mut self,
         file_path: &str,
         source: &str,
-        lang: SupportedLanguage,
+        lang: LanguageId,
     ) -> Result<Vec<Symbol>> {
         let entry = self
-            .find_plugin(lang)
-            .ok_or_else(|| anyhow::anyhow!("Language {:?} not loaded", lang))?;
+            .find_entry(lang)
+            .ok_or_else(|| anyhow::anyhow!("Language {lang} not loaded"))?;
 
-        let ts_lang = entry.plugin.ts_language();
+        let ts_lang = entry.lang.ts_language();
 
         self.parser
             .set_language(&ts_lang)
@@ -176,11 +107,10 @@ impl CodeParser {
 
         let mut cursor = QueryCursor::new();
 
-        // We need to borrow entry immutably while iterating, but self.parser
-        // was already used above. Re-find the plugin for the iteration.
+        // Re-borrow entry for iteration after mutable use of self.parser above.
         let entry = self
-            .find_plugin(lang)
-            .ok_or_else(|| anyhow::anyhow!("Language {:?} not loaded", lang))?;
+            .find_entry(lang)
+            .ok_or_else(|| anyhow::anyhow!("Language {lang} not loaded"))?;
 
         let mut matches = cursor.matches(&entry.symbol_query, tree.root_node(), source.as_bytes());
 
@@ -212,25 +142,25 @@ impl CodeParser {
             let Some(mut name) = name_text else { continue };
             let Some(def) = def_node else { continue };
 
-            let kind = entry.plugin.infer_symbol_kind(def.kind()).to_string();
-            if lang == SupportedLanguage::Ruby && matches!(kind.as_str(), "class" | "interface") {
+            let kind = lang.symbol_kind_for_node(def.kind()).to_string();
+            if lang == LanguageId::Ruby && matches!(kind.as_str(), "class" | "interface") {
                 name = qualify_ruby_decl_name(&def, &name, source);
             }
             let line = def.start_position().row as u32 + 1;
             let id = format!("{file_path}::{name}::{kind}::{line}");
 
-            // Extract metadata using language-specific logic
-            let metadata = entry.plugin.extract_metadata(&def, source, &kind)?;
+            // Extract metadata using language-specific logic. Phase B
+            // passes a NoopWorkspaceContext (R4); R2/R3 (sprint 0003)
+            // thread a real context.
+            let ctx = crate::workspace_context::NoopWorkspaceContext::default();
+            let metadata = lang.extract_metadata(&def, source, &kind, &ctx)?;
 
-            // Extract signature — the first line of the definition up to `{` or end of line
             let signature = extract_signature(&def, source);
-
-            // Extract docstring — delegates to language plugin (Python overrides for string-based docstrings)
-            let docstring = entry.plugin.extract_docstring(&def, source);
+            let docstring = lang.extract_docstring(&def, source);
 
             // Determine parent_id for methods inside classes
             let parent_id = if kind == "method" || kind == "property" || kind == "variant" {
-                find_parent_class(&def, source, file_path, entry.plugin.as_ref())
+                find_parent_class(&def, source, file_path, lang)
             } else {
                 None
             };
@@ -250,8 +180,7 @@ impl CodeParser {
             });
         }
 
-        // Post-extraction pass: associate Rust impl block methods with their target type.
-        if lang == SupportedLanguage::Rust {
+        if lang == LanguageId::Rust {
             associate_rust_impl_methods(&mut symbols, &tree, source, file_path);
         }
 
@@ -263,13 +192,13 @@ impl CodeParser {
         &mut self,
         file_path: &str,
         source: &str,
-        lang: SupportedLanguage,
+        lang: LanguageId,
     ) -> Result<Vec<Edge>> {
         let entry = self
-            .find_plugin(lang)
-            .ok_or_else(|| anyhow::anyhow!("Language {:?} not loaded", lang))?;
+            .find_entry(lang)
+            .ok_or_else(|| anyhow::anyhow!("Language {lang} not loaded"))?;
 
-        let ts_lang = entry.plugin.ts_language();
+        let ts_lang = entry.lang.ts_language();
 
         self.parser
             .set_language(&ts_lang)
@@ -282,10 +211,9 @@ impl CodeParser {
 
         let mut cursor = QueryCursor::new();
 
-        // Re-find plugin after mutable borrow of self.parser
         let entry = self
-            .find_plugin(lang)
-            .ok_or_else(|| anyhow::anyhow!("Language {:?} not loaded", lang))?;
+            .find_entry(lang)
+            .ok_or_else(|| anyhow::anyhow!("Language {lang} not loaded"))?;
 
         let mut matches = cursor.matches(&entry.edge_query, tree.root_node(), source.as_bytes());
 
@@ -294,7 +222,7 @@ impl CodeParser {
 
         while let Some(m) = matches.next() {
             let pattern = m.pattern_index;
-            let mut captures_map: HashMap<String, (String, u32)> = HashMap::new();
+            let mut typed_captures: Vec<Capture> = Vec::with_capacity(m.captures.len());
             // Pick the smallest captured node as the scope anchor. A whole-class
             // capture like `(class ...) @extends.node` would otherwise become the
             // anchor and `find_enclosing_scope` would walk past the class itself
@@ -308,7 +236,8 @@ impl CodeParser {
                     .utf8_text(source.as_bytes())
                     .unwrap_or_default()
                     .to_string();
-                let line = capture.node.start_position().row as u32 + 1;
+                let start = capture.node.start_position();
+                let end = capture.node.end_position();
                 let node_len = capture.node.end_byte() - capture.node.start_byte();
                 let replace = match representative_node {
                     None => true,
@@ -317,17 +246,27 @@ impl CodeParser {
                 if replace {
                     representative_node = Some(capture.node);
                 }
-                captures_map.insert(capture_name, (text, line));
+                typed_captures.push(Capture {
+                    name: capture_name,
+                    node_kind: capture.node.kind().to_string(),
+                    text,
+                    start_byte: capture.node.start_byte() as u32,
+                    end_byte: capture.node.end_byte() as u32,
+                    start_line: start.row as u32 + 1,
+                    end_line: end.row as u32 + 1,
+                    start_column: start.column as u32,
+                    end_column: end.column as u32,
+                });
             }
 
-            // Resolve the enclosing scope for this match
             let enclosing_scope_id = representative_node
                 .as_ref()
-                .and_then(|n| find_enclosing_scope(n, source, file_path, entry.plugin.as_ref()));
+                .and_then(|n| find_enclosing_scope(n, source, file_path, lang));
 
-            let extracted = entry.plugin.extract_edge(
+            let extracted = crate::extract::extract_edges_for_match(
+                lang,
                 pattern,
-                &captures_map,
+                &typed_captures,
                 file_path,
                 enclosing_scope_id.as_deref(),
             );
@@ -335,6 +274,44 @@ impl CodeParser {
         }
 
         Ok(edges)
+    }
+
+    /// Collect every skipped region for this file.
+    ///
+    /// Concatenates:
+    /// 1. Plugin-driven skips ([`LanguageId::plugin_skipped_ranges`]).
+    /// 2. Tree-sitter parser-recovery skips
+    ///    ([`crate::extract::scan_tree_sitter_errors`]).
+    ///
+    /// Both streams are forwarded verbatim per Charter §3 invariant 5; the
+    /// only post-processing is a `sort_by_key(start_line, end_line)` so
+    /// consumers downstream of `file_hashes.skipped_ranges` see source order.
+    pub fn collect_skipped_ranges(
+        &mut self,
+        file_path: &str,
+        source: &str,
+        lang: LanguageId,
+    ) -> Result<Vec<crate::extract::SkippedRange>> {
+        let entry = self
+            .find_entry(lang)
+            .ok_or_else(|| anyhow::anyhow!("Language {lang} not loaded"))?;
+
+        let ts_lang = entry.lang.ts_language();
+
+        self.parser
+            .set_language(&ts_lang)
+            .context("Failed to set parser language")?;
+
+        let tree = self
+            .parser
+            .parse(source, None)
+            .ok_or_else(|| anyhow::anyhow!("Parse failed for {file_path}"))?;
+
+        let root = tree.root_node();
+        let mut ranges = lang.plugin_skipped_ranges(&root, source);
+        ranges.extend(crate::extract::scan_tree_sitter_errors(&root, source));
+        ranges.sort_by_key(|r| (r.start_line, r.end_line));
+        Ok(ranges)
     }
 
     /// Extract Rust trait implementation edges (`impl Trait for Type`).
@@ -348,10 +325,10 @@ impl CodeParser {
         symbols: &[Symbol],
     ) -> Result<Vec<Edge>> {
         let entry = self
-            .find_plugin(SupportedLanguage::Rust)
+            .find_entry(LanguageId::Rust)
             .ok_or_else(|| anyhow::anyhow!("Rust language not loaded"))?;
 
-        let ts_lang = entry.plugin.ts_language();
+        let ts_lang = entry.lang.ts_language();
 
         self.parser
             .set_language(&ts_lang)
@@ -362,7 +339,7 @@ impl CodeParser {
             .parse(source, None)
             .ok_or_else(|| anyhow::anyhow!("Parse failed for {file_path}"))?;
 
-        Ok(extract_rust_trait_impl_edges(
+        Ok(crate::extract::rust_lang::extract_rust_trait_impl_edges(
             symbols, &tree, source, file_path,
         ))
     }
@@ -430,27 +407,26 @@ fn find_enclosing_scope(
     node: &tree_sitter::Node,
     source: &str,
     file_path: &str,
-    plugin: &dyn LanguagePlugin,
+    lang: LanguageId,
 ) -> Option<String> {
     let mut current = node.parent();
 
-    let scope_types = plugin.scope_node_types();
+    let scope_types = lang.scope_node_types();
 
     while let Some(parent) = current {
         if scope_types.contains(&parent.kind()) {
             // Ruby `call` nodes are scope boundaries only for assigned proc/lambda
             // blocks. Treating every call as a scope would create synthetic
             // from_ids such as `::new::function` for ordinary member calls.
-            if plugin.language() == SupportedLanguage::Ruby && parent.kind() == "call" {
-                if let Some(scope_id) = ruby_assigned_call_scope(&parent, source, file_path, plugin)
-                {
+            if lang == LanguageId::Ruby && parent.kind() == "call" {
+                if let Some(scope_id) = ruby_assigned_call_scope(&parent, source, file_path, lang) {
                     return Some(scope_id);
                 }
                 current = parent.parent();
                 continue;
             }
 
-            if plugin.language() == SupportedLanguage::Ruby && parent.kind() == "lambda" {
+            if lang == LanguageId::Ruby && parent.kind() == "lambda" {
                 if let Some(scope_id) = ruby_assigned_lambda_scope(&parent, source, file_path) {
                     return Some(scope_id);
                 }
@@ -471,7 +447,6 @@ fn find_enclosing_scope(
                         }
                     }
                 }
-                // If we can't get a name from variable_declarator, keep walking up
                 current = parent.parent();
                 continue;
             }
@@ -479,11 +454,11 @@ fn find_enclosing_scope(
             // Named scope — get its name and build the ID
             if let Some(name_node) = parent.child_by_field_name("name") {
                 if let Ok(name) = name_node.utf8_text(source.as_bytes()) {
-                    let mut kind = plugin.infer_symbol_kind(parent.kind());
+                    let mut kind = lang.symbol_kind_for_node(parent.kind());
 
                     // For Rust: function_item inside an impl_item is a "method"
                     if kind == "function"
-                        && plugin.language() == SupportedLanguage::Rust
+                        && lang == LanguageId::Rust
                         && parent.kind() == "function_item"
                     {
                         if let Some(grandparent) = parent.parent() {
@@ -497,8 +472,7 @@ fn find_enclosing_scope(
                         }
                     }
 
-                    let name = if plugin.language() == SupportedLanguage::Ruby
-                        && matches!(kind, "class" | "interface")
+                    let name = if lang == LanguageId::Ruby && matches!(kind, "class" | "interface")
                     {
                         qualify_ruby_decl_name(&parent, name, source)
                     } else {
@@ -512,7 +486,7 @@ fn find_enclosing_scope(
         current = parent.parent();
     }
 
-    None // Module level — no enclosing scope
+    None
 }
 
 fn ruby_assigned_lambda_scope(
@@ -539,7 +513,7 @@ fn ruby_assigned_call_scope(
     node: &tree_sitter::Node,
     source: &str,
     file_path: &str,
-    plugin: &dyn LanguagePlugin,
+    lang: LanguageId,
 ) -> Option<String> {
     let method = node.child_by_field_name("method")?;
     let method_name = method.utf8_text(source.as_bytes()).ok()?;
@@ -558,7 +532,7 @@ fn ruby_assigned_call_scope(
     }
 
     let name = name_node.utf8_text(source.as_bytes()).ok()?;
-    let kind = plugin.infer_symbol_kind(node.kind());
+    let kind = lang.symbol_kind_for_node(node.kind());
     let line = assignment.start_position().row as u32 + 1;
     Some(format!("{file_path}::{name}::{kind}::{line}"))
 }
@@ -568,10 +542,10 @@ fn find_parent_class(
     node: &tree_sitter::Node,
     source: &str,
     file_path: &str,
-    plugin: &dyn LanguagePlugin,
+    lang: LanguageId,
 ) -> Option<String> {
-    let class_body_nodes = plugin.class_body_node_types();
-    let class_decl_nodes = plugin.class_decl_node_types();
+    let class_body_nodes = lang.class_body_node_types();
+    let class_decl_nodes = lang.class_decl_node_types();
 
     let mut current = node.parent();
     while let Some(parent) = current {
@@ -580,8 +554,8 @@ fn find_parent_class(
                 if class_decl_nodes.contains(&class_node.kind()) {
                     if let Some(name_node) = class_node.child_by_field_name("name") {
                         let class_name = name_node.utf8_text(source.as_bytes()).ok()?;
-                        let kind = plugin.infer_symbol_kind(class_node.kind());
-                        let class_name = if plugin.language() == SupportedLanguage::Ruby {
+                        let kind = lang.symbol_kind_for_node(class_node.kind());
+                        let class_name = if lang == LanguageId::Ruby {
                             qualify_ruby_decl_name(&class_node, class_name, source)
                         } else {
                             class_name.to_string()
@@ -658,10 +632,11 @@ fn associate_rust_impl_methods(
             continue;
         }
 
-        let target_type_name = match extract_impl_target_type(&child, source) {
-            Some(name) => name,
-            None => continue,
-        };
+        let target_type_name =
+            match crate::extract::rust_lang::extract_impl_target_type(&child, source) {
+                Some(name) => name,
+                None => continue,
+            };
 
         // Collect function_item children inside the declaration_list
         let mut methods = Vec::new();
@@ -721,115 +696,6 @@ fn associate_rust_impl_methods(
                     sym.file_path, sym.name, sym.line_start
                 );
             }
-        }
-    }
-}
-
-/// Extract `implements` edges from Rust `impl Trait for Type` blocks.
-///
-/// Walks the AST for `impl_item` nodes that have a `trait` field and creates
-/// an `implements` edge from the target type to the trait. Requires the extracted
-/// symbols to resolve the correct `from_id` (the target type's symbol ID).
-pub fn extract_rust_trait_impl_edges(
-    symbols: &[Symbol],
-    tree: &tree_sitter::Tree,
-    source: &str,
-    file_path: &str,
-) -> Vec<Edge> {
-    let root = tree.root_node();
-    let mut tree_cursor = root.walk();
-    let mut edges = Vec::new();
-
-    for child in root.children(&mut tree_cursor) {
-        if child.kind() != "impl_item" {
-            continue;
-        }
-
-        // Only process trait impls (impl Trait for Type)
-        let trait_node = match child.child_by_field_name("trait") {
-            Some(node) => node,
-            None => continue,
-        };
-
-        let trait_name = match extract_base_type_name(&trait_node, source) {
-            Some(name) => name,
-            None => continue,
-        };
-
-        let target_type_name = match extract_impl_target_type(&child, source) {
-            Some(name) => name,
-            None => continue,
-        };
-
-        let line = child.start_position().row as u32 + 1;
-
-        // Find the actual symbol ID for the target type
-        let from_id = symbols
-            .iter()
-            .find(|s| {
-                s.file_path == file_path
-                    && s.name == target_type_name
-                    && (s.kind == "struct" || s.kind == "enum" || s.kind == "interface")
-            })
-            .map(|s| s.id.clone())
-            .unwrap_or_else(|| {
-                // Fallback: use a synthetic ID if the type is defined in another file
-                format!("{file_path}::__module__::class")
-            });
-
-        edges.push(crate::languages::make_edge(
-            from_id,
-            trait_name,
-            "implements",
-            file_path,
-            line,
-        ));
-    }
-
-    edges
-}
-
-/// Extract the target type name from a Rust `impl_item` node.
-///
-/// For `impl Type { ... }`, returns `Type`.
-/// For `impl Trait for Type { ... }`, returns `Type` (after `for`).
-/// For `impl<T> Type<T> { ... }`, returns `Type` (strips generic params).
-fn extract_impl_target_type(impl_node: &tree_sitter::Node, source: &str) -> Option<String> {
-    // In tree-sitter-rust, `impl_item` uses a `type` field for the target type
-    // in both plain `impl Type` and `impl Trait for Type`.
-    let type_node = impl_node.child_by_field_name("type")?;
-    extract_base_type_name(&type_node, source)
-}
-
-/// Extract the base type name from a type node, stripping generic parameters.
-///
-/// For `Foo<T>`, returns `Foo`. For `Foo`, returns `Foo`.
-fn extract_base_type_name(type_node: &tree_sitter::Node, source: &str) -> Option<String> {
-    match type_node.kind() {
-        "type_identifier" => {
-            let text = type_node.utf8_text(source.as_bytes()).ok()?;
-            Some(text.to_string())
-        }
-        "generic_type" => {
-            // The first child is the type_identifier
-            let mut cursor = type_node.walk();
-            for child in type_node.children(&mut cursor) {
-                if child.kind() == "type_identifier" {
-                    let text = child.utf8_text(source.as_bytes()).ok()?;
-                    return Some(text.to_string());
-                }
-            }
-            None
-        }
-        "scoped_type_identifier" => {
-            // e.g., path::Type — take the last identifier
-            let text = type_node.utf8_text(source.as_bytes()).ok()?;
-            text.rsplit("::").next().map(|s| s.to_string())
-        }
-        _ => {
-            // Fallback: try to get text
-            let text = type_node.utf8_text(source.as_bytes()).ok()?;
-            Some(text.to_string())
         }
     }
 }

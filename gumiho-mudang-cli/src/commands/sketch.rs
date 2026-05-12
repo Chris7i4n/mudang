@@ -12,9 +12,9 @@ use clap::Args;
 use std::path::Path;
 
 use crate::commands::warn_if_stale;
-use gumiho_mudang_scope::core::graph::{Graph, Symbol};
 use crate::output::formatter;
 use crate::output::json::JsonOutput;
+use gumiho_mudang_scope::core::graph::{Graph, Symbol};
 
 /// Strip internal fields from a Symbol for compact JSON output.
 /// Keeps only what agents need: name, kind, signature, line_start, line_end.
@@ -325,7 +325,10 @@ fn sketch_enum(
 }
 
 /// Sketch a generic symbol (const, type).
-fn sketch_generic(args: &SketchArgs, symbol: &gumiho_mudang_scope::core::graph::Symbol) -> Result<()> {
+fn sketch_generic(
+    args: &SketchArgs,
+    symbol: &gumiho_mudang_scope::core::graph::Symbol,
+) -> Result<()> {
     if args.json || args.compact {
         let sym = if args.compact {
             compact_symbol(symbol)

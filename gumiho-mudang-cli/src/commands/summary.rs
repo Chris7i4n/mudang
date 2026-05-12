@@ -12,8 +12,8 @@ use anyhow::{bail, Result};
 use clap::Args;
 use std::path::Path;
 
-use gumiho_mudang_scope::core::graph::Graph;
 use crate::output::json::JsonOutput;
+use gumiho_mudang_scope::core::graph::Graph;
 
 use super::looks_like_file_path;
 

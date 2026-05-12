@@ -1,7 +1,7 @@
 # Sprint 0007 — Phase E: Malformed-source harness
 
 > **Source of truth**: [`ARCHITECTURAL-REFACTOR.md` § R6](../ARCHITECTURAL-REFACTOR.md#r6--malformed-source-test-harness).
-> **Phase**: E. Single-sprint phase. **Final sprint of the refactor.**
+> **Phase**: E. First of two Phase E sprints. Followed by [Sprint 0008 — Charter sweep and shim retirement](./0008-phase-e-charter-sweep.md), which closes the refactor.
 > **Ambiguity protocol**: [`README.md` § Ambiguity protocol](./README.md#3-ambiguity-protocol--consult-the-human).
 
 ---
@@ -14,10 +14,12 @@ gate that asserts every plugin survives broken sources, populates
 partially-malformed file.
 
 Phase E ships **last** so that every plugin is already in its final
-shape before the gate activates. When this sprint ships, the
+shape before the gate activates. Sprint 0007 lands the R6 malformed-
+source harness; [Sprint 0008](./0008-phase-e-charter-sweep.md) then
+sweeps the codebase for compat shims and closes the refactor. The
 full-refactor acceptance criteria
 ([`ARCHITECTURAL-REFACTOR.md` § Acceptance for the refactor as a whole](../ARCHITECTURAL-REFACTOR.md#acceptance-for-the-refactor-as-a-whole))
-must hold; the [`POST-REFACTOR-PLAN.md`](../POST-REFACTOR-PLAN.md) queue
+must hold at sprint 0008's close; [`POST-REFACTOR-PLAN.md`](../POST-REFACTOR-PLAN.md)
 becomes eligible immediately afterwards.
 
 ## R-moves shipped this sprint

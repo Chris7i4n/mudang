@@ -4,4 +4,4 @@
 //! `find_impact`, `find_deps`, `find_call_paths`, `find_flow_paths`).
 
 pub mod graph;
-pub mod resolver;
+pub mod resolve;

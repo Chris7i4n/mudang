@@ -19,12 +19,12 @@ use serde::Serialize;
 use std::path::Path;
 
 use crate::commands::entrypoints::EntrypointInfo;
-use gumiho_mudang_scope::config::workspace::WorkspaceConfig;
-use gumiho_mudang_scope::core::graph::Graph;
-use gumiho_mudang_scope::core::workspace_graph::WorkspaceGraph;
 use crate::output::formatter;
 use crate::output::json::JsonOutput;
 use crate::Context;
+use gumiho_mudang_scope::config::workspace::WorkspaceConfig;
+use gumiho_mudang_scope::core::graph::Graph;
+use gumiho_mudang_scope::core::workspace_graph::WorkspaceGraph;
 
 /// Show a structural overview of the entire repository.
 ///

@@ -1,0 +1,67 @@
+# Language: C#
+
+## Tree-sitter grammar
+
+- **Crate / package**: `tree-sitter-c-sharp` (workspace-pinned version)
+- **Source**: <https://github.com/tree-sitter/tree-sitter-c-sharp>
+- **License**: MIT
+- **Maturity assessment**: stable.
+- **Known grammar gaps**: `using static` is captured as a regular `using_directive`; no semantic distinction is preserved.
+
+## Depth target
+
+- **Level**: surface
+- **Post-refactor depth queue**: no
+
+## Symbol kinds emitted
+
+`class`, `interface`, `struct`, `method`, `property`, `const`, `enum`.
+
+## Edge kinds emitted
+
+`calls`, `imports`, `instantiates`, `implements` (covers both extends and implements at the syntactic level — the base list does not distinguish), `references`.
+
+Pattern catalog (per `queries/csharp/edges.scm`):
+
+| Pattern | pattern_id |
+|---|---|
+| `using X;` | `imports.identifier` |
+| `using X.Y.Z;` | `imports.qualified` |
+| `_logger.Info(...)` | `calls.method` |
+| `DoSomething(...)` | `calls.function` |
+| `new Foo()` | `instantiates.class` |
+| `this.Method()` | `calls.method.this` |
+| `base.Method()` | `calls.method.base` |
+| base list (identifier) | `implements.base_list` |
+| base list (qualified) | `implements.base_list.qualified` |
+| `case PaymentStatus.Pending:` | `references.switch.member` |
+
+## Universal boundaries — compliance log
+
+- **A1 / A2 / A3** (type system): **mechanically enforced after R12 sprint 0004** — `scripts/audit_trait_shape.sh` (gate `ci-trait-shape`) forbids any `fn infer_*` / `fn solve_*` / `fn narrow_*` / `fn resolve_overload_*` in the scanned plugin / extractor paths. C# generics are not solved; method-resolution semantics are not modelled.
+- **B1**: discipline-only per the universal class-3 list (`ARCHITECTURAL-REFACTOR.md § What remains discipline-only after the refactor`).
+- **B2** (no runtime / dynamic resolution): **mechanically enforced after R12 sprint 0004** — `scripts/audit_trait_shape.sh` forbids `fn evaluate_*`. C# `dynamic` dispatch is captured by syntactic position only.
+- **B3**: trivially compliant — tree-sitter parser recovery scanner active.
+- **C1** (no macro / template expansion): **mechanically enforced after R11 sprint 0004** — the same trait-shape audit forbids `fn expand_*`. C# has no macro system; the rule's enforcement layer applies uniformly across languages.
+- **C2** (no version-specific compiler-quirk modelling): **mechanically enforced after R4**.
+- **D1**: trivially compliant.
+- **D2** (no best-guess fallback resolution): **mechanically enforced after R3**.
+- **D3** (no symbol-id collision resolution by guessing): mechanically enforced via R0 + R3.
+- **E1**: trivially compliant.
+- **E2** (no metadata interpretation in plugin): **mechanically enforced after R2 chunk 7**. Plugin returns `RawCaptures`; `annotations` reserved key carries `{name, args_text?}` verbatim from `[Attribute(...)]` syntax (e.g., `[HttpGet("/users")]`). `decorators` and `template_calls` keys are **omitted**.
+- **E3**: trivially compliant.
+- **F1** (no multi-pass semantic analysis in plugin): **mechanically enforced after R3 typestate**.
+- **F2** (no write-back to source): **mechanically enforced after R9 sprint 0004** — `scripts/audit_immutable.sh` (gate `ci-immutable`) forbids `&mut str` / `&mut String` / `&mut tree_sitter::Tree` / `&mut Tree` / `&mut Source*` in the scanned plugin / extractor paths.
+- **F3** (no embedded-format parsing beyond tree-sitter): trivially compliant.
+- **F4** (no language detection by content sniffing): mechanically enforced after R7 — dispatch is compile-time const, the plugin is invoked by extension only.
+
+No `NEEDS REVIEW` outstanding for D2 / D3 / E2 / F1.
+
+## Known gotchas
+
+1. The base list (`(base_list ...)` in C#) does not syntactically distinguish a class superclass from an implemented interface; both are emitted as `implements`. Consumers that need the distinction must consult the symbol's `kind` (class vs interface vs struct) on the target side.
+
+## Test fixtures
+
+- `gumiho-mudang-scope/tests/fixtures/languages/csharp/`
+- `gumiho-mudang-scope/tests/integration/test_csharp.rs`

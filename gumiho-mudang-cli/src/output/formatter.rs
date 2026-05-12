@@ -411,11 +411,13 @@ fn extract_enrichment_prefix(language: &str, metadata_json: &str) -> String {
 
     match language {
         "java" => {
-            // Show annotations as @Name prefixes
+            // Show annotations as @Name prefixes. R2 (sprint 0003 chunk 3b)
+            // migrated the per-entry shape from string to object — read
+            // `.name` instead of treating each entry as a bare string.
             if let Some(annotations) = parsed.get("annotations").and_then(|v| v.as_array()) {
                 let prefixes: Vec<String> = annotations
                     .iter()
-                    .filter_map(|a| a.as_str())
+                    .filter_map(|a| a.get("name").and_then(|v| v.as_str()))
                     .filter(|a| !a.is_empty())
                     .map(|a| format!("@{a}"))
                     .collect();
@@ -426,11 +428,13 @@ fn extract_enrichment_prefix(language: &str, metadata_json: &str) -> String {
             String::new()
         }
         "python" => {
-            // Show decorators as @name prefixes
+            // Show decorators as @name prefixes. R2 (sprint 0003 chunk 3b)
+            // migrated the per-entry shape from string to object — read
+            // `.name` instead of treating each entry as a bare string.
             if let Some(decorators) = parsed.get("decorators").and_then(|v| v.as_array()) {
                 let prefixes: Vec<String> = decorators
                     .iter()
-                    .filter_map(|d| d.as_str())
+                    .filter_map(|d| d.get("name").and_then(|v| v.as_str()))
                     .filter(|d| !d.is_empty())
                     .map(|d| format!("@{d}"))
                     .collect();
@@ -1260,7 +1264,7 @@ fn format_number(n: usize) -> String {
 
     let mut result = String::with_capacity(len + len / 3);
     for (i, ch) in s.chars().enumerate() {
-        if i > 0 && (len - i).is_multiple_of(3) {
+        if i > 0 && (len - i) % 3 == 0 {
             result.push(',');
         }
         result.push(ch);

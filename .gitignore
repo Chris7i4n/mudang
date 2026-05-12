@@ -40,3 +40,6 @@ ndjson/
 gumiho-mudang-scope/.cargo/
 gumiho-mudang-lsp/.cargo/
 gumiho-mudang-cli/.cargo/
+
+# Sprint-local ephemera (codex review logs, scratch). Never tracked.
+**/wip/

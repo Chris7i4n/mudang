@@ -5,8 +5,8 @@
 //! context, ordered by importance. This is what gets indexed in the FTS5
 //! table and searched against user queries.
 
+use scope_core::languages::LanguageId;
 use scope_core::Symbol;
-use scope_core::languages::stopwords_for_language;
 
 /// Build the searchable text representation of a symbol.
 ///
@@ -95,7 +95,9 @@ pub fn build_embedding_text(
     // De-rank generic names (e.g. new, toString, __init__) by forcing importance
     // to "low" regardless of caller count. This prevents them from polluting
     // FTS5 search results while still keeping them discoverable.
-    let stopwords = stopwords_for_language(&symbol.language);
+    let stopwords = LanguageId::from_slug(&symbol.language)
+        .map(LanguageId::generic_name_stopwords)
+        .unwrap_or(&[]);
     let is_generic = stopwords.contains(&symbol.name.as_str());
 
     // Add importance tier for search boosting.

@@ -6,8 +6,8 @@ use anyhow::{bail, Context, Result};
 use clap::Args;
 use std::path::Path;
 
-use gumiho_mudang_scope::core::graph::Graph;
 use crate::output::json::JsonOutput;
+use gumiho_mudang_scope::core::graph::Graph;
 
 /// Arguments for the `scope source` command.
 #[derive(Args, Debug)]

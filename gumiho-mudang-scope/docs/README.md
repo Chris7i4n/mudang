@@ -51,15 +51,39 @@ These documents govern decisions; revise via explicit commit, not silent edit.
 
 ## Current state
 
-Sprint 0000 (crate decomposition, structural prerequisite inside
-mudang's Phase A) **shipped 2026-05-11**. The five sub-crates
-(`scope-core`, `scope-index`, `scope-graph`, `scope-search`,
-`scope-workspace`) are live under `gumiho-mudang-scope/`; the legacy
-crate name is now a façade re-exporting them 1:1. R-move work has not
-yet started; sprint 0001 (R0, R1) is the first R-move batch. See
-`REFACTOR-STATUS.md` for the live R-move snapshot. Until the refactor
-closes, plugin authoring follows the pre-refactor trait shapes (see
-`LANGUAGE-PLAYBOOK.md` Step 5 pre-R2 vs post-R2 sections).
+Refactor progress snapshot (live state lives in
+`REFACTOR-STATUS.md`):
+
+- **Sprint 0000** — crate decomposition (structural prerequisite inside
+  mudang's Phase A). **Shipped 2026-05-11.** Five sub-crates
+  (`scope-core`, `scope-index`, `scope-graph`, `scope-search`,
+  `scope-workspace`) live under `gumiho-mudang-scope/`; the legacy
+  crate name is a façade re-exporting them 1:1.
+- **Sprint 0001** — R0 + R1 schema and storage. **Shipped 2026-05-11.**
+  Confidence / status / producer / pattern_id / args_text columns,
+  surrogate `edge_id` PK, 38 edge kinds, sealed `Edge` / `EdgeBuilder`
+  typestate, Phase A resolver stub.
+- **Sprint 0002** — R7 + R4 dispatch and workspace context. **Closed on
+  `refactor/phase-b`** (not yet on `main`). `LanguageId` enum + const-
+  fn dispatch + `register_languages!` macro; `LanguagePlugin` trait and
+  7 `*Plugin` structs removed; `LanguageWorkspaceContext` typed split;
+  3 CI gates activated (context-shape / no-fs / dispatch).
+- **Sprint 0003** — R2 + R3 typed plugin output and resolution pipeline.
+  **In-progress on `refactor/sprint-0003-typed-plugin-resolution`**.
+  Chunks 1, 2, 3a, 3b + codex review round-trip shipped on the sprint
+  branch (extract module scaffolding, per-language extractor migration,
+  `skipped_ranges` plumbing, metadata reserved-key spec compliance,
+  charter amend + shim audit + sprint 0008 added). Chunks 4–7 (R3
+  resolver scaffold, stub retirement, typestate CI gate, sprint-close)
+  pending.
+- **Sprints 0004–0008** — unstarted. 0004 (R9/R11/R12 audits), 0005
+  (R5 framework infra), 0006 (R10/R8 output + audit), 0007 (R6
+  malformed-source harness), 0008 (charter sweep + shim retirement;
+  closes the refactor).
+
+Until the refactor closes, plugin authoring follows the pre-refactor
+trait shapes (see `LANGUAGE-PLAYBOOK.md` Step 5 pre-R2 vs post-R2
+sections).
 
 ## Where to put a new note
 

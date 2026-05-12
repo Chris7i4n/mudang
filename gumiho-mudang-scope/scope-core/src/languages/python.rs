@@ -8,97 +8,8 @@
 /// child of the function/class body containing a `string` node.
 use anyhow::Result;
 use serde::Serialize;
-use std::collections::HashMap;
-use tree_sitter::Language;
 
-use crate::types::Edge;
-use crate::parser::SupportedLanguage;
-use crate::languages::{make_edge, resolve_scope_id, LanguagePlugin};
-
-/// Python language plugin.
-pub struct PythonPlugin;
-
-impl LanguagePlugin for PythonPlugin {
-    fn language(&self) -> SupportedLanguage {
-        SupportedLanguage::Python
-    }
-
-    fn extensions(&self) -> &[&str] {
-        &["py"]
-    }
-
-    fn ts_language(&self) -> Language {
-        tree_sitter_python::LANGUAGE.into()
-    }
-
-    fn symbol_query_source(&self) -> &str {
-        include_str!("../queries/python/symbols.scm")
-    }
-
-    fn edge_query_source(&self) -> &str {
-        include_str!("../queries/python/edges.scm")
-    }
-
-    fn infer_symbol_kind(&self, node_kind: &str) -> &str {
-        match node_kind {
-            // Python uses `function_definition` for both top-level functions and
-            // class methods. We map to "function" here. Note: parser.rs only sets
-            // parent_id for kind == "method" || kind == "property", so Python
-            // methods won't have parent_id set automatically. This is a known
-            // limitation of the current LanguagePlugin trait contract.
-            "function_definition" => "function",
-            "class_definition" => "class",
-            _ => "function",
-        }
-    }
-
-    fn scope_node_types(&self) -> &[&str] {
-        &[
-            "function_definition",
-            "class_definition",
-            "decorated_definition",
-            "module",
-        ]
-    }
-
-    fn class_body_node_types(&self) -> &[&str] {
-        &["block"]
-    }
-
-    fn class_decl_node_types(&self) -> &[&str] {
-        &["class_definition"]
-    }
-
-    fn extract_metadata(
-        &self,
-        node: &tree_sitter::Node,
-        source: &str,
-        kind: &str,
-    ) -> Result<String> {
-        extract_metadata(node, source, kind)
-    }
-
-    fn extract_edge(
-        &self,
-        pattern_index: usize,
-        captures: &HashMap<String, (String, u32)>,
-        file_path: &str,
-        enclosing_scope_id: Option<&str>,
-    ) -> Vec<Edge> {
-        extract_py_edge(pattern_index, captures, file_path, enclosing_scope_id)
-    }
-
-    fn extract_docstring(&self, node: &tree_sitter::Node, source: &str) -> Option<String> {
-        extract_docstring(node, source)
-    }
-
-    fn generic_name_stopwords(&self) -> &[&str] {
-        &[
-            "__init__", "__str__", "__repr__", "__eq__", "__hash__", "__len__", "__iter__",
-            "__next__",
-        ]
-    }
-}
+use crate::extract::MetadataEntry;
 
 /// Structured metadata for a Python symbol.
 #[derive(Debug, Clone, Serialize, Default)]
@@ -115,8 +26,12 @@ pub struct PythonMetadata {
     pub is_abstract: bool,
     /// Whether the function has a `@property` decorator.
     pub is_property: bool,
-    /// All decorator names on this symbol.
-    pub decorators: Vec<String>,
+    /// Decorators applied to this symbol — reserved key per
+    /// `LANGUAGE-PLAYBOOK.md` § Step 5. Empty array means "looked, found
+    /// none". The key is always present because Python's AST has a
+    /// dedicated `decorator` node — the absent-vs-empty distinction is
+    /// preserved by the key's struct-field presence.
+    pub decorators: Vec<MetadataEntry>,
     /// Return type annotation, if present.
     pub return_type: Option<String>,
     /// Parameter list with names, type annotations, and default status.
@@ -155,14 +70,17 @@ pub fn extract_metadata(node: &tree_sitter::Node, source: &str, kind: &str) -> R
             for child in parent.children(&mut cursor) {
                 if child.kind() == "decorator" {
                     if let Ok(text) = child.utf8_text(source.as_bytes()) {
-                        // Strip leading `@` and any arguments (e.g., `@decorator(args)` -> `decorator`)
-                        let dec_name = text
-                            .trim_start_matches('@')
-                            .split('(')
-                            .next()
-                            .unwrap_or("")
-                            .trim()
-                            .to_string();
+                        // Strip leading `@`; split out args if present.
+                        // `@decorator(args)` → name="decorator", args_text=Some("(args)")
+                        // `@staticmethod`    → name="staticmethod", args_text=None
+                        let stripped = text.trim_start_matches('@').trim();
+                        let (dec_name, args_text) = match stripped.find('(') {
+                            Some(idx) => (
+                                stripped[..idx].trim().to_string(),
+                                Some(stripped[idx..].trim().to_string()),
+                            ),
+                            None => (stripped.to_string(), None),
+                        };
                         if !dec_name.is_empty() {
                             match dec_name.as_str() {
                                 "staticmethod" => meta.is_static = true,
@@ -171,7 +89,10 @@ pub fn extract_metadata(node: &tree_sitter::Node, source: &str, kind: &str) -> R
                                 "property" => meta.is_property = true,
                                 _ => {}
                             }
-                            meta.decorators.push(dec_name);
+                            meta.decorators.push(MetadataEntry {
+                                name: dec_name,
+                                args_text,
+                            });
                         }
                     }
                 }
@@ -193,7 +114,7 @@ pub fn extract_metadata(node: &tree_sitter::Node, source: &str, kind: &str) -> R
     // Infer access from the symbol name
     if let Some(name_node) = node.child_by_field_name("name") {
         if let Ok(name) = name_node.utf8_text(source.as_bytes()) {
-            meta.access = infer_access(name);
+            meta.access = access_from_name(name);
         }
     }
 
@@ -224,7 +145,7 @@ pub fn extract_metadata(node: &tree_sitter::Node, source: &str, kind: &str) -> R
 /// - Name starts with `__` and does NOT end with `__` -> "name_mangled"
 /// - Name starts with `_` -> "private"
 /// - Otherwise -> "public"
-fn infer_access(name: &str) -> String {
+fn access_from_name(name: &str) -> String {
     if name.starts_with("__") && !name.ends_with("__") {
         "name_mangled".to_string()
     } else if name.starts_with('_') {
@@ -369,91 +290,4 @@ pub fn extract_docstring(node: &tree_sitter::Node, source: &str) -> Option<Strin
     }
 
     None
-}
-
-/// Python edge extraction by pattern index.
-///
-/// Pattern indices map to the order of patterns in `queries/python/edges.scm`:
-/// 0 = import statement, 1 = from-import statement, 2 = direct call,
-/// 3 = attribute/method call, 4 = class inheritance
-fn extract_py_edge(
-    pattern: usize,
-    captures: &HashMap<String, (String, u32)>,
-    file_path: &str,
-    enclosing_scope_id: Option<&str>,
-) -> Vec<Edge> {
-    let mut edges = Vec::new();
-
-    let from_fn = resolve_scope_id(enclosing_scope_id, file_path, "function");
-    let from_cls = resolve_scope_id(enclosing_scope_id, file_path, "class");
-
-    match pattern {
-        // import statement (e.g. `import os`) — always module-level
-        0 => {
-            if let Some((imported_name, line)) = captures.get("imported_name") {
-                edges.push(make_edge(
-                    format!("{file_path}::__module__::function"),
-                    imported_name,
-                    "imports",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // from-import statement (e.g. `from os.path import join`)
-        1 => {
-            if let (Some((imported_name, line)), Some((source_mod, _))) =
-                (captures.get("imported_name"), captures.get("source"))
-            {
-                edges.push(make_edge(
-                    format!("{file_path}::__module__::function"),
-                    format!("{source_mod}::{imported_name}"),
-                    "imports",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // Direct function call (e.g. `foo()`)
-        2 => {
-            if let Some((callee, line)) = captures.get("callee") {
-                edges.push(make_edge(
-                    from_fn.clone(),
-                    callee,
-                    "calls",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // Attribute/method call (e.g. `self.foo()`, `obj.bar()`)
-        3 => {
-            if let (Some((object, line)), Some((method, _))) =
-                (captures.get("object"), captures.get("method"))
-            {
-                edges.push(make_edge(
-                    from_fn.clone(),
-                    format!("{object}.{method}"),
-                    "calls",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // Class inheritance (e.g. `class Foo(Bar):`)
-        4 => {
-            if let Some((base_class, line)) = captures.get("base_class") {
-                edges.push(make_edge(
-                    from_cls.clone(),
-                    base_class,
-                    "extends",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        _ => {}
-    }
-
-    edges
 }

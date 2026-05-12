@@ -1,5 +1,6 @@
 ---
-source: tests/integration/test_deps.rs
+source: gumiho-mudang-cli/tests/integration/test_deps.rs
+assertion_line: 202
 expression: normalized
 ---
 PaymentService — direct dependencies
@@ -9,11 +10,11 @@ calls:
   logger.warn             (external)
   validateAmount          src/payments/service.ts
 
-imports:
-  Logger                  src/utils/logger.ts
-  PaymentMethod           src/payments/types.ts
-  PaymentRequest          src/payments/types.ts
-  PaymentResult           src/payments/types.ts
+imports (external):
+  ../utils/logger::Logger (external)
+  ./types::PaymentMethod  (external)
+  ./types::PaymentRequest (external)
+  ./types::PaymentResult  (external)
 
 references_type:
   Logger                  src/utils/logger.ts

@@ -14,9 +14,9 @@ use serde::Serialize;
 use std::path::Path;
 
 use crate::commands::resolve_symbol;
-use gumiho_mudang_scope::core::graph::Graph;
 use crate::output::formatter;
 use crate::output::json::JsonOutput;
+use gumiho_mudang_scope::core::graph::Graph;
 
 /// Find call paths between two symbols.
 ///

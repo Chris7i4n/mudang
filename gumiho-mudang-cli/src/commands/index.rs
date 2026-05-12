@@ -14,12 +14,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::output::formatter;
 use gumiho_mudang_scope::config::ProjectConfig;
 use gumiho_mudang_scope::core::graph::Graph;
 use gumiho_mudang_scope::core::indexer::Indexer;
 use gumiho_mudang_scope::core::searcher::Searcher;
 use gumiho_mudang_scope::core::watcher::{WatchLock, Watcher};
-use crate::output::formatter;
 
 /// Arguments for the `scope index` command.
 #[derive(Args, Debug)]

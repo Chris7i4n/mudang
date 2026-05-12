@@ -36,6 +36,21 @@ Scope serves **LLM coding agents** running in shells, sandboxes, and CI runners.
 
 LSP servers exist and serve human IDE users well. Scope does not compete with LSP on its home turf.
 
+### Single-operator posture
+
+Scope today serves exactly one user. The repository owner operates every deployment. There are no external installs, no third-party `.scope/` indexes in the wild, no upgrade-from-version-N migration paths to honour.
+
+This collapses an entire class of compatibility work the codebase otherwise has to carry:
+
+- **No backward-compatibility shims.** When a schema, JSON shape, or on-disk format changes, the canonical path is wipe + reindex. The operator deletes `.scope/` (or `.mudang/`) and runs `index --full`.
+- **No dual-read / dual-write paths during migrations.** A column or JSON key has exactly one canonical shape per binary version. Code that tolerates "shape A or shape B" is anti-pattern: it normalises ambiguity into the type system and rots through subsequent shape changes.
+- **No version detectors that branch behaviour by stored format.** `Graph::open` may refuse a schema it does not own and surface the wipe instruction; it does not transparently upgrade.
+- **No `_deprecated` columns, no `// legacy` reader arms, no `version: u32` fields wedged into shapes to coordinate readers across binary releases.**
+
+This is a deliberate budget choice. Backward-compat is one of the highest-leverage sources of rot in long-lived codebases; deciding explicitly that we will not pay for it lets every refactor commit to the cleanest possible shape and delete the old one in the same landing.
+
+If Scope ever ships to additional operators (released crate, distributed binary, hosted index), this section is the first thing to revisit — and the trade-off becomes a real one. Until then, the premise stands and reviewers should flag any "compat shim" as a violation in the same severity tier as breaking a § 3 invariant.
+
 ---
 
 ## 3. Core invariants — must never break
@@ -49,6 +64,7 @@ Any change that breaks one of these is rejected.
 5. **Tree-sitter resilience.** The index updates correctly even when source code does not compile. Mid-refactor, broken branches, generated code with gaps — all must produce a useful (if incomplete) index.
 6. **Deterministic, read-only at query time.** No network calls. No mutable buffer state. Two queries against the same `.scope/` return the same answer.
 7. **LLM-shaped output.** Token-budgeted views (`summary` ~30 tok, `sketch` ~180 tok, `compact` JSON). Output formats may change; the budget orientation may not.
+8. **Wipe-and-reindex is the canonical migration path.** No backward-compatibility shims, no dual-read code, no stored-format version detectors. See § 2 "Single-operator posture" for the full premise. Reviewers must flag any compat shim as a § 3 violation.
 
 ---
 

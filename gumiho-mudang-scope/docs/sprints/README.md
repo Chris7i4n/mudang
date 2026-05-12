@@ -36,20 +36,21 @@ Land in this order. No sprint starts before its predecessor is closed.
 
 Sprint 0000 is a **structural prerequisite** (crate decomposition) owned
 by mudang's umbrella docs, not by `ARCHITECTURAL-REFACTOR.md`. Sprints
-0001–0007 are the R-move sprints.
+0001–0007 are the R-move sprints. Sprint 0008 is the final acceptance gate (charter sweep + shim retirement) — no new R-moves, but no refactor close without it.
 
 | # | Sprint | Phase | R-moves | Status |
 |---|---|---|---|---|
 | 0000 | [Crate decomposition](./0000-phase-a-crate-decomposition.md) | A (internal, pre-R0) | — (structural) | shipped (2026-05-11) |
 | 0001 | [Schema and storage](./0001-phase-a-schema-and-storage.md) | A | R0, R1 | shipped (2026-05-11) |
-| 0002 | [Dispatch and workspace context](./0002-phase-b-dispatch-and-workspace-context.md) | B | R7, R4 | unstarted |
-| 0003 | [Typed plugin output and resolution pipeline](./0003-phase-b-typed-plugin-and-resolution.md) | B | R2, R3 | unstarted |
+| 0002 | [Dispatch and workspace context](./0002-phase-b-dispatch-and-workspace-context.md) | B | R7, R4 | in-progress (closed on `refactor/phase-b`; not yet on `main`) |
+| 0003 | [Typed plugin output and resolution pipeline](./0003-phase-b-typed-plugin-and-resolution.md) | B | R2, R3 | in-progress (chunks 1, 2, 3a, 3b + codex review fixes on `refactor/sprint-0003-typed-plugin-resolution`) |
 | 0004 | [Trait closure and audit gates](./0004-phase-b-trait-closure-and-audits.md) | B | R9, R11, R12 | unstarted |
 | 0005 | [Framework infrastructure](./0005-phase-c-framework-infrastructure.md) | C | R5 | unstarted |
 | 0006 | [Output schema and confidence audit](./0006-phase-d-output-and-audit.md) | D | R10, R8 | unstarted |
 | 0007 | [Malformed-source harness](./0007-phase-e-malformed-source-harness.md) | E | R6 | unstarted |
+| 0008 | [Charter sweep and shim retirement](./0008-phase-e-charter-sweep.md) | E | — (acceptance gate) | unstarted |
 
-After sprint 0007 closes and the full-refactor acceptance criteria in
+After sprint 0008 closes and the full-refactor acceptance criteria in
 [`ARCHITECTURAL-REFACTOR.md` § Acceptance for the refactor as a whole](../ARCHITECTURAL-REFACTOR.md#acceptance-for-the-refactor-as-a-whole)
 hold, `POST-REFACTOR-PLAN.md`'s queue becomes eligible. Nothing from
 that document starts earlier.

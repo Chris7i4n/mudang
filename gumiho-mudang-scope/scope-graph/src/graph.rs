@@ -9,10 +9,30 @@ use rusqlite::{params, Connection, OptionalExtension};
 // resolving. The structs themselves live in scope-core; this preserves
 // the 1:1 public-surface promise in TODO 0006 § Sprint 0000 ambiguity
 // resolutions § 2.
-pub use scope_core::{Edge, InsertableEdge, RawEdge, Symbol};
+pub use crate::resolve::InsertableEdge;
+use scope_core::extract::SkippedRange;
+pub use scope_core::{Edge, RawEdge, Symbol};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
+
+/// One row destined for the `file_hashes` table (R6 — sprint 0003 chunk 3a).
+///
+/// Wraps the historical `(file_path, hash)` pair with `skipped_ranges` so
+/// the indexer can record both tree-sitter parser-recovery skips (R6) and
+/// plugin-driven skips (R2) in a single transactional write. The
+/// `file_hashes.skipped_ranges` column defaults to `'[]'`; passing an
+/// empty `Vec` here yields the same JSON literal.
+#[derive(Debug, Clone, Default)]
+pub struct FileHashRow {
+    /// SHA-256 hex digest of file contents — the staleness key.
+    pub hash: String,
+    /// Concatenation of plugin-driven skips and tree-sitter-error skips
+    /// for this file. Per Charter §3 invariant 5, the indexer must
+    /// forward both in source order; the storage layer serialises the
+    /// slice verbatim.
+    pub skipped_ranges: Vec<SkippedRange>,
+}
 
 /// The dependency graph backed by SQLite.
 pub struct Graph {
@@ -703,30 +723,27 @@ impl Graph {
         Ok(results)
     }
 
-    /// Extract a human-readable name from a symbol ID.
+    /// Display-name lookup for an edge endpoint id.
     ///
-    /// If the ID corresponds to a symbol in the index, returns its name.
-    /// Otherwise, extracts the name portion from the ID format `file::name::kind`.
+    /// Returns the symbol's name when the id is present in the
+    /// symbols table (Resolved / Ambiguous endpoints). For unresolved
+    /// (Dangling) endpoints the column stores the extractor's
+    /// original `to_id` text verbatim, so passing through `id` as-is
+    /// preserves the unresolved reference without parsing — R3
+    /// acceptance bullet 5 deletes the synthetic-id text-parse
+    /// fallback that previously hid the resolved-vs-dangling
+    /// distinction behind a `file::name::kind` split.
     fn symbol_name_from_id(&self, id: &str) -> String {
-        // Try to look up the symbol
-        if let Ok(Some(sym)) = self
-            .conn
+        self.conn
             .query_row(
                 "SELECT name FROM symbols WHERE id = ?1",
                 params![id],
                 |row| row.get::<_, String>(0),
             )
             .optional()
-        {
-            return sym;
-        }
-
-        // Fallback: parse the ID format "file::name::kind"
-        if let Some(rest) = id.split("::").nth(1) {
-            return rest.to_string();
-        }
-
-        id.to_string()
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| id.to_string())
     }
 
     /// Build a display name for a caller, including parent class if available.
@@ -1656,10 +1673,18 @@ impl Graph {
         })
     }
 
-    /// Resolve a symbol ID to a `CallPathStep`, falling back to parsing
-    /// the ID format if the symbol is not in the index.
+    /// Resolve a symbol ID to a `CallPathStep`.
+    ///
+    /// On miss (Dangling endpoint), returns a `CallPathStep` with the
+    /// id preserved verbatim as both `symbol_id` and `symbol_name`, no
+    /// file path, no line. R3 acceptance bullet 5 deletes the
+    /// synthetic-id text-parse fallback that previously fabricated a
+    /// `(file_path, name, kind)` triple by splitting `id` on `::` —
+    /// the parse silently turned Dangling into something that *looked*
+    /// like Resolved, hiding the cleanest-signal distinction from
+    /// downstream consumers.
     fn resolve_call_path_step(&self, id: &str) -> Result<CallPathStep> {
-        if let Some(sym) = self
+        Ok(self
             .conn
             .query_row(
                 "SELECT id, name, kind, file_path, line_start FROM symbols WHERE id = ?1",
@@ -1675,45 +1700,32 @@ impl Graph {
                 },
             )
             .optional()?
-        {
-            return Ok(sym);
-        }
-
-        // Fallback: parse the ID format "file::name::kind"
-        let parts: Vec<&str> = id.split("::").collect();
-        let name = if parts.len() >= 2 {
-            parts[1].to_string()
-        } else {
-            id.to_string()
-        };
-
-        Ok(CallPathStep {
-            symbol_id: id.to_string(),
-            symbol_name: name,
-            file_path: parts.first().unwrap_or(&"unknown").to_string(),
-            line: 0,
-            kind: if parts.len() >= 3 {
-                parts[2].to_string()
-            } else {
-                "unknown".to_string()
-            },
-        })
+            .unwrap_or_else(|| CallPathStep {
+                symbol_id: id.to_string(),
+                symbol_name: id.to_string(),
+                file_path: String::new(),
+                line: 0,
+                kind: "unknown".to_string(),
+            }))
     }
 
-    /// Insert a batch of symbols and edges within a single transaction.
-    ///
-    /// Used during indexing to efficiently store all extracted data for a file.
-    /// R1: routes a `RawEdge` through the Phase A resolver stub to
-    /// produce an `InsertableEdge`. R3 replaces both the call sites
-    /// and the stub wholesale; see
-    /// `REFACTOR-STATUS.md` § Stubs outstanding.
-    pub fn resolve(&self, raw: RawEdge) -> Result<InsertableEdge> {
-        crate::resolver::resolve_stub(&self.conn, raw)
+    /// Route a single `RawEdge` through the R3 resolver
+    /// ([`crate::resolve::Resolver`]) and return every `InsertableEdge`
+    /// the resolution produced. The return shape is `Vec` because
+    /// multi-row Ambiguous expansion can turn one `RawEdge` into
+    /// `N` `InsertableEdge`s, one per matched candidate symbol
+    /// (R3 multiplicity commitment).
+    pub fn resolve(&self, raw: RawEdge) -> Result<Vec<InsertableEdge>> {
+        Ok(crate::resolve::Resolver::new(&self.conn)
+            .resolve(crate::resolve::Captured::new(raw))?
+            .into_insertable())
     }
 
-    /// R1 batch variant of [`Graph::resolve`].
+    /// Batch variant of [`Graph::resolve`]. Total output length is
+    /// `>=` input length: each Ambiguous input contributes one row per
+    /// candidate target; Resolved + Dangling contribute one row each.
     pub fn resolve_batch(&self, raws: Vec<RawEdge>) -> Result<Vec<InsertableEdge>> {
-        crate::resolver::resolve_stub_batch(&self.conn, raws)
+        crate::resolve::Resolver::new(&self.conn).resolve_batch(raws)
     }
 
     /// Insert (or replace) the symbols for a single file in their own
@@ -1721,11 +1733,7 @@ impl Graph {
     /// file's symbols before the resolver runs over any file's edges,
     /// so same-file and cross-file targets are visible to the Phase A
     /// resolver stub.
-    pub fn insert_symbols_for_file(
-        &mut self,
-        file_path: &str,
-        symbols: &[Symbol],
-    ) -> Result<()> {
+    pub fn insert_symbols_for_file(&mut self, file_path: &str, symbols: &[Symbol]) -> Result<()> {
         let tx = self.conn.transaction()?;
         tx.execute(
             "DELETE FROM symbols WHERE file_path = ?1",
@@ -2101,7 +2109,13 @@ impl Graph {
     }
 
     /// Update the stored file hashes after indexing.
-    pub fn update_file_hashes(&mut self, hashes: &HashMap<String, String>) -> Result<()> {
+    ///
+    /// The `skipped_ranges` slice on each `FileHashRow` is serialised to JSON
+    /// and written to `file_hashes.skipped_ranges`. An empty slice yields
+    /// `'[]'`, matching the column default. R6 (sprint 0007) reads this column
+    /// during the malformed-source harness to distinguish indexed-but-degraded
+    /// files from clean parses.
+    pub fn update_file_hashes(&mut self, hashes: &HashMap<String, FileHashRow>) -> Result<()> {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)?
             .as_secs() as i64;
@@ -2109,12 +2123,13 @@ impl Graph {
         let tx = self.conn.transaction()?;
         {
             let mut stmt = tx.prepare(
-                "INSERT OR REPLACE INTO file_hashes (file_path, hash, indexed_at)
-                 VALUES (?1, ?2, ?3)",
+                "INSERT OR REPLACE INTO file_hashes (file_path, hash, indexed_at, skipped_ranges)
+                 VALUES (?1, ?2, ?3, ?4)",
             )?;
 
-            for (path, hash) in hashes {
-                stmt.execute(params![path, hash, now])?;
+            for (path, row) in hashes {
+                let skipped_json = serde_json::to_string(&row.skipped_ranges)?;
+                stmt.execute(params![path, row.hash, now, skipped_json])?;
             }
         }
 
@@ -2410,11 +2425,11 @@ mod tests {
             .line(9)
             .build();
 
-        let edge_bare = graph.resolve(raw_bare).unwrap();
-        let edge_member = graph.resolve(raw_member).unwrap();
+        let mut edges = graph.resolve(raw_bare).unwrap();
+        edges.extend(graph.resolve(raw_member).unwrap());
 
         graph
-            .insert_file_data("src/order.ts", &[caller], &[edge_bare, edge_member])
+            .insert_file_data("src/order.ts", &[caller], &edges)
             .unwrap();
 
         let callers = graph
@@ -2424,5 +2439,82 @@ mod tests {
         // Should find the caller via bare-name and member-pattern matching
         assert_eq!(callers.len(), 1, "expected 1 caller, got {:?}", callers);
         assert_eq!(callers[0].count, 2, "expected 2 call sites from checkout");
+    }
+
+    #[test]
+    fn test_update_file_hashes_persists_skipped_ranges() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let db_path = dir.path().join("graph.db");
+        let mut graph = Graph::open(&db_path).unwrap();
+
+        let mut hashes = HashMap::new();
+        hashes.insert(
+            "src/messy.rs".to_string(),
+            FileHashRow {
+                hash: "abc123".to_string(),
+                skipped_ranges: vec![
+                    SkippedRange {
+                        start_line: 5,
+                        end_line: 10,
+                        reason: "tree_sitter_error:syntax_error".to_string(),
+                    },
+                    SkippedRange {
+                        start_line: 42,
+                        end_line: 84,
+                        reason: "plugin_skip:rust:unparseable_macro_body".to_string(),
+                    },
+                ],
+            },
+        );
+
+        graph.update_file_hashes(&hashes).unwrap();
+
+        let json: String = graph
+            .conn
+            .query_row(
+                "SELECT skipped_ranges FROM file_hashes WHERE file_path = ?1",
+                ["src/messy.rs"],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        let parsed: Vec<SkippedRange> = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.len(), 2, "expected 2 ranges, got {parsed:?}");
+        assert_eq!(parsed[0].start_line, 5);
+        assert!(parsed[0].reason.starts_with("tree_sitter_error:"));
+        assert_eq!(parsed[1].start_line, 42);
+        assert!(parsed[1].reason.starts_with("plugin_skip:"));
+    }
+
+    #[test]
+    fn test_update_file_hashes_empty_skipped_ranges_writes_empty_array() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let db_path = dir.path().join("graph.db");
+        let mut graph = Graph::open(&db_path).unwrap();
+
+        let mut hashes = HashMap::new();
+        hashes.insert(
+            "src/clean.rs".to_string(),
+            FileHashRow {
+                hash: "deadbeef".to_string(),
+                skipped_ranges: Vec::new(),
+            },
+        );
+
+        graph.update_file_hashes(&hashes).unwrap();
+
+        let json: String = graph
+            .conn
+            .query_row(
+                "SELECT skipped_ranges FROM file_hashes WHERE file_path = ?1",
+                ["src/clean.rs"],
+                |row| row.get(0),
+            )
+            .unwrap();
+
+        assert_eq!(
+            json, "[]",
+            "clean parse must serialise to literal '[]' (matches column default)"
+        );
     }
 }

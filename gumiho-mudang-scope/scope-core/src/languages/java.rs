@@ -6,113 +6,8 @@
 /// Java AST nodes.
 use anyhow::Result;
 use serde::Serialize;
-use std::collections::HashMap;
-use tree_sitter::Language;
 
-use crate::types::Edge;
-use crate::parser::SupportedLanguage;
-use crate::languages::{make_edge, resolve_scope_id, LanguagePlugin};
-
-/// Java language plugin.
-pub struct JavaPlugin;
-
-impl LanguagePlugin for JavaPlugin {
-    fn language(&self) -> SupportedLanguage {
-        SupportedLanguage::Java
-    }
-
-    fn extensions(&self) -> &[&str] {
-        &["java"]
-    }
-
-    fn ts_language(&self) -> Language {
-        tree_sitter_java::LANGUAGE.into()
-    }
-
-    fn symbol_query_source(&self) -> &str {
-        include_str!("../queries/java/symbols.scm")
-    }
-
-    fn edge_query_source(&self) -> &str {
-        include_str!("../queries/java/edges.scm")
-    }
-
-    fn infer_symbol_kind(&self, node_kind: &str) -> &str {
-        match node_kind {
-            "class_declaration" => "class",
-            "interface_declaration" => "interface",
-            "enum_declaration" => "enum",
-            "record_declaration" => "class",
-            "method_declaration" => "method",
-            "constructor_declaration" => "method",
-            "field_declaration" => "property",
-            "annotation_type_declaration" => "type",
-            "enum_constant" => "variant",
-            _ => "function",
-        }
-    }
-
-    fn scope_node_types(&self) -> &[&str] {
-        &[
-            "class_declaration",
-            "interface_declaration",
-            "enum_declaration",
-            "method_declaration",
-            "constructor_declaration",
-            "lambda_expression",
-        ]
-    }
-
-    fn class_body_node_types(&self) -> &[&str] {
-        &["class_body", "interface_body", "enum_body"]
-    }
-
-    fn class_decl_node_types(&self) -> &[&str] {
-        &[
-            "class_declaration",
-            "interface_declaration",
-            "enum_declaration",
-        ]
-    }
-
-    fn extract_metadata(
-        &self,
-        node: &tree_sitter::Node,
-        source: &str,
-        kind: &str,
-    ) -> Result<String> {
-        extract_metadata(node, source, kind)
-    }
-
-    fn extract_edge(
-        &self,
-        pattern_index: usize,
-        captures: &HashMap<String, (String, u32)>,
-        file_path: &str,
-        enclosing_scope_id: Option<&str>,
-    ) -> Vec<Edge> {
-        extract_java_edge(pattern_index, captures, file_path, enclosing_scope_id)
-    }
-
-    fn extract_docstring(&self, node: &tree_sitter::Node, source: &str) -> Option<String> {
-        // Java uses block comments (/** ... */) as Javadoc, which tree-sitter
-        // represents as `block_comment` or `line_comment` preceding siblings.
-        let prev = node.prev_sibling()?;
-        match prev.kind() {
-            "block_comment" | "line_comment" => {
-                let text = prev.utf8_text(source.as_bytes()).ok()?;
-                Some(text.trim().to_string())
-            }
-            _ => None,
-        }
-    }
-
-    fn generic_name_stopwords(&self) -> &[&str] {
-        &[
-            "toString", "hashCode", "equals", "get", "set", "of", "main", "run", "close",
-        ]
-    }
-}
+use crate::extract::MetadataEntry;
 
 /// Structured metadata for a Java symbol.
 #[derive(Debug, Clone, Serialize, Default)]
@@ -127,8 +22,12 @@ pub struct JavaMetadata {
     pub is_abstract: bool,
     /// Whether the symbol is synchronized.
     pub is_synchronized: bool,
-    /// Annotations on this symbol (e.g., "Override", "Deprecated", "Autowired").
-    pub annotations: Vec<String>,
+    /// Annotations on this symbol — reserved key per
+    /// `LANGUAGE-PLAYBOOK.md` § Step 5. Empty array means "looked, found
+    /// none". Java's AST exposes `marker_annotation` and `annotation`
+    /// nodes so the key is always present (struct-field presence pins
+    /// the contract).
+    pub annotations: Vec<MetadataEntry>,
     /// Return type, if present (for methods).
     pub return_type: Option<String>,
     /// Parameter list with names and types.
@@ -171,16 +70,23 @@ pub fn extract_metadata(node: &tree_sitter::Node, source: &str, kind: &str) -> R
                     "synchronized" => meta.is_synchronized = true,
                     "marker_annotation" | "annotation" => {
                         if let Ok(text) = mod_child.utf8_text(source.as_bytes()) {
-                            // Strip leading `@` and any arguments
-                            let ann_name = text
-                                .trim_start_matches('@')
-                                .split('(')
-                                .next()
-                                .unwrap_or("")
-                                .trim()
-                                .to_string();
+                            // Strip leading `@`; split out args if present.
+                            // `@Deprecated`          → name="Deprecated", args_text=None
+                            // `@RequestMapping("/x")` → name="RequestMapping",
+                            //                          args_text=Some(`("/x")`)
+                            let stripped = text.trim_start_matches('@').trim();
+                            let (ann_name, args_text) = match stripped.find('(') {
+                                Some(idx) => (
+                                    stripped[..idx].trim().to_string(),
+                                    Some(stripped[idx..].trim().to_string()),
+                                ),
+                                None => (stripped.to_string(), None),
+                            };
                             if !ann_name.is_empty() {
-                                meta.annotations.push(ann_name);
+                                meta.annotations.push(MetadataEntry {
+                                    name: ann_name,
+                                    args_text,
+                                });
                             }
                         }
                     }
@@ -273,152 +179,4 @@ fn extract_parameters(params_node: &tree_sitter::Node, source: &str) -> Vec<Java
     }
 
     params
-}
-
-/// Java edge extraction by pattern index.
-///
-/// Pattern indices map to the order of patterns in `queries/java/edges.scm`:
-/// 0 = import declaration, 1 = member method call, 2 = direct method call,
-/// 3 = this.method() call, 4 = object creation (new), 5 = extends (superclass),
-/// 6 = class implements, 7 = interface extends, 8 = field type ref, 9 = param type ref,
-/// 10 = super.method() call, 11 = switch case enum constant ref
-fn extract_java_edge(
-    pattern: usize,
-    captures: &HashMap<String, (String, u32)>,
-    file_path: &str,
-    enclosing_scope_id: Option<&str>,
-) -> Vec<Edge> {
-    let mut edges = Vec::new();
-
-    let from_fn = resolve_scope_id(enclosing_scope_id, file_path, "function");
-    let from_cls = resolve_scope_id(enclosing_scope_id, file_path, "class");
-
-    match pattern {
-        // Import declaration
-        0 => {
-            if let Some((imported_name, line)) = captures.get("imported_name") {
-                edges.push(make_edge(
-                    format!("{file_path}::__module__::function"),
-                    imported_name,
-                    "imports",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // Member method invocation (e.g. service.processPayment())
-        1 => {
-            if let (Some((object, line)), Some((method, _))) =
-                (captures.get("object"), captures.get("method"))
-            {
-                edges.push(make_edge(
-                    from_fn.clone(),
-                    format!("{object}.{method}"),
-                    "calls",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // Direct method invocation (e.g. processPayment())
-        2 => {
-            if let Some((callee, line)) = captures.get("callee") {
-                edges.push(make_edge(
-                    from_fn.clone(),
-                    callee,
-                    "calls",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // this.method() call — captures method name only
-        // super.method() call — captures method name only
-        3 | 10 => {
-            if let Some((method, line)) = captures.get("method") {
-                edges.push(make_edge(
-                    from_fn.clone(),
-                    method,
-                    "calls",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // Object creation (new Foo())
-        4 => {
-            if let Some((class_name, line)) = captures.get("class_name") {
-                edges.push(make_edge(
-                    from_fn.clone(),
-                    class_name,
-                    "instantiates",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // Superclass (extends)
-        5 => {
-            if let Some((base_type, line)) = captures.get("base_type") {
-                edges.push(make_edge(
-                    from_cls.clone(),
-                    base_type,
-                    "extends",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // Class implements
-        6 => {
-            if let Some((base_type, line)) = captures.get("base_type") {
-                edges.push(make_edge(
-                    from_cls.clone(),
-                    base_type,
-                    "implements",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // Interface extends
-        7 => {
-            if let Some((base_type, line)) = captures.get("base_type") {
-                edges.push(make_edge(
-                    from_cls.clone(),
-                    base_type,
-                    "extends",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // Field / parameter type reference
-        8 | 9 => {
-            if let Some((type_ref, line)) = captures.get("type_ref") {
-                edges.push(make_edge(
-                    from_fn.clone(),
-                    type_ref,
-                    "references_type",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // Switch case label referencing an enum constant (e.g. case SUCCESS:)
-        11 => {
-            if let Some((variant_ref, line)) = captures.get("variant_ref") {
-                edges.push(make_edge(
-                    from_fn.clone(),
-                    variant_ref,
-                    "references",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        _ => {}
-    }
-
-    edges
 }

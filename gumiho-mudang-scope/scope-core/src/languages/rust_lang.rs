@@ -5,91 +5,8 @@
 /// and parameters from Rust AST nodes.
 use anyhow::Result;
 use serde::Serialize;
-use std::collections::HashMap;
-use tree_sitter::Language;
 
-use crate::types::Edge;
-use crate::parser::SupportedLanguage;
-use crate::languages::{make_edge, resolve_scope_id, LanguagePlugin};
-
-/// Rust language plugin.
-pub struct RustPlugin;
-
-impl LanguagePlugin for RustPlugin {
-    fn language(&self) -> SupportedLanguage {
-        SupportedLanguage::Rust
-    }
-
-    fn extensions(&self) -> &[&str] {
-        &["rs"]
-    }
-
-    fn ts_language(&self) -> Language {
-        tree_sitter_rust::LANGUAGE.into()
-    }
-
-    fn symbol_query_source(&self) -> &str {
-        include_str!("../queries/rust/symbols.scm")
-    }
-
-    fn edge_query_source(&self) -> &str {
-        include_str!("../queries/rust/edges.scm")
-    }
-
-    fn infer_symbol_kind(&self, node_kind: &str) -> &str {
-        match node_kind {
-            "function_item" => "function",
-            "struct_item" => "struct",
-            "enum_item" => "enum",
-            "trait_item" => "interface",
-            "type_item" => "type",
-            "const_item" | "static_item" => "const",
-            "enum_variant" => "variant",
-            _ => "function",
-        }
-    }
-
-    fn scope_node_types(&self) -> &[&str] {
-        &["function_item", "impl_item", "trait_item", "mod_item"]
-    }
-
-    fn class_body_node_types(&self) -> &[&str] {
-        // Rust impl blocks contain a `declaration_list` body, but `impl_item` is not
-        // stored as a symbol. The standard `find_parent_class` would generate a
-        // parent_id referencing a non-existent symbol, causing FK constraint errors.
-        // Only `enum_variant_list` is included so enum variants get their parent enum.
-        &["enum_variant_list"]
-    }
-
-    fn class_decl_node_types(&self) -> &[&str] {
-        &["enum_item"]
-    }
-
-    fn extract_metadata(
-        &self,
-        node: &tree_sitter::Node,
-        source: &str,
-        kind: &str,
-    ) -> Result<String> {
-        extract_metadata(node, source, kind)
-    }
-
-    fn extract_edge(
-        &self,
-        pattern_index: usize,
-        captures: &HashMap<String, (String, u32)>,
-        file_path: &str,
-        enclosing_scope_id: Option<&str>,
-    ) -> Vec<Edge> {
-        extract_rust_edge(pattern_index, captures, file_path, enclosing_scope_id)
-    }
-
-    fn generic_name_stopwords(&self) -> &[&str] {
-        &[
-            "new", "default", "from", "into", "run", "build", "try_from", "fmt", "clone", "drop",
-        ]
-    }
-}
+use crate::extract::MetadataEntry;
 
 /// Structured metadata for a Rust symbol.
 #[derive(Debug, Clone, Serialize, Default)]
@@ -102,8 +19,13 @@ pub struct RustMetadata {
     pub is_const: bool,
     /// Whether the symbol is unsafe.
     pub is_unsafe: bool,
-    /// Attributes like #[test], #[derive(Debug)].
-    pub attributes: Vec<String>,
+    /// Attributes applied to this symbol — reserved key `annotations`
+    /// per `LANGUAGE-PLAYBOOK.md` § Step 5 (Rust attributes map to the
+    /// playbook's universal "annotation" surface). Empty array means
+    /// "looked, found none". Examples: `#[test]`, `#[derive(Debug)]`,
+    /// `#[tokio::main]`.
+    #[serde(rename = "annotations")]
+    pub annotations: Vec<MetadataEntry>,
     /// Return type, if present.
     pub return_type: Option<String>,
     /// Parameter list with names and types.
@@ -134,26 +56,50 @@ pub fn extract_metadata(node: &tree_sitter::Node, source: &str, kind: &str) -> R
     // Walk direct children to find modifiers and attributes
     let mut child_cursor = node.walk();
     for child in node.children(&mut child_cursor) {
-        match child.kind() {
-            "visibility_modifier" => {
-                if let Ok(text) = child.utf8_text(source.as_bytes()) {
-                    meta.visibility = match text.trim() {
-                        "pub" => "pub".to_string(),
-                        s if s.starts_with("pub(crate)") => "pub(crate)".to_string(),
-                        s if s.starts_with("pub(super)") => "pub(super)".to_string(),
-                        s if s.starts_with("pub") => s.to_string(),
-                        _ => "private".to_string(),
-                    };
-                }
+        if child.kind() == "visibility_modifier" {
+            if let Ok(text) = child.utf8_text(source.as_bytes()) {
+                meta.visibility = match text.trim() {
+                    "pub" => "pub".to_string(),
+                    s if s.starts_with("pub(crate)") => "pub(crate)".to_string(),
+                    s if s.starts_with("pub(super)") => "pub(super)".to_string(),
+                    s if s.starts_with("pub") => s.to_string(),
+                    _ => "private".to_string(),
+                };
             }
-            "attribute_item" => {
-                if let Ok(text) = child.utf8_text(source.as_bytes()) {
-                    meta.attributes.push(text.trim().to_string());
-                }
-            }
-            _ => {}
         }
     }
+
+    // Rust attributes attach as PRECEDING SIBLINGS of the item node
+    // (`function_item`, `struct_item`, `enum_variant`, …) in tree-sitter-rust,
+    // not as direct children. Walk the prev_sibling chain, accepting
+    // `attribute_item` runs and skipping interleaved doc comments — both
+    // shapes are legal between attrs and the item they apply to. Stop at
+    // any other sibling kind (which marks the previous item / declaration
+    // boundary).
+    let mut prev_attrs: Vec<MetadataEntry> = Vec::new();
+    let mut sibling = node.prev_sibling();
+    while let Some(s) = sibling {
+        match s.kind() {
+            "attribute_item" => {
+                if let Ok(text) = s.utf8_text(source.as_bytes()) {
+                    let entry = parse_rust_attribute(text);
+                    if let Some(entry) = entry {
+                        prev_attrs.push(entry);
+                    }
+                }
+            }
+            "line_comment" | "block_comment" => {
+                // Doc / regular comments are transparent between attrs and
+                // the item they decorate; keep walking.
+            }
+            _ => break,
+        }
+        sibling = s.prev_sibling();
+    }
+    // We walked backwards; reverse so source order is preserved in the
+    // annotations array.
+    prev_attrs.reverse();
+    meta.annotations.extend(prev_attrs);
 
     // Check for async, const, unsafe keywords in function items
     if kind == "function" || kind == "method" {
@@ -193,6 +139,35 @@ pub fn extract_metadata(node: &tree_sitter::Node, source: &str, kind: &str) -> R
 
     let json = serde_json::to_string(&meta)?;
     Ok(json)
+}
+
+/// Parse one Rust `attribute_item` text into a [`MetadataEntry`].
+///
+/// Strips the `#[…]` (outer) or `#![…]` (inner) wrapping, then splits on
+/// the first `(` to separate the attribute path from its argument list.
+/// `#[derive(Debug)]` becomes `{name: "derive", args_text: Some("(Debug)")}`;
+/// `#[tokio::main]` becomes `{name: "tokio::main", args_text: None}`.
+/// Returns `None` when the parsed name is empty (malformed input).
+fn parse_rust_attribute(text: &str) -> Option<MetadataEntry> {
+    let stripped = text
+        .trim()
+        .trim_start_matches('#')
+        .trim_start_matches('!')
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .trim();
+    let (name, args_text) = match stripped.find('(') {
+        Some(idx) => (
+            stripped[..idx].trim().to_string(),
+            Some(stripped[idx..].trim().to_string()),
+        ),
+        None => (stripped.to_string(), None),
+    };
+    if name.is_empty() {
+        None
+    } else {
+        Some(MetadataEntry { name, args_text })
+    }
 }
 
 /// Extract parameter info from a parameters node.
@@ -252,148 +227,111 @@ fn extract_parameters(params_node: &tree_sitter::Node, source: &str) -> Vec<Rust
     params
 }
 
-/// Rust edge extraction by pattern index.
-///
-/// Pattern indices map to the order of patterns in `queries/rust/edges.scm`:
-/// 0 = use scoped, 1 = use aliased, 2 = direct call, 3 = scoped call,
-/// 4 = method call, 5 = macro invocation, 6 = scoped macro,
-/// 7 = field type ref, 8 = param type ref, 9 = return type ref,
-/// 10 = match arm struct pattern variant ref, 11 = match arm tuple struct pattern variant ref
-fn extract_rust_edge(
-    pattern: usize,
-    captures: &HashMap<String, (String, u32)>,
-    file_path: &str,
-    enclosing_scope_id: Option<&str>,
-) -> Vec<Edge> {
-    let mut edges = Vec::new();
-
-    let from_fn = resolve_scope_id(enclosing_scope_id, file_path, "function");
-    let module_fn = || format!("{file_path}::__module__::function");
-
-    match pattern {
-        // Use declaration — scoped identifier (e.g. use std::io)
-        // Use declaration — aliased (use ... as ...)
-        0 | 1 => {
-            if let Some((imported_name, line)) = captures.get("imported_name") {
-                edges.push(make_edge(
-                    module_fn(),
-                    imported_name,
-                    "imports",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // Direct call expression (e.g. process_payment(...))
-        // Scoped call expression (e.g. PaymentService::new(...))
-        2 | 3 => {
-            if let Some((callee, line)) = captures.get("callee") {
-                edges.push(make_edge(
-                    from_fn.clone(),
-                    callee,
-                    "calls",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // Method call expression (e.g. self.client.charge(...))
-        4 => {
-            if let Some((method, line)) = captures.get("method") {
-                edges.push(make_edge(
-                    from_fn.clone(),
-                    method,
-                    "calls",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // Macro invocation (e.g. println!(...))
-        // Scoped macro invocation (e.g. std::println!(...))
-        5 | 6 => {
-            if let Some((macro_name, line)) = captures.get("macro_name") {
-                edges.push(make_edge(
-                    from_fn.clone(),
-                    format!("{macro_name}!"),
-                    "calls",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // Field / parameter / return type reference.
-        // Skip single uppercase letters — these are almost always generic type
-        // parameters (T, U, K, V, F, R, S, E, B, ...), not real type references.
-        // Tree-sitter Rust treats both generic param names and concrete type
-        // references as `type_identifier`, so the query cannot distinguish them
-        // syntactically. Filtering here removes ~24% of false positives in
-        // `references_type` on tokio.
-        7..=9 => {
-            if let Some((type_ref, line)) = captures.get("type_ref") {
-                if !is_likely_generic_param(type_ref) {
-                    edges.push(make_edge(
-                        from_fn.clone(),
-                        type_ref,
-                        "references_type",
-                        file_path,
-                        *line,
-                    ));
-                }
-            }
-        }
-        // Match arm — struct pattern variant ref (e.g. PaymentResult::Success { .. })
-        // Match arm — tuple struct pattern variant ref (e.g. PaymentMethod::CreditCard(details))
-        10 | 11 => {
-            if let Some((variant_ref, line)) = captures.get("variant_ref") {
-                // For scoped identifiers like "PaymentMethod::CreditCard", extract just the
-                // variant name (last segment after ::)
-                let variant_name = variant_ref.rsplit("::").next().unwrap_or(variant_ref);
-                edges.push(make_edge(
-                    from_fn.clone(),
-                    variant_name,
-                    "references",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        _ => {}
-    }
-
-    edges
-}
-
-/// Heuristic: a single uppercase ASCII letter is almost always a Rust generic
-/// type parameter, not a real type reference. Real Rust types are PascalCase
-/// multi-letter identifiers (Vec, Option, HashMap). This filter trades a small
-/// amount of recall (real one-letter types are vanishingly rare in idiomatic
-/// Rust APIs) for a large precision win on `references_type`.
-fn is_likely_generic_param(name: &str) -> bool {
-    let mut chars = name.chars();
-    match (chars.next(), chars.next()) {
-        (Some(c), None) => c.is_ascii_uppercase(),
-        _ => false,
-    }
-}
-
 #[cfg(test)]
-mod generic_param_tests {
-    use super::is_likely_generic_param;
+mod rust_annotation_tests {
+    use super::*;
+    use tree_sitter::Parser;
 
-    #[test]
-    fn single_uppercase_letters_are_generic() {
-        for c in ["T", "U", "K", "V", "F", "R", "S", "E", "B"] {
-            assert!(is_likely_generic_param(c), "{c} should be flagged");
+    fn parse_and_extract_first_fn_metadata(source: &str) -> serde_json::Value {
+        let mut parser = Parser::new();
+        parser
+            .set_language(&tree_sitter_rust::LANGUAGE.into())
+            .unwrap();
+        let tree = parser.parse(source, None).unwrap();
+        let root = tree.root_node();
+
+        // Find the first function_item / struct_item node by walking children.
+        let mut cursor = root.walk();
+        for child in root.children(&mut cursor) {
+            if child.kind() == "function_item" || child.kind() == "struct_item" {
+                let kind = if child.kind() == "function_item" {
+                    "function"
+                } else {
+                    "struct"
+                };
+                let json = extract_metadata(&child, source, kind).unwrap();
+                return serde_json::from_str(&json).unwrap();
+            }
         }
+        panic!("no function_item or struct_item found in source");
     }
 
     #[test]
-    fn real_types_are_not_generic() {
-        for c in [
-            "Vec", "Option", "HashMap", "Tt", "Future", "Item", "Output", "Self",
-        ] {
-            assert!(!is_likely_generic_param(c), "{c} should not be flagged");
-        }
+    fn outer_attribute_on_function_captured_as_annotation() {
+        let source = "#[test]\nfn smoke() {}";
+        let meta = parse_and_extract_first_fn_metadata(source);
+        let annotations = meta.get("annotations").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(
+            annotations.len(),
+            1,
+            "expected exactly one annotation, got {meta:?}"
+        );
+        assert_eq!(
+            annotations[0].get("name").and_then(|v| v.as_str()),
+            Some("test")
+        );
+        // No args — args_text key should be omitted.
+        assert!(
+            annotations[0].get("args_text").is_none(),
+            "args-less attribute must omit args_text; got {:?}",
+            annotations[0]
+        );
+    }
+
+    #[test]
+    fn derive_attribute_captures_args_text() {
+        let source = "#[derive(Debug, Clone)]\nstruct S;";
+        let meta = parse_and_extract_first_fn_metadata(source);
+        let annotations = meta.get("annotations").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(annotations.len(), 1);
+        assert_eq!(
+            annotations[0].get("name").and_then(|v| v.as_str()),
+            Some("derive")
+        );
+        assert_eq!(
+            annotations[0].get("args_text").and_then(|v| v.as_str()),
+            Some("(Debug, Clone)")
+        );
+    }
+
+    #[test]
+    fn multiple_attrs_preserve_source_order() {
+        let source = "#[cfg(test)]\n#[allow(dead_code)]\nfn x() {}";
+        let meta = parse_and_extract_first_fn_metadata(source);
+        let annotations = meta.get("annotations").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(annotations.len(), 2);
+        assert_eq!(
+            annotations[0].get("name").and_then(|v| v.as_str()),
+            Some("cfg")
+        );
+        assert_eq!(
+            annotations[1].get("name").and_then(|v| v.as_str()),
+            Some("allow")
+        );
+    }
+
+    #[test]
+    fn doc_comments_between_attrs_are_transparent() {
+        // /// doc lines interleaved with attrs: both attrs should still be captured.
+        let source = "#[test]\n/// docs for smoke\nfn smoke() {}";
+        let meta = parse_and_extract_first_fn_metadata(source);
+        let annotations = meta.get("annotations").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(
+            annotations.len(),
+            1,
+            "doc comment must not block prev-sibling walk; got {meta:?}"
+        );
+        assert_eq!(
+            annotations[0].get("name").and_then(|v| v.as_str()),
+            Some("test")
+        );
+    }
+
+    #[test]
+    fn item_with_no_attrs_emits_empty_annotations() {
+        let source = "fn plain() {}";
+        let meta = parse_and_extract_first_fn_metadata(source);
+        let annotations = meta.get("annotations").and_then(|v| v.as_array()).unwrap();
+        assert!(annotations.is_empty(), "expected [], got {annotations:?}");
     }
 }

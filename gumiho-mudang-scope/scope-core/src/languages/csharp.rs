@@ -5,108 +5,9 @@
 /// return type, and parameters from C# AST nodes.
 use anyhow::Result;
 use serde::Serialize;
-use std::collections::HashMap;
-use tree_sitter::Language;
 
-use crate::types::{Edge, Symbol};
-use crate::parser::SupportedLanguage;
-use crate::languages::{make_edge, resolve_scope_id, LanguagePlugin};
-
-/// C# language plugin.
-pub struct CSharpPlugin;
-
-impl LanguagePlugin for CSharpPlugin {
-    fn language(&self) -> SupportedLanguage {
-        SupportedLanguage::CSharp
-    }
-
-    fn extensions(&self) -> &[&str] {
-        &["cs"]
-    }
-
-    fn ts_language(&self) -> Language {
-        tree_sitter_c_sharp::LANGUAGE.into()
-    }
-
-    fn symbol_query_source(&self) -> &str {
-        include_str!("../queries/csharp/symbols.scm")
-    }
-
-    fn edge_query_source(&self) -> &str {
-        include_str!("../queries/csharp/edges.scm")
-    }
-
-    fn infer_symbol_kind(&self, node_kind: &str) -> &str {
-        match node_kind {
-            "class_declaration" => "class",
-            "method_declaration" => "method",
-            "constructor_declaration" => "method",
-            "property_declaration" => "property",
-            "interface_declaration" => "interface",
-            "enum_declaration" => "enum",
-            "struct_declaration" => "struct",
-            "record_declaration" => "class",
-            "delegate_declaration" => "type",
-            "enum_member_declaration" => "variant",
-            _ => "function",
-        }
-    }
-
-    fn scope_node_types(&self) -> &[&str] {
-        &[
-            "method_declaration",
-            "constructor_declaration",
-            "class_declaration",
-            "struct_declaration",
-            "interface_declaration",
-            "record_declaration",
-        ]
-    }
-
-    fn class_body_node_types(&self) -> &[&str] {
-        &["declaration_list", "enum_member_declaration_list"]
-    }
-
-    fn class_decl_node_types(&self) -> &[&str] {
-        &[
-            "class_declaration",
-            "struct_declaration",
-            "interface_declaration",
-            "record_declaration",
-            "enum_declaration",
-        ]
-    }
-
-    fn extract_metadata(
-        &self,
-        node: &tree_sitter::Node,
-        source: &str,
-        kind: &str,
-    ) -> Result<String> {
-        extract_metadata(node, source, kind)
-    }
-
-    fn extract_edge(
-        &self,
-        pattern_index: usize,
-        captures: &HashMap<String, (String, u32)>,
-        file_path: &str,
-        enclosing_scope_id: Option<&str>,
-    ) -> Vec<Edge> {
-        extract_cs_edge(pattern_index, captures, file_path, enclosing_scope_id)
-    }
-
-    fn generic_name_stopwords(&self) -> &[&str] {
-        &[
-            "ToString",
-            "GetHashCode",
-            "Equals",
-            "Dispose",
-            "GetType",
-            "Main",
-        ]
-    }
-}
+use crate::extract::MetadataEntry;
+use crate::types::Symbol;
 
 /// Structured metadata for a C# symbol.
 #[derive(Debug, Clone, Serialize, Default)]
@@ -134,6 +35,11 @@ pub struct CSharpMetadata {
     pub return_type: Option<String>,
     /// Parameter list with names, types, and optionality.
     pub parameters: Vec<CSharpParameterInfo>,
+    /// Annotations (C# attributes) on this symbol — reserved key per
+    /// `LANGUAGE-PLAYBOOK.md` § Step 5. Empty array means "looked, found
+    /// none". Examples: `[Authorize]`, `[HttpGet("/users")]`,
+    /// `[Obsolete("use Foo instead", true)]`.
+    pub annotations: Vec<MetadataEntry>,
 }
 
 /// Information about a single C# method/constructor parameter.
@@ -154,9 +60,37 @@ pub struct CSharpParameterInfo {
 pub fn extract_metadata(node: &tree_sitter::Node, source: &str, kind: &str) -> Result<String> {
     let mut meta = CSharpMetadata::default();
 
-    // Walk direct children to find modifiers
+    // Walk direct children to find modifiers and attribute_list nodes.
     let mut child_cursor = node.walk();
     for child in node.children(&mut child_cursor) {
+        if child.kind() == "attribute_list" {
+            let mut attr_cursor = child.walk();
+            for attr in child.children(&mut attr_cursor) {
+                if attr.kind() != "attribute" {
+                    continue;
+                }
+                if let Ok(text) = attr.utf8_text(source.as_bytes()) {
+                    // `Authorize`            → name="Authorize", args_text=None
+                    // `HttpGet("/users")`    → name="HttpGet", args_text=Some(`("/users")`)
+                    // `Obsolete("x", true)`  → name="Obsolete", args_text=Some(`("x", true)`)
+                    let stripped = text.trim();
+                    let (ann_name, args_text) = match stripped.find('(') {
+                        Some(idx) => (
+                            stripped[..idx].trim().to_string(),
+                            Some(stripped[idx..].trim().to_string()),
+                        ),
+                        None => (stripped.to_string(), None),
+                    };
+                    if !ann_name.is_empty() {
+                        meta.annotations.push(MetadataEntry {
+                            name: ann_name,
+                            args_text,
+                        });
+                    }
+                }
+            }
+            continue;
+        }
         if child.kind() == "modifier" {
             if let Ok(text) = child.utf8_text(source.as_bytes()) {
                 match text {
@@ -315,119 +249,4 @@ pub fn merge_partial_classes(symbols: &mut [Symbol]) -> Vec<String> {
     }
 
     removals
-}
-
-/// C# edge extraction by pattern index.
-///
-/// Pattern indices map to the order of patterns in `queries/csharp/edges.scm`:
-/// 0 = using (identifier), 1 = using (qualified), 2 = member call,
-/// 3 = direct call, 4 = new expression, 5 = this.Method() call,
-/// 6 = base list (identifier), 7 = base list (qualified), 8 = base.Method() call,
-/// 9 = switch case member access variant ref
-fn extract_cs_edge(
-    pattern: usize,
-    captures: &HashMap<String, (String, u32)>,
-    file_path: &str,
-    enclosing_scope_id: Option<&str>,
-) -> Vec<Edge> {
-    let mut edges = Vec::new();
-
-    let from_fn = resolve_scope_id(enclosing_scope_id, file_path, "function");
-    let from_cls = resolve_scope_id(enclosing_scope_id, file_path, "class");
-    let module_fn = || format!("{file_path}::__module__::function");
-
-    match pattern {
-        // Using directive with identifier — always module-level
-        // Using directive with qualified name — always module-level
-        0 | 1 => {
-            if let Some((imported_name, line)) = captures.get("imported_name") {
-                edges.push(make_edge(
-                    module_fn(),
-                    imported_name,
-                    "imports",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // Member access call (e.g. _logger.Info(...))
-        2 => {
-            if let (Some((object, line)), Some((method, _))) =
-                (captures.get("object"), captures.get("method"))
-            {
-                edges.push(make_edge(
-                    from_fn.clone(),
-                    format!("{object}.{method}"),
-                    "calls",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // Direct call (e.g. DoSomething(...))
-        3 => {
-            if let Some((callee, line)) = captures.get("callee") {
-                edges.push(make_edge(
-                    from_fn.clone(),
-                    callee,
-                    "calls",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // Object creation (new ...)
-        4 => {
-            if let Some((class_name, line)) = captures.get("class_name") {
-                edges.push(make_edge(
-                    from_fn.clone(),
-                    class_name,
-                    "instantiates",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // this.Method() call — captures method name only
-        // base.Method() call — captures method name only
-        5 | 8 => {
-            if let Some((method, line)) = captures.get("method") {
-                edges.push(make_edge(
-                    from_fn.clone(),
-                    method,
-                    "calls",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // Base list with identifier (implements/extends)
-        // Base list with qualified name
-        6 | 7 => {
-            if let Some((base_type, line)) = captures.get("base_type") {
-                edges.push(make_edge(
-                    from_cls.clone(),
-                    base_type,
-                    "implements",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        // Switch case with member access variant ref (e.g. case PaymentStatus.Pending:)
-        9 => {
-            if let Some((variant_ref, line)) = captures.get("variant_ref") {
-                edges.push(make_edge(
-                    from_fn.clone(),
-                    variant_ref,
-                    "references",
-                    file_path,
-                    *line,
-                ));
-            }
-        }
-        _ => {}
-    }
-
-    edges
 }

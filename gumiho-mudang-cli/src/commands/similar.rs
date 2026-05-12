@@ -12,11 +12,11 @@ use anyhow::{bail, Result};
 use clap::Args;
 use std::path::Path;
 
+use crate::output::formatter;
+use crate::output::json::JsonOutput;
 use gumiho_mudang_scope::config::ProjectConfig;
 use gumiho_mudang_scope::core::graph::Graph;
 use gumiho_mudang_scope::core::searcher::Searcher;
-use crate::output::formatter;
-use crate::output::json::JsonOutput;
 
 /// Arguments for the `scope similar` command.
 #[derive(Args, Debug)]

@@ -11,9 +11,11 @@ use std::path::Path;
 use std::time::Instant;
 
 use scope_core::config::ProjectConfig;
+use scope_core::extract::SkippedRange;
+use scope_core::languages::LanguageId;
+use scope_core::parser::CodeParser;
 use scope_core::{Edge, Symbol};
-use scope_graph::graph::Graph;
-use scope_core::parser::{CodeParser, SupportedLanguage};
+use scope_graph::graph::{FileHashRow, Graph};
 use scope_search::searcher::Searcher;
 
 /// Statistics from an indexing run.
@@ -112,7 +114,7 @@ impl Indexer {
 
         let mut total_symbols = 0usize;
         let mut total_edges = 0usize;
-        let mut file_hashes: HashMap<String, String> = HashMap::new();
+        let mut file_hashes: HashMap<String, FileHashRow> = HashMap::new();
         let mut lang_stats: HashMap<String, (usize, usize)> = HashMap::new();
         let mut all_symbols: Vec<Symbol> = Vec::new();
 
@@ -132,7 +134,13 @@ impl Indexer {
             let insertable = graph.resolve_batch(pf.edges.clone())?;
             graph.insert_edges_for_file(&pf.rel_path, &insertable)?;
 
-            file_hashes.insert(pf.rel_path.clone(), pf.hash.clone());
+            file_hashes.insert(
+                pf.rel_path.clone(),
+                FileHashRow {
+                    hash: pf.hash.clone(),
+                    skipped_ranges: pf.skipped_ranges.clone(),
+                },
+            );
 
             let sym_count = pf.symbols.len();
             let edge_count = pf.edges.len();
@@ -201,7 +209,7 @@ impl Indexer {
         // Collect all current files and compute hashes
         let files = self.collect_files(project_root, config)?;
         let mut current_hashes: HashMap<String, String> = HashMap::new();
-        let mut file_map: HashMap<String, (std::path::PathBuf, SupportedLanguage, String, String)> =
+        let mut file_map: HashMap<String, (std::path::PathBuf, LanguageId, String, String)> =
             HashMap::new();
 
         for (rel_path, abs_path, lang) in &files {
@@ -242,28 +250,23 @@ impl Indexer {
         }
 
         // Process modified and added files
-        let files_to_reindex: Vec<(
-            String,
-            std::path::PathBuf,
-            SupportedLanguage,
-            String,
-            String,
-        )> = changed
-            .modified
-            .iter()
-            .chain(changed.added.iter())
-            .filter_map(|rel_path| {
-                file_map.get(rel_path).map(|(abs, lang, source, hash)| {
-                    (
-                        rel_path.clone(),
-                        abs.clone(),
-                        *lang,
-                        source.clone(),
-                        hash.clone(),
-                    )
+        let files_to_reindex: Vec<(String, std::path::PathBuf, LanguageId, String, String)> =
+            changed
+                .modified
+                .iter()
+                .chain(changed.added.iter())
+                .filter_map(|rel_path| {
+                    file_map.get(rel_path).map(|(abs, lang, source, hash)| {
+                        (
+                            rel_path.clone(),
+                            abs.clone(),
+                            *lang,
+                            source.clone(),
+                            hash.clone(),
+                        )
+                    })
                 })
-            })
-            .collect();
+                .collect();
 
         // Parse changed files in parallel
         let parsed: Vec<ParsedFile> = files_to_reindex
@@ -275,7 +278,7 @@ impl Indexer {
             })
             .collect();
 
-        let mut updated_hashes: HashMap<String, String> = HashMap::new();
+        let mut updated_hashes: HashMap<String, FileHashRow> = HashMap::new();
         let mut all_reindexed_symbols: Vec<Symbol> = Vec::new();
 
         // Two-pass write — symbols first across the changed batch so
@@ -302,7 +305,13 @@ impl Indexer {
             }
 
             if let Some(hash) = current_hashes.get(&pf.rel_path) {
-                updated_hashes.insert(pf.rel_path.clone(), hash.clone());
+                updated_hashes.insert(
+                    pf.rel_path.clone(),
+                    FileHashRow {
+                        hash: hash.clone(),
+                        skipped_ranges: pf.skipped_ranges.clone(),
+                    },
+                );
             }
         }
 
@@ -344,7 +353,7 @@ impl Indexer {
         &self,
         project_root: &Path,
         config: &ProjectConfig,
-    ) -> Result<Vec<(String, std::path::PathBuf, SupportedLanguage)>> {
+    ) -> Result<Vec<(String, std::path::PathBuf, LanguageId)>> {
         let mut files = Vec::new();
 
         let mut builder = ignore::WalkBuilder::new(project_root);
@@ -492,18 +501,19 @@ struct ParsedFile {
     hash: String,
     symbols: Vec<Symbol>,
     edges: Vec<Edge>,
-    lang: SupportedLanguage,
+    lang: LanguageId,
+    /// Concatenation of plugin-driven skips and tree-sitter parser-recovery
+    /// skips for this file, in source order. R6 / R2 plumbing — written to
+    /// `file_hashes.skipped_ranges` (sprint 0003 chunk 3a). Empty for clean
+    /// parses where no plugin opted to skip.
+    skipped_ranges: Vec<SkippedRange>,
 }
 
 /// Parse a single file: read, hash, extract symbols and edges.
 ///
 /// Each invocation creates its own `CodeParser` because tree-sitter's `Parser`
 /// is not `Send`. This is cheap — the grammar pointers are shared.
-fn parse_file(
-    rel_path: &str,
-    abs_path: &std::path::Path,
-    lang: SupportedLanguage,
-) -> Result<ParsedFile> {
+fn parse_file(rel_path: &str, abs_path: &std::path::Path, lang: LanguageId) -> Result<ParsedFile> {
     let source = std::fs::read_to_string(abs_path)
         .with_context(|| format!("Failed to read {}", abs_path.display()))?;
     let hash = compute_hash(&source);
@@ -514,17 +524,24 @@ fn parse_file(
 fn parse_loaded_source(
     rel_path: &str,
     source: &str,
-    lang: SupportedLanguage,
+    lang: LanguageId,
     hash: String,
 ) -> Result<ParsedFile> {
     let mut parser = CodeParser::new()?;
     let symbols = parser.extract_symbols(rel_path, source, lang)?;
     let mut edges = parser.extract_edges(rel_path, source, lang)?;
 
-    if lang == SupportedLanguage::Rust {
+    if lang == LanguageId::Rust {
         let trait_edges = parser.extract_rust_impl_trait_edges(rel_path, source, &symbols)?;
         edges.extend(trait_edges);
     }
+
+    // R6 / R2 — collect tree-sitter parser-recovery skips and plugin-driven
+    // skips (the latter is opt-in per language; default arm returns empty).
+    // The two streams are concatenated; Charter §3 invariant 5 forbids
+    // reordering or merging at this layer, so we sort only the combined
+    // result for source-order presentation.
+    let skipped_ranges = parser.collect_skipped_ranges(rel_path, source, lang)?;
 
     Ok(ParsedFile {
         rel_path: rel_path.to_string(),
@@ -532,6 +549,7 @@ fn parse_loaded_source(
         symbols,
         edges,
         lang,
+        skipped_ranges,
     })
 }
 

@@ -9,11 +9,17 @@
 
 pub mod config;
 pub mod edge;
+pub mod extract;
 pub mod languages;
 pub mod parser;
 pub mod types;
+pub mod workspace;
+pub mod workspace_context;
 
-pub use edge::{
-    Confidence, EdgeBuilder, EdgeKind, InsertableEdge, Insertable, Producer, RawEdge, Status,
-};
+pub use edge::{Confidence, EdgeBuilder, EdgeKind, Producer, RawEdge, Status};
+pub use extract::{Capture, MetadataEntry, MetadataField, RawCaptures, SkippedRange};
 pub use types::{Edge, Symbol};
+pub use workspace_context::{
+    Dependency, FileId, FrameworkVersions, LanguageWorkspaceContext, Lockfile, ModuleLayout,
+    NoopWorkspaceContext, Package,
+};

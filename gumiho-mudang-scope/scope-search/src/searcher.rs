@@ -15,8 +15,8 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crate::embedder::build_embedding_text;
+use scope_core::languages::dispatch;
 use scope_core::Symbol;
-use scope_core::languages::stopwords_for_language;
 
 /// A single result from a search query.
 #[derive(Debug, Clone, Serialize)]
@@ -139,9 +139,9 @@ impl Searcher {
             return Ok(results);
         }
 
-        let (first_party, vendor): (Vec<_>, Vec<_>) = results
-            .into_iter()
-            .partition(|r| !scope_core::config::project::is_vendor_path(&r.file_path, vendor_patterns));
+        let (first_party, vendor): (Vec<_>, Vec<_>) = results.into_iter().partition(|r| {
+            !scope_core::config::project::is_vendor_path(&r.file_path, vendor_patterns)
+        });
 
         let mut combined = first_party;
         combined.extend(vendor);
@@ -285,18 +285,9 @@ fn normalize_scores(raw: Vec<RawFtsResult>) -> Vec<SearchResult> {
 /// treated as optional boosters rather than primary search terms when
 /// the query also contains specific (non-stopword) terms.
 fn is_any_stopword(term: &str) -> bool {
-    const LANGUAGES: &[&str] = &[
-        "typescript",
-        "csharp",
-        "python",
-        "rust",
-        "go",
-        "java",
-        "ruby",
-    ];
     let lower = term.to_lowercase();
-    for lang in LANGUAGES {
-        for sw in stopwords_for_language(lang) {
+    for &lang in dispatch::REGISTERED {
+        for sw in lang.generic_name_stopwords() {
             if sw.to_lowercase() == lower {
                 return true;
             }
