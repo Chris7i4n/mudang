@@ -7,7 +7,7 @@
 /// `scope audit coverage` is explicitly post-refactor — see
 /// `POST-REFACTOR-PLAN.md` § Items deliberately deferred.
 use anyhow::{Context, Result};
-use clap::{Args, Subcommand};
+use clap::{Args, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
@@ -96,6 +96,42 @@ impl SampleRecord {
     }
 }
 
+/// One row of the precision report — emitted as one element of the
+/// JSON `report` array and as one TSV row.
+///
+/// Columns mirror the pre-Phase-D ambiguity #4 resolution:
+/// `(kind, tier, producer, pattern_id, sample_size, correct_count, precision)`.
+/// `tier` is the same string as the sample record's `confidence` field
+/// (`"high"` / `"medium"` / `"low"`); the report uses the *tier-target*
+/// vocabulary because R8's tier targets are stated against the tier
+/// name, not against the bare confidence stamp.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ReportRow {
+    pub kind: String,
+    pub tier: String,
+    pub producer: String,
+    pub pattern_id: String,
+    pub sample_size: usize,
+    pub correct_count: usize,
+    /// `correct_count / sample_size`, clamped at f64 precision.
+    /// Always in `[0.0, 1.0]`.
+    pub precision: f64,
+}
+
+/// Full precision report — the top-level shape emitted by
+/// `scope audit confidence --label --format json`.
+///
+/// The `schema_version` is the report-side contract (distinct from the
+/// sample-side contract in `docs/AUDIT-LABEL-SCHEMA.md`, though both
+/// happen to be locked at "1" today). `disclaimer` is the verbatim
+/// precision-only framing — see [`PRECISION_ONLY_DISCLAIMER`].
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PrecisionReport {
+    pub schema_version: String,
+    pub disclaimer: String,
+    pub report: Vec<ReportRow>,
+}
+
 /// `scope audit` — top-level dispatch for audit subcommands.
 #[derive(Args, Debug)]
 pub struct AuditArgs {
@@ -175,6 +211,28 @@ pub struct ConfidenceArgs {
     /// The only remediation is `scope index` then re-emit + re-label.
     #[arg(long, value_name = "PATH", conflicts_with = "emit_sample")]
     pub label: Option<PathBuf>,
+
+    /// Report output format. Applies only to `--label`; ignored by
+    /// `--emit-sample` (the sample file is always JSONL per
+    /// `docs/AUDIT-LABEL-SCHEMA.md`) and by the default summary.
+    ///
+    /// - `json` (default): top-level object with `schema_version: "1"`,
+    ///   the precision-only disclaimer, and a `report` array of rows
+    ///   `(kind, tier, producer, pattern_id, sample_size, correct_count, precision)`.
+    /// - `tsv`: same columns as the JSON `report` array, tab-separated,
+    ///   one header line then one row per group — pipeable into shell tools.
+    #[arg(long, value_enum, default_value_t = ReportFormat::Json)]
+    pub format: ReportFormat,
+}
+
+/// Precision report serialisation format.
+///
+/// JSON is the contract per pre-Phase-D ambiguity #4. TSV is the shell-
+/// pipeline convenience surface with the same column set.
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReportFormat {
+    Json,
+    Tsv,
 }
 
 pub fn run(args: &AuditArgs, project_root: &Path) -> Result<()> {
@@ -295,7 +353,7 @@ fn emit_sample(
 /// land in chunks 5-6.
 fn label_pass(
     graph: &Graph,
-    _args: &ConfidenceArgs,
+    args: &ConfidenceArgs,
     project_root: &Path,
     in_path: &Path,
 ) -> Result<()> {
@@ -331,6 +389,22 @@ fn label_pass(
         records.push(record);
     }
 
+    // Reject incomplete labelling: every row must carry a true/false
+    // verdict before precision can be computed. Mixing labelled and
+    // unlabelled rows in one report would mis-state the denominator —
+    // either we'd inflate precision by ignoring nulls or deflate it by
+    // counting them as wrong. Either choice is dishonest. Mechanical
+    // refusal until the labeller finishes is the only honest path.
+    let unlabelled = records.iter().filter(|r| r.label.is_none()).count();
+    if unlabelled > 0 {
+        anyhow::bail!(
+            "{}: {unlabelled} of {} record(s) have label=null; complete labelling before re-running --label. \
+             Each record's `label` must be `true` (correct) or `false` (incorrect) per docs/AUDIT-LABEL-SCHEMA.md.",
+            in_path.display(),
+            records.len(),
+        );
+    }
+
     // Join record edge_ids back to file_paths via the index. The schema
     // intentionally omits file_path (the labeller does not need it), so
     // the index is the truth source for the drift gate at label time.
@@ -345,12 +419,104 @@ fn label_pass(
         .collect();
     enforce_freshness(graph, project_root, &referenced_rows)?;
 
-    anyhow::bail!(
-        "audit confidence --label: read {} record(s) and verified source freshness. \
-         Precision report, JSON/TSV writers, and tier gate land in sprint 0007 chunks 5-6. \
-         See `docs/sprints/0007-phase-d-confidence-audit.md`.",
-        records.len()
-    )
+    let report = compute_precision_report(&records);
+    write_report(&report, args.format, &mut std::io::stdout().lock())?;
+    Ok(())
+}
+
+/// Group records by `(kind, tier, producer, pattern_id)` and compute
+/// precision per group.
+///
+/// `tier` is taken from each record's `confidence` field — they are the
+/// same string vocabulary (`"high"` / `"medium"` / `"low"`) per the
+/// schema. Group iteration order is sorted (`BTreeMap`) so the report
+/// is byte-for-byte deterministic given the same input.
+///
+/// `precision = correct_count as f64 / sample_size as f64`. The caller
+/// must ensure every record carries a non-null label before calling —
+/// `label_pass` enforces that at the parse boundary.
+pub fn compute_precision_report(records: &[SampleRecord]) -> PrecisionReport {
+    let mut groups: BTreeMap<(String, String, String, String), (usize, usize)> =
+        BTreeMap::new();
+    for r in records {
+        let key = (
+            r.kind.clone(),
+            r.confidence.clone(),
+            r.producer.clone(),
+            r.pattern_id.clone(),
+        );
+        let entry = groups.entry(key).or_insert((0, 0));
+        entry.0 += 1; // sample_size
+        if r.label == Some(true) {
+            entry.1 += 1; // correct_count
+        }
+    }
+
+    let rows = groups
+        .into_iter()
+        .map(|((kind, tier, producer, pattern_id), (n, k))| {
+            let precision = if n == 0 { 0.0 } else { k as f64 / n as f64 };
+            ReportRow {
+                kind,
+                tier,
+                producer,
+                pattern_id,
+                sample_size: n,
+                correct_count: k,
+                precision,
+            }
+        })
+        .collect();
+
+    PrecisionReport {
+        schema_version: SCHEMA_VERSION.to_string(),
+        disclaimer: PRECISION_ONLY_DISCLAIMER.to_string(),
+        report: rows,
+    }
+}
+
+/// Write the precision report to `out` in the requested format.
+///
+/// JSON: pretty-printed (two-space indent) so a human can read the
+/// report directly and so diffs over time stay reviewable.
+/// `serde_json::to_writer_pretty` streams without an intermediate
+/// `Value`.
+///
+/// TSV: a single header line (`kind\ttier\t...\tprecision`) then one
+/// row per `ReportRow`. Precision is rendered with four decimal places
+/// — enough resolution to distinguish 0.95 from 0.9499 (the tier
+/// boundary) without flooding shell output with float noise.
+pub fn write_report<W: Write>(
+    report: &PrecisionReport,
+    format: ReportFormat,
+    out: &mut W,
+) -> Result<()> {
+    match format {
+        ReportFormat::Json => {
+            serde_json::to_writer_pretty(&mut *out, report)?;
+            writeln!(out)?;
+        }
+        ReportFormat::Tsv => {
+            writeln!(
+                out,
+                "kind\ttier\tproducer\tpattern_id\tsample_size\tcorrect_count\tprecision"
+            )?;
+            for row in &report.report {
+                writeln!(
+                    out,
+                    "{}\t{}\t{}\t{}\t{}\t{}\t{:.4}",
+                    row.kind,
+                    row.tier,
+                    row.producer,
+                    row.pattern_id,
+                    row.sample_size,
+                    row.correct_count,
+                    row.precision,
+                )?;
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Hard mechanical enforcement of the auditor immutability rule.
@@ -699,5 +865,211 @@ mod tests {
         // Bumping is charter-grade and must land via POST-REFACTOR-PLAN
         // § Priority 2; this assertion is the canary against drive-by edits.
         assert_eq!(SCHEMA_VERSION, "1");
+    }
+
+    // -- Chunk 5: precision report + JSON / TSV writers --
+
+    fn labelled(
+        edge_id: i64,
+        kind: &str,
+        confidence: &str,
+        producer: &str,
+        pattern_id: &str,
+        label: bool,
+    ) -> SampleRecord {
+        SampleRecord {
+            schema_version: SCHEMA_VERSION.to_string(),
+            edge_id: edge_id.to_string(),
+            kind: kind.to_string(),
+            confidence: confidence.to_string(),
+            producer: producer.to_string(),
+            pattern_id: pattern_id.to_string(),
+            from: format!("f{edge_id}"),
+            to: format!("t{edge_id}"),
+            source_snippet: String::new(),
+            lang_version: None,
+            label: Some(label),
+        }
+    }
+
+    #[test]
+    fn precision_report_groups_by_full_key() {
+        let records = vec![
+            labelled(1, "calls", "high", "rust", "rust.calls.method", true),
+            labelled(2, "calls", "high", "rust", "rust.calls.method", true),
+            labelled(3, "calls", "high", "rust", "rust.calls.method", false),
+            labelled(4, "calls", "high", "rust", "rust.calls.fn", true),
+            labelled(5, "imports", "medium", "rust", "rust.imports.use", false),
+        ];
+        let report = compute_precision_report(&records);
+        assert_eq!(report.schema_version, "1");
+        assert_eq!(report.report.len(), 3);
+
+        // Find each group; assert math.
+        let g1 = report
+            .report
+            .iter()
+            .find(|r| r.pattern_id == "rust.calls.method")
+            .unwrap();
+        assert_eq!(g1.sample_size, 3);
+        assert_eq!(g1.correct_count, 2);
+        assert!((g1.precision - 2.0 / 3.0).abs() < 1e-9);
+
+        let g2 = report
+            .report
+            .iter()
+            .find(|r| r.pattern_id == "rust.calls.fn")
+            .unwrap();
+        assert_eq!(g2.sample_size, 1);
+        assert_eq!(g2.correct_count, 1);
+        assert_eq!(g2.precision, 1.0);
+
+        let g3 = report
+            .report
+            .iter()
+            .find(|r| r.pattern_id == "rust.imports.use")
+            .unwrap();
+        assert_eq!(g3.sample_size, 1);
+        assert_eq!(g3.correct_count, 0);
+        assert_eq!(g3.precision, 0.0);
+    }
+
+    #[test]
+    fn precision_report_rows_are_sorted_deterministically() {
+        let records = vec![
+            labelled(1, "imports", "low", "python", "p.imports.from", true),
+            labelled(2, "calls", "high", "rust", "rust.calls.method", true),
+            labelled(3, "calls", "high", "rust", "rust.calls.fn", true),
+            labelled(4, "extends", "medium", "ts", "ts.extends.class", true),
+        ];
+        let report = compute_precision_report(&records);
+        // BTreeMap key sort: (kind, tier, producer, pattern_id) ascending.
+        let keys: Vec<_> = report
+            .report
+            .iter()
+            .map(|r| (r.kind.as_str(), r.tier.as_str(), r.pattern_id.as_str()))
+            .collect();
+        assert_eq!(
+            keys,
+            vec![
+                ("calls", "high", "rust.calls.fn"),
+                ("calls", "high", "rust.calls.method"),
+                ("extends", "medium", "ts.extends.class"),
+                ("imports", "low", "p.imports.from"),
+            ]
+        );
+    }
+
+    #[test]
+    fn precision_report_disclaimer_is_verbatim() {
+        let report = compute_precision_report(&[]);
+        assert_eq!(report.disclaimer, PRECISION_ONLY_DISCLAIMER);
+    }
+
+    #[test]
+    fn write_report_json_carries_schema_disclaimer_rows() {
+        let report = PrecisionReport {
+            schema_version: "1".to_string(),
+            disclaimer: PRECISION_ONLY_DISCLAIMER.to_string(),
+            report: vec![ReportRow {
+                kind: "calls".to_string(),
+                tier: "high".to_string(),
+                producer: "rust".to_string(),
+                pattern_id: "rust.calls.method".to_string(),
+                sample_size: 30,
+                correct_count: 29,
+                precision: 29.0 / 30.0,
+            }],
+        };
+        let mut buf = Vec::new();
+        write_report(&report, ReportFormat::Json, &mut buf).unwrap();
+        let s = String::from_utf8(buf).unwrap();
+        assert!(s.contains("\"schema_version\": \"1\""));
+        assert!(s.contains(PRECISION_ONLY_DISCLAIMER));
+        assert!(s.contains("\"sample_size\": 30"));
+        assert!(s.contains("\"correct_count\": 29"));
+        assert!(s.contains("\"precision\":"));
+        // Pretty-printed: contains a newline (not a single-line blob).
+        assert!(s.contains('\n'));
+    }
+
+    #[test]
+    fn write_report_tsv_has_header_and_one_row_per_group() {
+        let report = PrecisionReport {
+            schema_version: "1".to_string(),
+            disclaimer: PRECISION_ONLY_DISCLAIMER.to_string(),
+            report: vec![
+                ReportRow {
+                    kind: "calls".to_string(),
+                    tier: "high".to_string(),
+                    producer: "rust".to_string(),
+                    pattern_id: "rust.calls.method".to_string(),
+                    sample_size: 30,
+                    correct_count: 29,
+                    precision: 29.0 / 30.0,
+                },
+                ReportRow {
+                    kind: "imports".to_string(),
+                    tier: "medium".to_string(),
+                    producer: "python".to_string(),
+                    pattern_id: "p.imports.from".to_string(),
+                    sample_size: 12,
+                    correct_count: 9,
+                    precision: 0.75,
+                },
+            ],
+        };
+        let mut buf = Vec::new();
+        write_report(&report, ReportFormat::Tsv, &mut buf).unwrap();
+        let s = String::from_utf8(buf).unwrap();
+        let lines: Vec<_> = s.lines().collect();
+        assert_eq!(lines.len(), 3); // header + 2 rows
+        assert_eq!(
+            lines[0],
+            "kind\ttier\tproducer\tpattern_id\tsample_size\tcorrect_count\tprecision"
+        );
+        assert_eq!(
+            lines[1],
+            "calls\thigh\trust\trust.calls.method\t30\t29\t0.9667"
+        );
+        assert_eq!(
+            lines[2],
+            "imports\tmedium\tpython\tp.imports.from\t12\t9\t0.7500"
+        );
+    }
+
+    #[test]
+    fn write_report_tsv_uses_four_decimal_precision() {
+        // Picks values either side of the high-tier 0.95 boundary so a
+        // future format-string change that loses resolution fails here.
+        let report = PrecisionReport {
+            schema_version: "1".to_string(),
+            disclaimer: PRECISION_ONLY_DISCLAIMER.to_string(),
+            report: vec![
+                ReportRow {
+                    kind: "calls".to_string(),
+                    tier: "high".to_string(),
+                    producer: "rust".to_string(),
+                    pattern_id: "p1".to_string(),
+                    sample_size: 200,
+                    correct_count: 190, // 0.9500
+                    precision: 190.0 / 200.0,
+                },
+                ReportRow {
+                    kind: "calls".to_string(),
+                    tier: "high".to_string(),
+                    producer: "rust".to_string(),
+                    pattern_id: "p2".to_string(),
+                    sample_size: 10000,
+                    correct_count: 9499, // 0.9499
+                    precision: 9499.0 / 10000.0,
+                },
+            ],
+        };
+        let mut buf = Vec::new();
+        write_report(&report, ReportFormat::Tsv, &mut buf).unwrap();
+        let s = String::from_utf8(buf).unwrap();
+        assert!(s.contains("\t0.9500\n"));
+        assert!(s.contains("\t0.9499\n"));
     }
 }

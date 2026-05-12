@@ -93,8 +93,107 @@ fn test_audit_confidence_emit_sample_writes_jsonl() {
     }
 }
 
+/// Helper: emit a sample then label every record `true`.
+fn emit_and_label_all_true(root: &Path) -> PathBuf {
+    let sample = root.join("sample.jsonl");
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--emit-sample"])
+        .arg(&sample)
+        .current_dir(root)
+        .assert()
+        .success();
+
+    let raw = std::fs::read_to_string(&sample).unwrap();
+    let labelled: String = raw
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+        .map(|l| l.replace("\"label\":null", "\"label\":true"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    std::fs::write(&sample, format!("{labelled}\n")).unwrap();
+    sample
+}
+
 #[test]
-fn test_audit_confidence_emit_then_label_round_trips() {
+fn test_audit_confidence_label_emits_json_report_by_default() {
+    let (_dir, root) = setup_indexed_fixture();
+    let sample = emit_and_label_all_true(&root);
+
+    let out = Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--label"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .success();
+    let stdout = String::from_utf8_lossy(&out.get_output().stdout).to_string();
+
+    // Parse the report and verify its shape matches the pre-Phase-D
+    // ambiguity #4 contract.
+    let report: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("stdout not valid JSON: {e}\n{stdout}"));
+    assert_eq!(report["schema_version"], "1");
+    assert!(report["disclaimer"]
+        .as_str()
+        .unwrap()
+        .contains("precision report"));
+    let rows = report["report"].as_array().expect("report array");
+    assert!(!rows.is_empty(), "expected at least one report row");
+    for row in rows {
+        for field in [
+            "kind",
+            "tier",
+            "producer",
+            "pattern_id",
+            "sample_size",
+            "correct_count",
+            "precision",
+        ] {
+            assert!(
+                row.get(field).is_some(),
+                "row missing field {field}: {row}"
+            );
+        }
+        // Labeller said true everywhere => precision must be 1.0.
+        assert_eq!(row["precision"].as_f64().unwrap(), 1.0);
+        assert_eq!(row["sample_size"], row["correct_count"]);
+    }
+}
+
+#[test]
+fn test_audit_confidence_label_format_tsv() {
+    let (_dir, root) = setup_indexed_fixture();
+    let sample = emit_and_label_all_true(&root);
+
+    let out = Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--label"])
+        .arg(&sample)
+        .args(["--format", "tsv"])
+        .current_dir(&root)
+        .assert()
+        .success();
+    let stdout = String::from_utf8_lossy(&out.get_output().stdout).to_string();
+
+    let mut lines = stdout.lines();
+    let header = lines.next().expect("header line");
+    assert_eq!(
+        header,
+        "kind\ttier\tproducer\tpattern_id\tsample_size\tcorrect_count\tprecision"
+    );
+    let body: Vec<_> = lines.collect();
+    assert!(!body.is_empty(), "expected at least one body row");
+    for row in body {
+        let cols: Vec<&str> = row.split('\t').collect();
+        assert_eq!(cols.len(), 7, "expected 7 tab-separated columns: {row}");
+        // All-true labelling => precision rendered as 1.0000.
+        assert_eq!(cols[6], "1.0000", "row: {row}");
+    }
+}
+
+#[test]
+fn test_audit_confidence_label_rejects_null_labels() {
     let (_dir, root) = setup_indexed_fixture();
     let sample = root.join("sample.jsonl");
 
@@ -105,41 +204,17 @@ fn test_audit_confidence_emit_then_label_round_trips() {
         .current_dir(&root)
         .assert()
         .success();
+    // Don't fill any labels: every record still has label=null.
 
-    // Label every record true (placeholder labeller — replaces null with true).
-    let raw = std::fs::read_to_string(&sample).unwrap();
-    let labelled: String = raw
-        .lines()
-        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
-        .map(|l| l.replace("\"label\":null", "\"label\":true"))
-        .collect::<Vec<_>>()
-        .join("\n");
-    std::fs::write(&sample, format!("{labelled}\n")).unwrap();
-
-    // --label is chunk-4-complete: it parses + drift-checks then bails
-    // with the chunk-5/6 pointer. Until chunks 5-6 land we assert that
-    // the parser accepts the round-tripped file (no schema_version /
-    // drift errors).
-    let out = Command::cargo_bin("mudang")
+    Command::cargo_bin("mudang")
         .unwrap()
         .args(["audit", "confidence", "--label"])
         .arg(&sample)
         .current_dir(&root)
         .assert()
-        .failure(); // chunks 5-6 not yet wired => intentional bail
-    let stderr = String::from_utf8_lossy(&out.get_output().stderr).to_string();
-    assert!(
-        stderr.contains("Precision report") || stderr.contains("chunks 5-6"),
-        "expected chunk-5-6 pointer in stderr; got: {stderr}"
-    );
-    assert!(
-        !stderr.contains("source drift"),
-        "no drift expected; got: {stderr}"
-    );
-    assert!(
-        !stderr.contains("unknown schema_version"),
-        "no schema mismatch expected; got: {stderr}"
-    );
+        .failure()
+        .stderr(contains("label=null"))
+        .stderr(contains("complete labelling"));
 }
 
 #[test]
