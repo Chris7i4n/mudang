@@ -28,7 +28,10 @@
 
 pub mod compact_symbol;
 pub mod index;
+pub mod init;
 pub mod refs;
+pub mod setup;
+pub mod source;
 pub mod summary;
 pub mod symbol_sketch;
 
@@ -37,7 +40,10 @@ pub use index::{
     IndexEvent, IndexFullResult, IndexIncrementalResult, IndexIncrementalUpToDate,
     IndexLanguageStat, IndexReindexEvent, IndexStartEvent, IndexStopEvent,
 };
+pub use init::InitResult;
 pub use refs::{RefsGroup, RefsGrouped};
+pub use setup::SetupResult;
+pub use source::SourceView;
 pub use summary::{FileSummary, Summary, SymbolSummary};
 pub use symbol_sketch::{
     ClassSketch, EnumSketch, EnumVariantView, FieldView, FileSketch, GenericSketch,

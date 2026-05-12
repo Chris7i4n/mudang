@@ -70,19 +70,19 @@ pub fn run(args: &SourceArgs, project_root: &Path) -> Result<()> {
     let source_lines = &lines[start..end];
 
     if args.json {
-        let data = serde_json::json!({
-            "symbol": sym.name,
-            "kind": sym.kind,
-            "file_path": sym.file_path,
-            "line_start": sym.line_start,
-            "line_end": sym.line_end,
-            "signature": sym.signature,
-            "source": source_lines.join("\n"),
-        });
+        let data = crate::output::schema::SourceView {
+            symbol: &sym.name,
+            kind: &sym.kind,
+            file_path: &sym.file_path,
+            line_start: sym.line_start,
+            line_end: sym.line_end,
+            signature: sym.signature.as_deref(),
+            source: source_lines.join("\n"),
+        };
         let envelope = JsonOutput {
             command: "source",
             symbol: Some(sym.name.clone()),
-            data: &data,
+            data,
             truncated: false,
             total: 1,
         };
