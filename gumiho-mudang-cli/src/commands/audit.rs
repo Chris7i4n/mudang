@@ -44,6 +44,34 @@ pub const PRECISION_ONLY_DISCLAIMER: &str =
 pub const SCHEMA_DOC_POINTER: &str =
     "Sample-file schema: docs/AUDIT-LABEL-SCHEMA.md (schema_version \"1\").";
 
+/// Limitation disclosed in every precision report so the operator never
+/// reads a precision number out of context.
+///
+/// Schema_version "1" surfaces precision per
+/// `(kind, tier, producer, pattern_id)` over the *labelled* records in
+/// each group. It deliberately omits three classes of signal that are
+/// post-refactor design work (see
+/// `POST-REFACTOR-PLAN.md` § Priority 1 — Self-correction cycle):
+///
+/// 1. **Per-group coverage** — how many records the labeller skipped
+///    (left `label = null`). A precision number with high skip ratio
+///    is opaque; bundled with `skipped_count` / `labelled_count` /
+///    `coverage_ratio` in schema bump "2" (sub-item (h)).
+/// 2. **Richer verdict types** — `target_proposed`, `kind_proposed`,
+///    `confidence_proposed`, `evidence`, `reasoning_text` (sub-item (g)).
+///    Binary `label = true | false` says *whether* Scope was wrong but
+///    not *why* or *what the truth is*; the actionable signal for
+///    closing the self-correction loop is qualitative, not binary.
+/// 3. **Multi-labeller aggregation** — combining LSP, LLM, human, and
+///    hybrid labellers' verdicts over the same edges with policy for
+///    disagreement (sub-item (i)).
+///
+/// This note is the operator-facing acknowledgement that the precision
+/// number on this report is one face of a richer truth surface that has
+/// not yet been built. Read it together with the disclaimer above.
+pub const COVERAGE_LIMITATION_NOTE: &str =
+    "report schema_version \"1\" surfaces precision over labelled records only; per-group coverage, richer verdict types (target/kind/confidence_proposed, evidence, reasoning_text), and multi-labeller aggregation land in schema_version \"2\" — see POST-REFACTOR-PLAN.md § Priority 1 — Self-correction cycle.";
+
 /// Wire-format schema version emitted by `--emit-sample` and accepted by
 /// `--label`. Locked at `"1"` per the contract in
 /// `docs/AUDIT-LABEL-SCHEMA.md`. Bumping this is charter-grade and lands
@@ -147,6 +175,11 @@ pub struct PrecisionReport {
     pub schema_version: String,
     pub disclaimer: String,
     pub sample_schema_doc: String,
+    /// Operator-facing acknowledgement that this `schema_version: "1"`
+    /// report omits per-group coverage, richer verdict types, and
+    /// multi-labeller aggregation. See [`COVERAGE_LIMITATION_NOTE`]
+    /// and `POST-REFACTOR-PLAN.md` § Priority 1 sub-items (g) + (h) + (i).
+    pub coverage_limitation_note: String,
     pub report: Vec<ReportRow>,
 }
 
@@ -798,6 +831,7 @@ pub fn compute_precision_report(records: &[SampleRecord]) -> PrecisionReport {
         schema_version: SCHEMA_VERSION.to_string(),
         disclaimer: PRECISION_ONLY_DISCLAIMER.to_string(),
         sample_schema_doc: SCHEMA_DOC_POINTER.to_string(),
+        coverage_limitation_note: COVERAGE_LIMITATION_NOTE.to_string(),
         report: rows,
     }
 }
@@ -824,15 +858,18 @@ pub fn write_report<W: Write>(
             writeln!(out)?;
         }
         ReportFormat::Tsv => {
-            // Preamble: `#`-prefixed comments carrying the disclaimer
-            // and sample-file schema doc pointer. Standard TSV consumers
-            // (awk / cut / Miller / csvkit) either ignore `#` lines via
-            // a `--comment` flag or can be teed through `grep -v '^#'`
-            // before parsing. Both surfaces (JSON top-level fields, TSV
-            // comment preamble) carry the same pointer so external
-            // labeller authors discover the contract from either format.
+            // Preamble: `#`-prefixed comments carrying the disclaimer,
+            // sample-file schema doc pointer, and coverage-limitation
+            // note. Standard TSV consumers (awk / cut / Miller /
+            // csvkit) either ignore `#` lines via a `--comment` flag
+            // or can be teed through `grep -v '^#'` before parsing.
+            // Both surfaces (JSON top-level fields, TSV comment
+            // preamble) carry the same three notes so external
+            // labeller authors discover the full contract — including
+            // the schema "1" limitation — from either format.
             writeln!(out, "# {}", report.disclaimer)?;
             writeln!(out, "# {}", report.sample_schema_doc)?;
+            writeln!(out, "# {}", report.coverage_limitation_note)?;
             writeln!(
                 out,
                 "kind\ttier\tproducer\tpattern_id\tsample_size\tcorrect_count\tprecision"
@@ -1308,6 +1345,7 @@ mod tests {
             schema_version: "1".to_string(),
             disclaimer: PRECISION_ONLY_DISCLAIMER.to_string(),
             sample_schema_doc: SCHEMA_DOC_POINTER.to_string(),
+            coverage_limitation_note: COVERAGE_LIMITATION_NOTE.to_string(),
             report: vec![ReportRow {
                 kind: "calls".to_string(),
                 tier: "high".to_string(),
@@ -1336,6 +1374,7 @@ mod tests {
             schema_version: "1".to_string(),
             disclaimer: PRECISION_ONLY_DISCLAIMER.to_string(),
             sample_schema_doc: SCHEMA_DOC_POINTER.to_string(),
+            coverage_limitation_note: COVERAGE_LIMITATION_NOTE.to_string(),
             report: vec![
                 ReportRow {
                     kind: "calls".to_string(),
@@ -1361,20 +1400,22 @@ mod tests {
         write_report(&report, ReportFormat::Tsv, &mut buf).unwrap();
         let s = String::from_utf8(buf).unwrap();
         let lines: Vec<_> = s.lines().collect();
-        // 2 preamble (`#` disclaimer + `#` schema-doc pointer) + 1 header + 2 rows.
-        assert_eq!(lines.len(), 5);
+        // 3 preamble (`#` disclaimer + `#` schema-doc pointer + `#`
+        // coverage-limitation note) + 1 header + 2 rows.
+        assert_eq!(lines.len(), 6);
         assert_eq!(lines[0], format!("# {PRECISION_ONLY_DISCLAIMER}"));
         assert_eq!(lines[1], format!("# {SCHEMA_DOC_POINTER}"));
+        assert_eq!(lines[2], format!("# {COVERAGE_LIMITATION_NOTE}"));
         assert_eq!(
-            lines[2],
+            lines[3],
             "kind\ttier\tproducer\tpattern_id\tsample_size\tcorrect_count\tprecision"
         );
         assert_eq!(
-            lines[3],
+            lines[4],
             "calls\thigh\trust\trust.calls.method\t30\t29\t0.9667"
         );
         assert_eq!(
-            lines[4],
+            lines[5],
             "imports\tmedium\tpython\tp.imports.from\t12\t9\t0.7500"
         );
     }
@@ -1399,12 +1440,46 @@ mod tests {
         let mut buf = Vec::new();
         write_report(&report, ReportFormat::Tsv, &mut buf).unwrap();
         let s = String::from_utf8(buf).unwrap();
-        for line in s.lines().take(2) {
+        for line in s.lines().take(3) {
             assert!(
                 line.starts_with("# "),
                 "preamble line must start with `# `: {line:?}"
             );
         }
+    }
+
+    #[test]
+    fn write_report_carries_coverage_limitation_note_on_both_surfaces() {
+        // The coverage-limitation note is the operator-facing
+        // acknowledgement that `schema_version: "1"` omits per-group
+        // coverage, richer verdict types, and multi-labeller
+        // aggregation. It must appear on both JSON and TSV surfaces
+        // so any consumer reads it as part of the report header.
+        let report = compute_precision_report(&[]);
+        // JSON: top-level field present.
+        let mut buf = Vec::new();
+        write_report(&report, ReportFormat::Json, &mut buf).unwrap();
+        let json = String::from_utf8(buf).unwrap();
+        assert!(json.contains("\"coverage_limitation_note\""));
+        assert!(json.contains("POST-REFACTOR-PLAN.md"));
+        // TSV: third preamble line is the note.
+        let mut buf = Vec::new();
+        write_report(&report, ReportFormat::Tsv, &mut buf).unwrap();
+        let tsv = String::from_utf8(buf).unwrap();
+        let third = tsv.lines().nth(2).unwrap();
+        assert_eq!(third, format!("# {COVERAGE_LIMITATION_NOTE}"));
+    }
+
+    #[test]
+    fn precision_report_carries_coverage_limitation_note() {
+        let report = compute_precision_report(&[]);
+        assert_eq!(report.coverage_limitation_note, COVERAGE_LIMITATION_NOTE);
+        assert!(report
+            .coverage_limitation_note
+            .contains("schema_version"));
+        assert!(report
+            .coverage_limitation_note
+            .contains("POST-REFACTOR-PLAN.md"));
     }
 
     #[test]
@@ -1422,6 +1497,7 @@ mod tests {
             schema_version: "1".to_string(),
             disclaimer: PRECISION_ONLY_DISCLAIMER.to_string(),
             sample_schema_doc: SCHEMA_DOC_POINTER.to_string(),
+            coverage_limitation_note: COVERAGE_LIMITATION_NOTE.to_string(),
             report: rows,
         }
     }
@@ -1515,6 +1591,7 @@ mod tests {
             schema_version: "1".to_string(),
             disclaimer: PRECISION_ONLY_DISCLAIMER.to_string(),
             sample_schema_doc: SCHEMA_DOC_POINTER.to_string(),
+            coverage_limitation_note: COVERAGE_LIMITATION_NOTE.to_string(),
             report: vec![
                 ReportRow {
                     kind: "calls".to_string(),

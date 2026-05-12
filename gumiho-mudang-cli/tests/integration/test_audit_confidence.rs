@@ -176,13 +176,16 @@ fn test_audit_confidence_label_format_tsv() {
         .success();
     let stdout = String::from_utf8_lossy(&out.get_output().stdout).to_string();
 
-    // Preamble (chunk 8): two `#`-prefixed lines carrying the
-    // precision-only disclaimer and the sample-file schema pointer.
+    // Preamble (chunk 8 + sprint-0007 codex round 3 follow-up): three
+    // `#`-prefixed lines carrying the precision-only disclaimer, the
+    // sample-file schema pointer, and the coverage-limitation note.
     let mut lines = stdout.lines();
     let p1 = lines.next().expect("preamble line 1");
     let p2 = lines.next().expect("preamble line 2");
+    let p3 = lines.next().expect("preamble line 3");
     assert!(p1.starts_with("# "), "preamble must be #-prefixed: {p1:?}");
     assert!(p2.starts_with("# "), "preamble must be #-prefixed: {p2:?}");
+    assert!(p3.starts_with("# "), "preamble must be #-prefixed: {p3:?}");
     assert!(
         p1.contains("precision report") && p1.contains("recall"),
         "first preamble line must carry the precision-only disclaimer: {p1:?}"
@@ -190,6 +193,10 @@ fn test_audit_confidence_label_format_tsv() {
     assert!(
         p2.contains("docs/AUDIT-LABEL-SCHEMA.md"),
         "second preamble line must point to the sample-file schema doc: {p2:?}"
+    );
+    assert!(
+        p3.contains("POST-REFACTOR-PLAN.md"),
+        "third preamble line must point to the post-refactor plan: {p3:?}"
     );
 
     let header = lines.next().expect("header line");
