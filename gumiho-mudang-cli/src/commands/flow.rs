@@ -151,7 +151,16 @@ pub fn run(args: &FlowArgs, project_root: &Path) -> Result<()> {
         };
         println!("{}", serde_json::to_string_pretty(&json_envelope)?);
     } else {
-        formatter::print_flow(&args.start, &args.end, &paths, total, args.depth);
+        print!(
+            "{}",
+            formatter::FlowView {
+                start: &args.start,
+                end: &args.end,
+                paths: &paths,
+                total,
+                depth_limit: args.depth,
+            }
+        );
     }
 
     Ok(())

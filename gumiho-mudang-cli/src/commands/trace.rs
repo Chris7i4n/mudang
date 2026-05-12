@@ -88,7 +88,15 @@ pub fn run(args: &TraceArgs, project_root: &Path) -> Result<()> {
         };
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
-        formatter::print_trace(&args.symbol, &result, total, truncated);
+        print!(
+            "{}",
+            formatter::TraceView {
+                symbol_name: &args.symbol,
+                result: &result,
+                total,
+                truncated,
+            }
+        );
     }
 
     Ok(())

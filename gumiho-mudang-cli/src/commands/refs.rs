@@ -145,7 +145,13 @@ pub(super) fn run_callers_transitive(
         };
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
-        formatter::print_impact(&args.symbol, &result);
+        print!(
+            "{}",
+            formatter::ImpactView {
+                symbol_name: &args.symbol,
+                result: &result,
+            }
+        );
     }
 
     Ok(())

@@ -875,56 +875,72 @@ impl fmt::Display for FileDepsView<'_> {
 ///   tests/unit/order.test.ts
 ///   ... (4 more)
 /// ```
-pub fn print_impact(symbol_name: &str, result: &ImpactResult) {
-    println!("Impact analysis: {symbol_name}");
-    println!("{SEPARATOR}");
+/// Plain-text view for `scope impact <symbol>` (and `scope callers
+/// <symbol> --depth N` when `N > 1`, which shares the underlying
+/// `ImpactResult`).
+pub struct ImpactView<'a> {
+    pub symbol_name: &'a str,
+    pub result: &'a ImpactResult,
+}
 
-    if result.nodes_by_depth.is_empty() && result.test_files.is_empty() {
-        println!("(no impact detected)");
-        return;
-    }
+impl fmt::Display for ImpactView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Impact analysis: {}", self.symbol_name)?;
+        writeln!(f, "{SEPARATOR}")?;
 
-    for (depth, nodes) in &result.nodes_by_depth {
-        let depth_label = impact_depth_label(*depth);
-        println!("{depth_label} ({}):", nodes.len());
-
-        let max_display = 10;
-        let display_nodes = if nodes.len() > max_display {
-            &nodes[..max_display]
-        } else {
-            nodes
-        };
-
-        for node in display_nodes {
-            let path = normalize_path(&node.file_path);
-            println!("  {:<40}{}", node.name, path);
+        if self.result.nodes_by_depth.is_empty() && self.result.test_files.is_empty() {
+            writeln!(f, "(no impact detected)")?;
+            return Ok(());
         }
 
-        if nodes.len() > max_display {
-            println!("  ... ({} more)", nodes.len() - max_display);
+        for (depth, nodes) in &self.result.nodes_by_depth {
+            let depth_label = impact_depth_label(*depth);
+            writeln!(f, "{depth_label} ({}):", nodes.len())?;
+
+            let max_display = 10;
+            let display_nodes = if nodes.len() > max_display {
+                &nodes[..max_display]
+            } else {
+                nodes.as_slice()
+            };
+
+            for node in display_nodes {
+                let path = normalize_path(&node.file_path);
+                writeln!(f, "  {:<40}{}", node.name, path)?;
+            }
+
+            if nodes.len() > max_display {
+                writeln!(f, "  ... ({} more)", nodes.len() - max_display)?;
+            }
+
+            writeln!(f)?;
         }
 
-        println!();
-    }
+        if !self.result.test_files.is_empty() {
+            writeln!(f, "Test files affected: {}", self.result.test_files.len())?;
 
-    if !result.test_files.is_empty() {
-        println!("Test files affected: {}", result.test_files.len());
+            let max_display = 10;
+            let display_tests = if self.result.test_files.len() > max_display {
+                &self.result.test_files[..max_display]
+            } else {
+                self.result.test_files.as_slice()
+            };
 
-        let max_display = 10;
-        let display_tests = if result.test_files.len() > max_display {
-            &result.test_files[..max_display]
-        } else {
-            &result.test_files
-        };
+            for node in display_tests {
+                let path = normalize_path(&node.file_path);
+                writeln!(f, "  {path}")?;
+            }
 
-        for node in display_tests {
-            let path = normalize_path(&node.file_path);
-            println!("  {path}");
+            if self.result.test_files.len() > max_display {
+                writeln!(
+                    f,
+                    "  ... ({} more)",
+                    self.result.test_files.len() - max_display
+                )?;
+            }
         }
 
-        if result.test_files.len() > max_display {
-            println!("  ... ({} more)", result.test_files.len() - max_display);
-        }
+        Ok(())
     }
 }
 
@@ -940,55 +956,69 @@ pub fn print_impact(symbol_name: &str, result: &ImpactResult) {
 /// Path 2: SubscriptionRenewalWorker.autoRenewDue
 ///   └─→ SubscriptionService.processRenewal          src/services/sub.ts:72
 /// ```
-pub fn print_trace(symbol_name: &str, result: &TraceResult, total: usize, truncated: bool) {
-    let path_count = result.paths.len();
-    let path_word = if path_count == 1 { "path" } else { "paths" };
+/// Plain-text view for `scope trace <symbol>`.
+pub struct TraceView<'a> {
+    pub symbol_name: &'a str,
+    pub result: &'a TraceResult,
+    pub total: usize,
+    pub truncated: bool,
+}
 
-    let display_count = if truncated { total } else { path_count };
-    println!(
-        "{} \u{2014} {} entry {}",
-        symbol_name, display_count, path_word
-    );
-    println!("{SEPARATOR}");
+impl fmt::Display for TraceView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let path_count = self.result.paths.len();
+        let path_word = if path_count == 1 { "path" } else { "paths" };
 
-    if result.paths.is_empty() {
-        println!("(no entry paths found)");
-        return;
-    }
+        let display_count = if self.truncated {
+            self.total
+        } else {
+            path_count
+        };
+        writeln!(
+            f,
+            "{} \u{2014} {} entry {}",
+            self.symbol_name, display_count, path_word
+        )?;
+        writeln!(f, "{SEPARATOR}")?;
 
-    for (i, call_path) in result.paths.iter().enumerate() {
-        if call_path.steps.is_empty() {
-            continue;
+        if self.result.paths.is_empty() {
+            writeln!(f, "(no entry paths found)")?;
+            return Ok(());
         }
 
-        // First step: the entry point (no arrow prefix)
-        let entry = &call_path.steps[0];
-        let entry_name = entry.symbol_name.clone();
-        println!("Path {}: {}", i + 1, entry_name);
+        for (i, call_path) in self.result.paths.iter().enumerate() {
+            if call_path.steps.is_empty() {
+                continue;
+            }
 
-        // Subsequent steps: indented with └─→
-        for (step_idx, step) in call_path.steps.iter().enumerate().skip(1) {
-            let indent = "  ".repeat(step_idx);
-            let step_name = step.symbol_name.clone();
-            let path = normalize_path(&step.file_path);
-            let location = format!("{path}:{}", step.line);
-            println!(
-                "{indent}\u{2514}\u{2500}\u{2192} {:<40}{}",
-                step_name, location
-            );
+            let entry = &call_path.steps[0];
+            writeln!(f, "Path {}: {}", i + 1, entry.symbol_name)?;
+
+            for (step_idx, step) in call_path.steps.iter().enumerate().skip(1) {
+                let indent = "  ".repeat(step_idx);
+                let path = normalize_path(&step.file_path);
+                let location = format!("{path}:{}", step.line);
+                writeln!(
+                    f,
+                    "{indent}\u{2514}\u{2500}\u{2192} {:<40}{}",
+                    step.symbol_name, location
+                )?;
+            }
+
+            if i < path_count - 1 {
+                writeln!(f)?;
+            }
         }
 
-        // Blank line between paths (but not after the last one)
-        if i < path_count - 1 {
-            println!();
+        if self.truncated {
+            writeln!(
+                f,
+                "... {} more paths (use --limit to show more)",
+                self.total - path_count
+            )?;
         }
-    }
 
-    if truncated {
-        println!(
-            "... {} more paths (use --limit to show more)",
-            total - path_count
-        );
+        Ok(())
     }
 }
 
@@ -1001,39 +1031,49 @@ pub fn print_trace(symbol_name: &str, result: &TraceResult, total: usize, trunca
 ///
 /// ─ 2 paths found (depth limit: 10)
 /// ```
-pub fn print_flow(start: &str, end: &str, paths: &[FlowPath], total: usize, depth_limit: usize) {
-    if paths.is_empty() {
-        println!(
-            "No path found from {} to {} within depth {}.",
-            start, end, depth_limit
-        );
-        return;
-    }
+/// Plain-text view for `scope flow <start> <end>`.
+pub struct FlowView<'a> {
+    pub start: &'a str,
+    pub end: &'a str,
+    pub paths: &'a [FlowPath],
+    pub total: usize,
+    pub depth_limit: usize,
+}
 
-    for (i, path) in paths.iter().enumerate() {
-        // Line 1: symbol names connected by ` → `
-        let names: Vec<&str> = path.steps.iter().map(|s| s.name.as_str()).collect();
-        println!("{}", names.join(" \u{2192} "));
-
-        // Line 2 (indented): file:line for each step, connected by `  →  `
-        let locations: Vec<String> = path
-            .steps
-            .iter()
-            .map(|s| format!("{}:{}", normalize_path(&s.file_path), s.line_start))
-            .collect();
-        println!("  {}", locations.join("  \u{2192}  "));
-
-        // Blank line between paths (but not after the last one)
-        if i < paths.len() - 1 {
-            println!();
+impl fmt::Display for FlowView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.paths.is_empty() {
+            writeln!(
+                f,
+                "No path found from {} to {} within depth {}.",
+                self.start, self.end, self.depth_limit
+            )?;
+            return Ok(());
         }
-    }
 
-    let path_word = if total == 1 { "path" } else { "paths" };
-    println!(
-        "\n\u{2500} {} {} found (depth limit: {})",
-        total, path_word, depth_limit
-    );
+        for (i, path) in self.paths.iter().enumerate() {
+            let names: Vec<&str> = path.steps.iter().map(|s| s.name.as_str()).collect();
+            writeln!(f, "{}", names.join(" \u{2192} "))?;
+
+            let locations: Vec<String> = path
+                .steps
+                .iter()
+                .map(|s| format!("{}:{}", normalize_path(&s.file_path), s.line_start))
+                .collect();
+            writeln!(f, "  {}", locations.join("  \u{2192}  "))?;
+
+            if i < self.paths.len() - 1 {
+                writeln!(f)?;
+            }
+        }
+
+        let path_word = if self.total == 1 { "path" } else { "paths" };
+        writeln!(
+            f,
+            "\n\u{2500} {} {} found (depth limit: {})",
+            self.total, path_word, self.depth_limit
+        )
+    }
 }
 
 /// Print entry points grouped by type.
