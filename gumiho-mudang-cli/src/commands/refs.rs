@@ -22,6 +22,7 @@ use std::path::Path;
 
 use crate::output::formatter;
 use crate::output::json::JsonOutput;
+use crate::output::schema::{RefsGroup, RefsGrouped};
 use crate::Context;
 use gumiho_mudang_scope::config::project::is_vendor_path;
 use gumiho_mudang_scope::config::workspace::WorkspaceConfig;
@@ -276,14 +277,15 @@ fn run_symbol_refs(args: &RefsArgs, graph: &Graph, project_root: &Path) -> Resul
         }
 
         if args.json {
-            let data = serde_json::json!({
-                "groups": groups.iter().map(|(kind, refs)| {
-                    serde_json::json!({
-                        "kind": kind,
-                        "refs": refs,
+            let data = RefsGrouped {
+                groups: groups
+                    .iter()
+                    .map(|(kind, refs)| RefsGroup {
+                        kind: kind.as_str(),
+                        refs: refs.as_slice(),
                     })
-                }).collect::<Vec<_>>(),
-            });
+                    .collect(),
+            };
             let output = JsonOutput {
                 command: "refs",
                 symbol: Some(args.symbol.clone()),
@@ -372,7 +374,7 @@ fn run_workspace(args: &RefsArgs, workspace_root: &Path, config: &WorkspaceConfi
             let output = JsonOutput {
                 command: "refs",
                 symbol: Some(args.symbol.clone()),
-                data: &Vec::<serde_json::Value>::new(),
+                data: &ws_refs,
                 truncated: false,
                 total: 0,
             };
