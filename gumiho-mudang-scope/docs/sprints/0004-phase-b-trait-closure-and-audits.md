@@ -238,8 +238,9 @@ Per [`README.md` § Reporting hooks](./README.md#4-reporting-hooks) and
 ## Out of scope for this sprint
 
 - Framework infrastructure — sprint 0005 (R5).
-- Output schema, confidence audit — sprint 0006 (R10, R8).
-- Malformed-source harness — sprint 0007 (R6).
+- Output schema — sprint 0006 (R10).
+- Confidence audit — sprint 0007 (R8).
+- Malformed-source harness — sprint 0008 (R6).
 - Phase C is not unlocked merely by Phase B closing; Phase C
   ([`ARCHITECTURAL-REFACTOR.md` § Phase C](../ARCHITECTURAL-REFACTOR.md#phase-c--framework-layer-closure))
   lands "when framework infrastructure is first introduced".

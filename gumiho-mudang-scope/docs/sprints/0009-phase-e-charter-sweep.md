@@ -1,4 +1,4 @@
-# Sprint 0008 — Phase E: Charter sweep and shim retirement
+# Sprint 0009 — Phase E: Charter sweep and shim retirement
 
 > **Source of truth**: [`CHARTER.md` § 2 "Single-operator posture"](../CHARTER.md#2-who-scope-serves) + [§ 3 invariant 8](../CHARTER.md#3-core-invariants--must-never-break) + [`REFACTOR-STATUS.md` § Compat shims outstanding](../REFACTOR-STATUS.md#compat-shims-outstanding).
 > **Phase**: E. Single-sprint phase. **Final sprint of the refactor.**
@@ -87,5 +87,5 @@ The refactor closes when **all** the following hold:
 
 - Anything in [`POST-REFACTOR-PLAN.md`](../POST-REFACTOR-PLAN.md).
 - Any new R-move. If chunk 2 surfaces a problem that needs a new R-move, the sprint blocks; the R-move is added to `ARCHITECTURAL-REFACTOR.md` and assigned to a re-opened earlier sprint (or a sprint 0008.5 inserted via § 3 ambiguity protocol).
-- Performance work. The benchmark gate from sprint 0007 already pins regression < 10 %; sprint 0008 must not regress further but does not optimise.
+- Performance work. The benchmark gate from sprint 0008 already pins regression < 10 %; sprint 0008 must not regress further but does not optimise.
 - Documentation rewrites beyond struck-shim log entries and the `just gate-charter` recipe.
