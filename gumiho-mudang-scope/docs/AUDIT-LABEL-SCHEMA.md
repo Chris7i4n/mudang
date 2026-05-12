@@ -140,6 +140,25 @@ The point: the labeller is replaceable. The contract is this schema.
 
 ---
 
+## Auditor immutability rule
+
+R8 measures **the extractor's accuracy at a snapshot in time**. The indexed graph and the source files together form the experimental subject. Editing source files between `scope audit confidence --emit-sample <path>` and `scope audit confidence --label <path>` — and during any reading or interpretation of the produced report — invalidates the measurement: the labeller would judge against source that no longer matches what the extractor saw.
+
+The rule:
+
+> **Between `--emit-sample` and `--label` (and during all downstream reading of the report) the maintainer / external labeller MUST NOT modify the source files Scope indexed.** Acceptable: re-index (which produces a fresh snapshot) then re-run `--emit-sample`. Not acceptable: edit-and-relabel.
+
+The rule is **mechanically enforced**, not procedural. Both `--emit-sample` and `--label` re-compute the SHA-256 hash of every source file referenced by the sampled / labelled edges and compare against `file_hashes.hash` (the value the indexer stored at index time, per [`scope-graph/src/sql/schema.sql`](../scope-graph/src/sql/schema.sql) → `file_hashes` table). Any mismatch — different content, deleted file — produces a hard error and aborts the audit. There is **no** `--allow-drift` escape. The only remediation is `scope index` followed by re-running the audit.
+
+Justification for the hard lock (rather than a soft warning + opt-out flag):
+
+- **No legitimate case found** where comparing an indexed snapshot against drifted current source produces a meaningful audit signal. *"Want to see what the extractor said a month ago"* is archaeology, not an audit of accuracy; *"CI runs faster without re-index"* is the performance-over-honesty anti-pattern that [`POST-REFACTOR-PLAN.md` § Priority 2 — Honesty audit](POST-REFACTOR-PLAN.md#priority-2-immediately-post-refactor--honesty-audit-eliminate-non-essential-approximations) explicitly forbids.
+- **`mtime` drift without content drift** (file copied between machines, `git checkout` that touches mtime) is handled correctly by content-hash comparison — hash matches, audit proceeds. This is the only "looks like drift but isn't" case, and SHA-256 disambiguates it without a flag.
+
+The SHA-256 check runs lazily: only the files referenced by the sample's edges are re-hashed, not the whole index (a typical N=30 sample touches ~10-30 distinct files). The cost is well under the time the labelling step itself takes.
+
+---
+
 ## Committed sample policy
 
 Labelled `*.jsonl` files committed under `gumiho-mudang-scope/scope-core/tests/fixtures/reference/<lang>/audit-samples/` are **regression assets**. Re-running `--label` against a committed sample reproduces the precision baseline byte-for-byte (seed is pinned per `--seed`). A drift in the recomputed precision is a CI signal.
