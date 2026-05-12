@@ -66,7 +66,7 @@ gate: fmt-check clippy test
 # this recipe. See sprint 0001 DOD #3.
 
 # Run every active refactor gate.
-gate-refactor: ci-edge-sealed test-builder test-typestate ci-context-shape ci-no-fs ci-dispatch ci-trait-shape ci-no-spawn ci-no-network ci-immutable ci-no-framework-scm ci-patterns ci-output-schema audit-confidence
+gate-refactor: ci-edge-sealed test-builder test-typestate ci-context-shape ci-no-fs ci-dispatch ci-trait-shape ci-no-spawn ci-no-network ci-immutable ci-no-framework-scm ci-patterns ci-output-schema audit-confidence test-malformed
 
 ci-edge-sealed:
     ./scripts/grep_edge_sealed.sh
@@ -122,6 +122,19 @@ ci-output-schema:
 # Self-correction cycle.
 audit-confidence:
     cargo test -p gumiho-mudang-cli --test test_audit_confidence
+
+# R6 (sprint 0008) — Malformed-source resilience harness.
+#
+# Runs the integration test that walks every fixture under
+# `scope-core/tests/fixtures/malformed/<lang>/<case>/` and asserts the
+# four R6 acceptance contracts: no panic, parseable prefix produces
+# ≥ 1 symbol, `skipped_ranges` non-empty when partially malformed,
+# `insta` snapshot pins the recorded reason + range. Snapshot files
+# under `scope-core/tests/snapshots/malformed_sources/` are the
+# authoritative line-range record; regressions surface as snapshot
+# diffs.
+test-malformed:
+    cargo test -p scope-core --test malformed_sources
 
 # --- Install ---
 
