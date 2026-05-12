@@ -144,20 +144,26 @@ Each ambiguity below is resolved by an amendment to the cited
 source-of-truth document on `main` **before** this sprint's branch
 opens.
 
-1. **Synthetic test framework location and shape.** The R5 integration
-   tests need a framework to exercise; no real framework is being
-   adopted here. Whether the synthetic framework lives at
-   `tests/synthetic_framework/`, `scope-core/src/frameworks/_test/`
-   (post-sprint-0000 sub-crate path), or behind a `#[cfg(test)]` module
-   is unspecified. Resolution amends `ARCHITECTURAL-REFACTOR.md` R5
-   "Target state".
+All four are resolved on `main` in the same commit that opens this
+sprint plan for execution. See `ARCHITECTURAL-REFACTOR.md` § R5
+"Target state" + "Acceptance" for the authoritative resolutions.
 
-2. **Cross-language fixture maintenance burden.** The cross-language
-   pre-filter integration test requires a fixture with two languages
-   sharing a decorator-like name. Whether this fixture lives under
-   `tests/fixtures/frameworks/_pre_filter/` or alongside the per-language
-   fixture trees is unspecified. Resolution amends
-   `ARCHITECTURAL-REFACTOR.md` R5 "Acceptance".
+1. **Synthetic test framework location and shape.** ✅ Resolved on
+   `main` — synthetic framework lives at
+   `scope-core/tests/synthetic_framework/mod.rs` (Rust shared-module
+   convention from integration tests). Not in `src/frameworks/_test/`
+   because integration tests compile as a separate crate and
+   `#[cfg(test)]` modules in `src/` are unreachable from `tests/*.rs`.
+   Fixtures at `scope-core/tests/fixtures/frameworks/synthetic/`. See
+   `ARCHITECTURAL-REFACTOR.md` § R5 → "Synthetic test framework
+   location".
+
+2. **Cross-language fixture maintenance burden.** ✅ Resolved on
+   `main` — pre-filter fixture at
+   `scope-core/tests/fixtures/frameworks/_pre_filter/{python,ruby}/`.
+   Underscore prefix denotes test-infrastructure-only. See
+   `ARCHITECTURAL-REFACTOR.md` § R5 → "Cross-language fixture
+   location".
 
 3. **`FrameworkWorkspaceContext` visibility flip — mandatory.** Sprint
    0002 landed `FrameworkWorkspaceContext` as `pub(crate)` in
@@ -172,16 +178,14 @@ opens.
    it earlier (check by `grep -n 'pub trait FrameworkWorkspaceContext'
    scope-core/src/` — must appear only in the R5 first-impl commit).
 
-4. **`LanguageId` and `.js`/`.jsx`.** R5 says
-   `applies_to_languages: Vec<LanguageId>`. Today
-   `LanguageId` does not include JavaScript
-   ([`FRAMEWORK-PLAYBOOK.md` Step 4 → Language scope](../FRAMEWORK-PLAYBOOK.md#language-scope)).
-   **Cheap-path** (extend `TypeScriptPlugin::extensions()` to include
-   `js|jsx`) and **strict-path** (new `JavaScript` variant) are
-   post-refactor decisions per
-   [`POST-REFACTOR-PLAN.md`](../POST-REFACTOR-PLAN.md). If R5 acceptance
-   demands JS coverage, resolution amends R5 "Acceptance" to declare
-   JS-shaped tests deferred to post-refactor.
+4. **`LanguageId` and `.js`/`.jsx`.** ✅ Resolved on `main` —
+   JavaScript-shaped integration tests are deferred to post-refactor
+   per `POST-REFACTOR-PLAN.md` § Items deliberately deferred. R5
+   acceptance is satisfied by synthetic coverage over the seven
+   currently-supported `LanguageId` variants
+   (`TypeScript, CSharp, Python, Go, Java, Rust, Ruby`). See
+   `ARCHITECTURAL-REFACTOR.md` § R5 → "JavaScript coverage in R5
+   acceptance".
 
 ---
 
