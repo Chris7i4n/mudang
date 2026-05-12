@@ -38,3 +38,8 @@ tempfile = { workspace = true }
 # absence of `.status(...)` (see CI-GATES.md § Builder requires fields,
 # § Builder forbids status).
 trybuild = "1.0"
+# R6 (sprint 0008) — snapshot tests for the malformed-source harness.
+# Pins recorded reason + range per fixture; regressions surface as
+# snapshot diffs. See sprints/0008-phase-e-malformed-source-harness.md
+# § Ambiguities (resolution #3).
+insta = { workspace = true }
