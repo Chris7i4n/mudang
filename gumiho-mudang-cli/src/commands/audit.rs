@@ -379,7 +379,7 @@ fn label_pass(
         .with_context(|| format!("failed to open sample file {}", in_path.display()))?;
     let reader = BufReader::new(file);
 
-    let mut records = Vec::new();
+    let mut records: Vec<(usize, SampleRecord)> = Vec::new();
     for (idx, line) in reader.lines().enumerate() {
         let line =
             line.with_context(|| format!("{}: read line {}", in_path.display(), idx + 1))?;
@@ -404,7 +404,7 @@ fn label_pass(
                 SCHEMA_VERSION
             );
         }
-        records.push(record);
+        records.push((idx + 1, record));
     }
 
     // Reject incomplete labelling: every row must carry a true/false
@@ -413,7 +413,7 @@ fn label_pass(
     // either we'd inflate precision by ignoring nulls or deflate it by
     // counting them as wrong. Either choice is dishonest. Mechanical
     // refusal until the labeller finishes is the only honest path.
-    let unlabelled = records.iter().filter(|r| r.label.is_none()).count();
+    let unlabelled = records.iter().filter(|(_, r)| r.label.is_none()).count();
     if unlabelled > 0 {
         anyhow::bail!(
             "{}: {unlabelled} of {} record(s) have label=null; complete labelling before re-running --label. \
@@ -423,21 +423,85 @@ fn label_pass(
         );
     }
 
-    // Join record edge_ids back to file_paths via the index. The schema
-    // intentionally omits file_path (the labeller does not need it), so
-    // the index is the truth source for the drift gate at label time.
-    let edge_ids: BTreeSet<i64> = records
-        .iter()
-        .filter_map(|r| r.edge_id.parse::<i64>().ok())
-        .collect();
+    // edge_id integrity gate (post-codex P1 round 1): every record's
+    // `edge_id` must (a) parse as i64 — the on-wire representation per
+    // docs/AUDIT-LABEL-SCHEMA.md is a string solely for JSON-number-
+    // safety reasons but the underlying DB column is `i64` — and
+    // (b) resolve to a row in the current index. Records that fail
+    // either check would otherwise be silently dropped from the drift
+    // gate (which joins by edge_id) while still contributing to the
+    // precision math. That is the same dishonesty the auditor
+    // immutability rule (AUDIT-LABEL-SCHEMA.md § Auditor immutability
+    // rule) forbids in source-drift form, in a different shape: here
+    // the *sample file* drifts from the index, not the source. Hard
+    // mechanical rejection, no escape flag — re-emit the sample
+    // against the current index.
     let all_rows = graph.list_edges_for_audit()?;
+    let indexed: BTreeSet<i64> = all_rows.iter().map(|r| r.edge_id).collect();
+    let mut unparseable: Vec<(usize, String)> = Vec::new();
+    let mut unknown: Vec<(usize, i64)> = Vec::new();
+    let mut parsed_ids: BTreeSet<i64> = BTreeSet::new();
+    for (line_no, record) in &records {
+        match record.edge_id.parse::<i64>() {
+            Err(_) => unparseable.push((*line_no, record.edge_id.clone())),
+            Ok(id) => {
+                if !indexed.contains(&id) {
+                    unknown.push((*line_no, id));
+                } else {
+                    parsed_ids.insert(id);
+                }
+            }
+        }
+    }
+    if !unparseable.is_empty() || !unknown.is_empty() {
+        use std::fmt::Write as _;
+        let mut msg = String::new();
+        msg.push_str(
+            "sample-file integrity check failed: every record's `edge_id` must parse as i64 \
+             and resolve to a row in the current index. ",
+        );
+        if !unparseable.is_empty() {
+            let _ = writeln!(
+                msg,
+                "\n  {} record(s) with non-integer edge_id:",
+                unparseable.len()
+            );
+            for (line_no, raw) in &unparseable {
+                let _ = writeln!(msg, "    {}: line {}: edge_id = {:?}", in_path.display(), line_no, raw);
+            }
+        }
+        if !unknown.is_empty() {
+            let _ = writeln!(
+                msg,
+                "\n  {} record(s) whose edge_id is not in the current index:",
+                unknown.len()
+            );
+            for (line_no, id) in &unknown {
+                let _ = writeln!(msg, "    {}: line {}: edge_id = {}", in_path.display(), line_no, id);
+            }
+        }
+        msg.push_str(
+            "\nRemediation: re-emit the sample against the current index \
+             (`scope audit confidence --emit-sample <new-path>`) and re-label. \
+             There is no `--allow-integrity-skip` escape — silently dropping \
+             these records from the drift gate while still counting them in the \
+             precision report would violate AUDIT-LABEL-SCHEMA.md § Auditor immutability rule.",
+        );
+        return Err(anyhow::anyhow!(msg));
+    }
+
+    // Drift gate runs on the union of files referenced by the
+    // (now fully resolved) edge_ids. `referenced_rows` is built from
+    // the same `all_rows` snapshot that the integrity gate used so the
+    // two checks see a consistent view of the index.
     let referenced_rows: Vec<AuditEdgeRow> = all_rows
         .into_iter()
-        .filter(|r| edge_ids.contains(&r.edge_id))
+        .filter(|r| parsed_ids.contains(&r.edge_id))
         .collect();
     enforce_freshness(graph, project_root, &referenced_rows)?;
 
-    let report = compute_precision_report(&records);
+    let records_only: Vec<SampleRecord> = records.into_iter().map(|(_, r)| r).collect();
+    let report = compute_precision_report(&records_only);
     write_report(&report, args.format, &mut std::io::stdout().lock())?;
     check_tier_gate(&report)?;
     Ok(())

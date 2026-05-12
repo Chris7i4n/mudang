@@ -293,6 +293,113 @@ fn test_audit_confidence_tier_gate_fails_on_low_precision_high_tier() {
 }
 
 #[test]
+fn test_audit_confidence_label_rejects_unparseable_edge_id() {
+    // Codex round-1 P1 regression: --label must NOT silently drop
+    // records whose `edge_id` is not a parseable i64. Before the fix,
+    // such records were excluded from the drift gate (via
+    // filter_map(|r| r.edge_id.parse::<i64>().ok())) but still entered
+    // the precision report, letting a tampered sample bypass the
+    // integrity guarantees of the audit command.
+    let (_dir, root) = setup_indexed_fixture();
+    let sample = root.join("sample.jsonl");
+
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--emit-sample"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .success();
+
+    // Label all true, then corrupt the first record's edge_id.
+    let raw = std::fs::read_to_string(&sample).unwrap();
+    let mut out_lines = Vec::new();
+    for (i, l) in raw
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+        .enumerate()
+    {
+        let mut line = l.replace("\"label\":null", "\"label\":true");
+        if i == 0 {
+            // Replace the first edge_id with a non-integer string.
+            let v: serde_json::Value = serde_json::from_str(&line).unwrap();
+            let real_id = v["edge_id"].as_str().unwrap().to_string();
+            line = line.replace(
+                &format!("\"edge_id\":\"{real_id}\""),
+                "\"edge_id\":\"not-an-int\"",
+            );
+        }
+        out_lines.push(line);
+    }
+    std::fs::write(&sample, out_lines.join("\n") + "\n").unwrap();
+
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--label"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .failure()
+        .stderr(contains("sample-file integrity check failed"))
+        .stderr(contains("non-integer edge_id"))
+        .stderr(contains("not-an-int"))
+        .stderr(contains("re-emit the sample"));
+}
+
+#[test]
+fn test_audit_confidence_label_rejects_unknown_edge_id() {
+    // Codex round-1 P1 regression (second arm): --label must NOT
+    // silently drop records whose `edge_id` parses as i64 but no
+    // longer exists in the current index. Before the fix, such
+    // records bypassed the drift gate while still contributing to
+    // the precision math.
+    let (_dir, root) = setup_indexed_fixture();
+    let sample = root.join("sample.jsonl");
+
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--emit-sample"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .success();
+
+    // Label all true, then replace the first record's edge_id with a
+    // very large i64 that cannot exist in this small fixture.
+    let raw = std::fs::read_to_string(&sample).unwrap();
+    let mut out_lines = Vec::new();
+    for (i, l) in raw
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+        .enumerate()
+    {
+        let mut line = l.replace("\"label\":null", "\"label\":true");
+        if i == 0 {
+            let v: serde_json::Value = serde_json::from_str(&line).unwrap();
+            let real_id = v["edge_id"].as_str().unwrap().to_string();
+            line = line.replace(
+                &format!("\"edge_id\":\"{real_id}\""),
+                "\"edge_id\":\"999999999\"",
+            );
+        }
+        out_lines.push(line);
+    }
+    std::fs::write(&sample, out_lines.join("\n") + "\n").unwrap();
+
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--label"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .failure()
+        .stderr(contains("sample-file integrity check failed"))
+        .stderr(contains("not in the current index"))
+        .stderr(contains("999999999"))
+        .stderr(contains("re-emit the sample"));
+}
+
+#[test]
 fn test_audit_confidence_label_rejects_null_labels() {
     let (_dir, root) = setup_indexed_fixture();
     let sample = root.join("sample.jsonl");
