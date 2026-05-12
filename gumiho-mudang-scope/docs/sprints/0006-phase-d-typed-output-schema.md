@@ -40,9 +40,9 @@ R8 lives in [sprint 0007](./0007-phase-d-confidence-audit.md).
 
 ### R10 acceptance ([source](../ARCHITECTURAL-REFACTOR.md#r10--typed-output-schema))
 
-- [ ] Output schemas are typed structs (`SymbolSketch`, `EdgeSummary`, `CompactView`, and any others currently driven by raw string concatenation). Formatters serialize structs; they do not concatenate strings.
-- [ ] Output-schema audit (`scripts/audit_output_schema.sh`) catches fields named `error`, `warning`, `diagnostic`, `is_valid`, `lint`, `correctness`.
-- [ ] Existing output formats (`sketch`, `summary`, `compact`, `json`) preserve their token budgets — the typed shape does not balloon output.
+- [x] Output schemas are typed structs (`SymbolSketch`, `EdgeSummary`, `CompactView`, and any others currently driven by raw string concatenation). Formatters serialize structs; they do not concatenate strings. **Shipped chunks 1, a-e (typed `--json` paths) + g.A-g.E (typed plain-text via `impl Display`).** `EdgeSummary` dropped chunk c as YAGNI — re-introduce when a downstream consumer needs edge-uniform handling; the three concrete edge types already `derive(Serialize)` and pass through `JsonOutput` directly.
+- [x] Output-schema audit (`scripts/audit_output_schema.sh`) catches fields named `error`, `warning`, `diagnostic`, `is_valid`, `lint`, `correctness`. **Shipped pre-implementation in commit `990ea1a` so the gate guarded every subsequent struct conversion; `ci-output-schema` is the 13th `gate-refactor` gate.**
+- [x] Existing output formats (`sketch`, `summary`, `compact`, `json`) preserve their token budgets — the typed shape does not balloon output. **Verified: zero `.snap.new` files after the full chunk-g Display conversion (13 `.snap` files match byte-for-byte; the pre-implementation estimate of 28 snapshots was high).**
 
 #### R10 scope decision (locked 2026-05-12)
 
@@ -100,6 +100,24 @@ Per [`README.md` § Reporting hooks](./README.md#4-reporting-hooks) and [`README
 3. `REFACTOR-STATUS.md` shows R10 `shipped`; Phase D row stays `in-progress` until sprint 0007 closes.
 4. `cargo test --workspace` is green; all `insta` snapshots are re-anchored and reviewed.
 5. `serde_json::json!()` macro usages in `gumiho-mudang-cli/src/commands/` and `gumiho-mudang-cli/src/output/` are removed; every JSON-emitting code path serializes a typed value.
+
+## Implementation log
+
+Chunk-by-chunk shipping log for R10 strict reading. Full per-chunk notes (including the `EdgeSummary` YAGNI rationale and the renderer-list explosion) live in [`REFACTOR-STATUS.md`](../REFACTOR-STATUS.md) under the `R10 chunk-by-chunk delivery` log row.
+
+| Chunk | Commit | Scope |
+|---|---|---|
+| 1 — schema scaffold | `689694c` | `output/schema/{compact_symbol,symbol_sketch,edge_summary}.rs` skeletons (`EdgeSummary` later dropped in chunk c) |
+| a — sketch.rs | `46a9159` | 19 `json!()` sites → `SymbolSketch<'a>` sum-type (6 variants) |
+| b — summary.rs | `38247ca` | 2 `json!()` sites → `Summary<'a>` sum-type |
+| c — refs.rs | `9812109` | 2 `json!()` sites → `RefsGrouped<'a>` + `EdgeSummary` YAGNI'd; `deps.rs` / `impact.rs` already typed |
+| d — index.rs | `ab0b667` | 7 `json!()` sites → `IndexFullResult` / `IndexIncrementalResult` / `IndexIncrementalUpToDate` + `IndexEvent` sum-type |
+| e — source/init/setup | `a73c7f7` | Last 3 `json!()` sites → `SourceView` / `InitResult` / `SetupResult` (zero `json!()` in CLI after this) |
+| g.A — sketch Display | `aef3a3c` | 6 sketch `print_*` fns → `XSketchView` + `impl fmt::Display` |
+| g.B — refs/deps Display | `a3f372e` | 6 refs/deps/workspace-refs `print_*` fns → `XView` + Display |
+| g.C — impact/trace/flow Display | `13b5fad` | 3 transitive-analysis `print_*` fns → `XView` + Display |
+| g.D — entrypoints/map Display | `f5d086a` | 2 multi-section `print_*` fns → `XView` + Display |
+| g.E — status/incremental/find/workspace Display | `2f434d7` | Last 6 `print_*` fns → `XView` + Display; `formatter.rs` reaches zero `println!` / `eprintln!` |
 
 ## Out of scope for this sprint
 
