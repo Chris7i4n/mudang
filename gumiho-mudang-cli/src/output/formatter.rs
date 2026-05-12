@@ -875,9 +875,8 @@ impl fmt::Display for FileDepsView<'_> {
 ///   tests/unit/order.test.ts
 ///   ... (4 more)
 /// ```
-/// Plain-text view for `scope impact <symbol>` (and `scope callers
-/// <symbol> --depth N` when `N > 1`, which shares the underlying
-/// `ImpactResult`).
+/// Plain-text view for `scope callers <symbol> --depth N` when
+/// `N > 1` (uses the underlying `ImpactResult`).
 pub struct ImpactView<'a> {
     pub symbol_name: &'a str,
     pub result: &'a ImpactResult,

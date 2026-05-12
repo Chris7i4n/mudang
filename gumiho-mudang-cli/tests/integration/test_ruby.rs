@@ -90,10 +90,10 @@ fn sc_deps(dir: &Path, symbol: &str) -> assert_cmd::assert::Assert {
         .assert()
 }
 
-fn sc_impact(dir: &Path, symbol: &str) -> assert_cmd::assert::Assert {
+fn sc_callers_transitive(dir: &Path, symbol: &str) -> assert_cmd::assert::Assert {
     Command::cargo_bin("mudang")
         .unwrap()
-        .args(["impact", symbol])
+        .args(["callers", symbol, "--depth", "2"])
         .current_dir(dir)
         .assert()
 }
@@ -746,7 +746,7 @@ fn test_ruby_graph_commands_use_edges() {
         .success()
         .stdout(contains("Auditable"))
         .stdout(contains("PaymentResult"));
-    sc_impact(dir.path(), "PaymentService")
+    sc_callers_transitive(dir.path(), "PaymentService")
         .success()
         .stdout(contains("checkout"));
 }
@@ -944,15 +944,18 @@ fn test_ruby_rdeps_auditable() {
 }
 
 #[test]
-fn test_ruby_impact_process_payment() {
+fn test_ruby_callers_transitive_process_payment() {
     let (_conn, dir) = indexed_ruby_fixture_db();
 
-    let stdout = scope_stdout(dir.path(), &["impact", "process_payment"]);
+    let stdout = scope_stdout(dir.path(), &["callers", "process_payment", "--depth", "2"]);
     assert!(stdout.contains("checkout"));
     assert!(stdout.contains("call"));
 
-    let json = scope_json(dir.path(), &["impact", "process_payment", "--json"]);
-    assert_eq!(json["command"], "impact");
+    let json = scope_json(
+        dir.path(),
+        &["callers", "process_payment", "--depth", "2", "--json"],
+    );
+    assert_eq!(json["command"], "callers");
     assert!(json["data"]["total_affected"].as_u64().unwrap() >= 2);
 }
 

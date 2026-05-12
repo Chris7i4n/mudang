@@ -166,15 +166,16 @@ fn test_deps_json_envelope() {
     );
 }
 
-/// `scope impact PaymentService --json` must emit valid JSON with `command="impact"`
-/// and a non-null `data` field.
+/// `scope callers PaymentService --depth 2 --json` must emit valid JSON
+/// with `command="callers"` and a non-null `data` field. Exercises the
+/// transitive-impact JSON envelope (the `ImpactResult` shape).
 #[test]
-fn test_impact_json_envelope() {
+fn test_callers_transitive_json_envelope() {
     let (_dir, root) = setup_indexed_fixture();
 
     let output = Command::cargo_bin("mudang")
         .unwrap()
-        .args(["impact", "PaymentService", "--json"])
+        .args(["callers", "PaymentService", "--depth", "2", "--json"])
         .current_dir(&root)
         .assert()
         .success()
@@ -185,8 +186,8 @@ fn test_impact_json_envelope() {
     let json = parse_json(&output);
 
     assert_eq!(
-        json["command"], "impact",
-        "JSON envelope must have command=impact, got: {}",
+        json["command"], "callers",
+        "JSON envelope must have command=callers, got: {}",
         json["command"]
     );
     assert!(

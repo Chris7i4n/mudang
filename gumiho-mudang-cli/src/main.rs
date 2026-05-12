@@ -122,16 +122,6 @@ pub enum Commands {
     ///   scope rdeps PaymentConfig --depth 2     — transitive reverse deps
     Rdeps(commands::rdeps::RdepsArgs),
 
-    /// Analyse blast radius if a symbol changes.
-    ///
-    /// Performs transitive reverse dependency traversal. Shows direct
-    /// callers, second-degree dependents, and affected test files.
-    ///
-    /// Examples:
-    ///   scope impact processPayment             — who breaks if this changes
-    ///   scope impact PaymentConfig              — blast radius of config change
-    Impact(commands::impact::ImpactArgs),
-
     /// Show which symbols changed since a git ref.
     ///
     /// Cross-references `git diff --name-only` with the index to show
@@ -346,10 +336,6 @@ fn main() -> Result<()> {
         Commands::Rdeps(args) => {
             let root = project_root_from_context(&ctx)?;
             commands::rdeps::run(args, root)
-        }
-        Commands::Impact(args) => {
-            let root = project_root_from_context(&ctx)?;
-            commands::impact::run(args, root)
         }
         Commands::Similar(args) => {
             let root = project_root_from_context(&ctx)?;

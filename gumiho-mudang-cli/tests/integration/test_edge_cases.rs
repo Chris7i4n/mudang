@@ -236,18 +236,18 @@ fn test_sketch_after_file_deleted() {
 // Deep depth flag
 // ---------------------------------------------------------------------------
 
-/// `scope impact PaymentService --depth 10` on the standard fixture must
+/// `scope callers PaymentService --depth 10` on the standard fixture must
 /// complete without hanging, crashing, or producing a non-zero exit code.
 ///
-/// This guards against infinite loops or exponential blowup in the impact
-/// traversal when the caller requests a high depth.
+/// This guards against infinite loops or exponential blowup in the
+/// transitive caller traversal when the caller requests a high depth.
 #[test]
-fn test_impact_depth_limit() {
+fn test_callers_depth_limit() {
     let (_dir, root) = setup_indexed_fixture();
 
     Command::cargo_bin("mudang")
         .unwrap()
-        .args(["impact", "PaymentService", "--depth", "10"])
+        .args(["callers", "PaymentService", "--depth", "10"])
         .current_dir(&root)
         .assert()
         .success()

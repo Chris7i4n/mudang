@@ -89,7 +89,7 @@ pub struct CallersArgs {
 /// When `depth > 1`: performs transitive impact analysis via `graph.find_impact()`.
 pub fn run_callers(args: &CallersArgs, project_root: &Path) -> Result<()> {
     if args.depth > 1 {
-        return run_callers_transitive(args, project_root, "callers");
+        return run_callers_transitive(args, project_root);
     }
 
     let refs_args = RefsArgs {
@@ -106,14 +106,7 @@ pub fn run_callers(args: &CallersArgs, project_root: &Path) -> Result<()> {
 }
 
 /// Run transitive caller analysis (depth > 1) using the impact graph query.
-///
-/// The `command_label` is used in JSON output to identify the command
-/// (e.g. `"callers"` or `"impact"` for backward compatibility).
-pub(super) fn run_callers_transitive(
-    args: &CallersArgs,
-    project_root: &Path,
-    command_label: &'static str,
-) -> Result<()> {
+fn run_callers_transitive(args: &CallersArgs, project_root: &Path) -> Result<()> {
     let scope_dir = project_root.join(".scope");
 
     if !scope_dir.exists() {
@@ -137,7 +130,7 @@ pub(super) fn run_callers_transitive(
 
     if args.json {
         let output = JsonOutput {
-            command: command_label,
+            command: "callers",
             symbol: Some(args.symbol.clone()),
             data: &result,
             truncated: false,

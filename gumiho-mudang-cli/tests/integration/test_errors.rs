@@ -113,15 +113,15 @@ fn test_deps_no_index() {
         .stderr(contains(".scope/").or(contains("scope init")));
 }
 
-/// `scope impact Foo` in a directory with no .scope/ must fail and tell the user
-/// to run scope init.
+/// `scope callers Foo --depth 2` in a directory with no .scope/ must
+/// fail and tell the user to run scope init.
 #[test]
-fn test_impact_no_index() {
+fn test_callers_no_index() {
     let dir = empty_dir();
 
     Command::cargo_bin("mudang")
         .unwrap()
-        .args(["impact", "Foo"])
+        .args(["callers", "Foo", "--depth", "2"])
         .current_dir(dir.path())
         .assert()
         .failure()
