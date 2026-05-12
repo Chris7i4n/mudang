@@ -263,5 +263,6 @@ Per [`README.md` § Reporting hooks](./README.md#4-reporting-hooks) and
   Workspace-uniform-version assumption](../FRAMEWORK-PLAYBOOK.md#cross-workspace-queries-cross-app-single-workspace).
 - `.js`/`.jsx` indexing path decisions
   ([`POST-REFACTOR-PLAN.md` § Items deliberately deferred](../POST-REFACTOR-PLAN.md#items-deliberately-deferred-beyond-this-plan)).
-- Output schema and confidence audit — sprint 0006 (R10, R8).
-- Malformed-source harness — sprint 0007 (R6).
+- Output schema — sprint 0006 (R10).
+- Confidence audit — sprint 0007 (R8).
+- Malformed-source harness — sprint 0008 (R6).

@@ -36,21 +36,22 @@ Land in this order. No sprint starts before its predecessor is closed.
 
 Sprint 0000 is a **structural prerequisite** (crate decomposition) owned
 by mudang's umbrella docs, not by `ARCHITECTURAL-REFACTOR.md`. Sprints
-0001–0007 are the R-move sprints. Sprint 0008 is the final acceptance gate (charter sweep + shim retirement) — no new R-moves, but no refactor close without it.
+0001–0008 are the R-move sprints. Sprint 0009 is the final acceptance gate (charter sweep + shim retirement) — no new R-moves, but no refactor close without it.
 
 | # | Sprint | Phase | R-moves | Status |
 |---|---|---|---|---|
 | 0000 | [Crate decomposition](./0000-phase-a-crate-decomposition.md) | A (internal, pre-R0) | — (structural) | shipped (2026-05-11) |
 | 0001 | [Schema and storage](./0001-phase-a-schema-and-storage.md) | A | R0, R1 | shipped (2026-05-11) |
-| 0002 | [Dispatch and workspace context](./0002-phase-b-dispatch-and-workspace-context.md) | B | R7, R4 | in-progress (closed on `refactor/phase-b`; not yet on `main`) |
-| 0003 | [Typed plugin output and resolution pipeline](./0003-phase-b-typed-plugin-and-resolution.md) | B | R2, R3 | in-progress (chunks 1, 2, 3a, 3b + codex review fixes on `refactor/sprint-0003-typed-plugin-resolution`) |
-| 0004 | [Trait closure and audit gates](./0004-phase-b-trait-closure-and-audits.md) | B | R9, R11, R12 | unstarted |
-| 0005 | [Framework infrastructure](./0005-phase-c-framework-infrastructure.md) | C | R5 | unstarted |
-| 0006 | [Output schema and confidence audit](./0006-phase-d-output-and-audit.md) | D | R10, R8 | unstarted |
-| 0007 | [Malformed-source harness](./0007-phase-e-malformed-source-harness.md) | E | R6 | unstarted |
-| 0008 | [Charter sweep and shim retirement](./0008-phase-e-charter-sweep.md) | E | — (acceptance gate) | unstarted |
+| 0002 | [Dispatch and workspace context](./0002-phase-b-dispatch-and-workspace-context.md) | B | R7, R4 | shipped (2026-05-12, Phase B atomic close) |
+| 0003 | [Typed plugin output and resolution pipeline](./0003-phase-b-typed-plugin-and-resolution.md) | B | R2, R3 | shipped (2026-05-12, Phase B atomic close) |
+| 0004 | [Trait closure and audit gates](./0004-phase-b-trait-closure-and-audits.md) | B | R9, R11, R12 | shipped (2026-05-12, Phase B atomic close) |
+| 0005 | [Framework infrastructure](./0005-phase-c-framework-infrastructure.md) | C | R5 | shipped (2026-05-12) |
+| 0006 | [Typed output schema](./0006-phase-d-typed-output-schema.md) | D | R10 | in-progress |
+| 0007 | [Confidence audit subcommand](./0007-phase-d-confidence-audit.md) | D | R8 | unstarted |
+| 0008 | [Malformed-source harness](./0008-phase-e-malformed-source-harness.md) | E | R6 | unstarted |
+| 0009 | [Charter sweep and shim retirement](./0009-phase-e-charter-sweep.md) | E | — (acceptance gate) | unstarted |
 
-After sprint 0008 closes and the full-refactor acceptance criteria in
+After sprint 0009 closes and the full-refactor acceptance criteria in
 [`ARCHITECTURAL-REFACTOR.md` § Acceptance for the refactor as a whole](../ARCHITECTURAL-REFACTOR.md#acceptance-for-the-refactor-as-a-whole)
 hold, `POST-REFACTOR-PLAN.md`'s queue becomes eligible. Nothing from
 that document starts earlier.
@@ -76,10 +77,15 @@ merges to `main`. The phase row in
 [`REFACTOR-STATUS.md`](../REFACTOR-STATUS.md) flips to `shipped` in
 the same commit as the phase-integration-branch merge to `main`.
 
-Single-sprint phases (today: A's R-move sprint 0001, C, D, E) merge
-directly to `main` because the sprint **is** the phase. Sprint 0000
-(structural, pre-R0) merges directly to `main` because it carries no
-R-move; it lands before Phase A's atomic shipment starts.
+Multi-sprint phases (Phase B with sprints 0002 + 0003 + 0004; Phase D
+with sprints 0006 + 0007) use phase integration branches
+(`refactor/phase-b`, `refactor/phase-d`) per the rule above.
+
+Single-sprint phases (today: A's R-move sprint 0001, C with sprint
+0005, E with sprint 0008 — sprint 0009 is the post-R-move acceptance
+gate) merge directly to `main` because the sprint **is** the phase.
+Sprint 0000 (structural, pre-R0) merges directly to `main` because it
+carries no R-move; it lands before Phase A's atomic shipment starts.
 
 Partial phase closure is rejected because it creates the very
 instability the refactor exists to eliminate.
@@ -186,11 +192,15 @@ refactor/phase-b                                   → integration branch
   refactor/sprint-0004-trait-closure-audits        → merges to refactor/phase-b
   → refactor/phase-b then merges to main           (Phase B atomic close)
 refactor/sprint-0005-framework-infrastructure      → merges to main (Phase C)
-refactor/sprint-0006-output-audit                  → merges to main (Phase D)
-refactor/sprint-0007-malformed-harness             → merges to main (Phase E)
+refactor/phase-d                                   → integration branch
+  refactor/sprint-0006-typed-output-schema         → merges to refactor/phase-d
+  refactor/sprint-0007-confidence-audit            → merges to refactor/phase-d
+  → refactor/phase-d then merges to main           (Phase D atomic close)
+refactor/sprint-0008-malformed-harness             → merges to main (Phase E R-move)
+refactor/sprint-0009-charter-sweep                 → merges to main (Phase E acceptance)
 ```
 
-#### Lifecycle — single-sprint phase (A R-move, C, D, E) and sprint 0000
+#### Lifecycle — single-sprint phase (A R-move, C, E R-move, E acceptance) and sprint 0000
 
 ```
                        (main)
@@ -207,7 +217,7 @@ refactor/sprint-0007-malformed-harness             → merges to main (Phase E)
                        (main, sprint NNNN merged; phase closed if applicable)
 ```
 
-#### Lifecycle — multi-sprint phase (B)
+#### Lifecycle — multi-sprint phase (B, D)
 
 ```
                        (main, sprint 0001 merged → Phase A closed)
@@ -233,6 +243,11 @@ refactor/sprint-0007-malformed-harness             → merges to main (Phase E)
                           ▼
                        (main, Phase B closed atomically)
 ```
+
+Phase D follows the same shape with two sprints
+(`refactor/sprint-0006-typed-output-schema` and
+`refactor/sprint-0007-confidence-audit`) feeding `refactor/phase-d`,
+then `refactor/phase-d` merges to `main` for the Phase D atomic close.
 
 #### Hard rules
 
@@ -307,11 +322,12 @@ on `main`) — pick one and stick with it across the refactor.
 
 #### Single-sprint phase close
 
-For Phase A's R-move (sprint 0001), Phase C (sprint 0005), Phase D
-(sprint 0006), and Phase E (sprint 0007), the sprint **is** the
-phase. The sprint's REFACTOR-STATUS.md transition commit flips both
-the R-move row(s) **and** the phase row in the same commit. No
-phase integration branch is needed.
+For Phase A's R-move (sprint 0001), Phase C (sprint 0005), Phase E's
+R-move (sprint 0008), and Phase E's acceptance gate (sprint 0009),
+the sprint **is** the phase (or, for sprint 0009, the post-R-move
+acceptance commit). The sprint's REFACTOR-STATUS.md transition commit
+flips both the R-move row(s) **and** the phase row in the same
+commit. No phase integration branch is needed.
 
 #### Rebase, not merge, for cleanup
 
@@ -351,10 +367,11 @@ as the five phase closes, plus the structural sprint 0000 if history is
 not squashed, in order:
 
 ```
-…  chore(refactor-status): phase E close       (sprint 0007)
-…  chore(refactor-status): phase D close       (sprint 0006)
+…  chore(refactor-status): phase E close       (sprint 0009 — charter sweep)
+…  chore(refactor-status): sprint 0008 close   (Phase E R-move — malformed harness)
+…  chore(refactor-status): phase D close       (Phase D integration merge — sprints 0006 + 0007)
 …  chore(refactor-status): phase C close       (sprint 0005)
-…  chore(refactor-status): phase B close       (Phase B integration merge)
+…  chore(refactor-status): phase B close       (Phase B integration merge — sprints 0002 + 0003 + 0004)
 …  chore(refactor-status): sprint 0001 close   (Phase A's R-move sprint)
 …  chore(refactor-status): sprint 0000 close   (crate decomposition)
 ```

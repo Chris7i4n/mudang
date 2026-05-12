@@ -204,18 +204,18 @@ pub fn run(args: &SetupArgs, project_root: &Path) -> Result<()> {
     }
 
     if args.json {
-        let data = serde_json::json!({
-            "initialized": did_init,
-            "indexed": true,
-            "preloaded": args.preload,
-            "claude_md_updated": did_claude_md,
-            "skill_installed": did_skill,
-            "scope_dir": ".scope/",
-        });
+        let data = crate::output::schema::SetupResult {
+            initialized: did_init,
+            indexed: true,
+            preloaded: args.preload,
+            claude_md_updated: did_claude_md,
+            skill_installed: did_skill,
+            scope_dir: ".scope/",
+        };
         let envelope = JsonOutput {
             command: "setup",
             symbol: None,
-            data: &data,
+            data,
             truncated: false,
             total: 1,
         };

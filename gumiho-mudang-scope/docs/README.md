@@ -73,13 +73,20 @@ Refactor progress snapshot (live state lives in
   Chunks 1, 2, 3a, 3b + codex review round-trip shipped on the sprint
   branch (extract module scaffolding, per-language extractor migration,
   `skipped_ranges` plumbing, metadata reserved-key spec compliance,
-  charter amend + shim audit + sprint 0008 added). Chunks 4–7 (R3
-  resolver scaffold, stub retirement, typestate CI gate, sprint-close)
-  pending.
-- **Sprints 0004–0008** — unstarted. 0004 (R9/R11/R12 audits), 0005
-  (R5 framework infra), 0006 (R10/R8 output + audit), 0007 (R6
-  malformed-source harness), 0008 (charter sweep + shim retirement;
-  closes the refactor).
+  charter amend + shim audit + sprint 0009 added — the sprint number
+  reflects the post-Phase-D-split renumbering on 2026-05-12). Chunks
+  4–7 (R3 resolver scaffold, stub retirement, typestate CI gate,
+  sprint-close) pending.
+- **Sprints 0002–0005** — shipped (Phase B atomic close on 2026-05-12
+  for 0002/0003/0004; Phase C close on 2026-05-12 for 0005).
+- **Sprints 0006–0009** — Phase D + Phase E. **Sprint 0006**
+  (R10 typed output schema) in-progress on
+  `refactor/sprint-0006-typed-output-schema` (off the
+  `refactor/phase-d` integration branch). **Sprint 0007**
+  (R8 confidence audit) unstarted — cuts from `refactor/phase-d` after
+  sprint 0006 merges. **Sprint 0008** (R6 malformed-source harness)
+  and **sprint 0009** (charter sweep + shim retirement; closes the
+  refactor) follow after Phase D atomic close.
 
 Until the refactor closes, plugin authoring follows the pre-refactor
 trait shapes (see `LANGUAGE-PLAYBOOK.md` Step 5 pre-R2 vs post-R2

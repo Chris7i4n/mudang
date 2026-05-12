@@ -15,6 +15,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::output::formatter;
+use crate::output::schema::{
+    IndexEvent, IndexFullResult, IndexIncrementalResult, IndexIncrementalUpToDate,
+    IndexLanguageStat, IndexReindexEvent, IndexStartEvent, IndexStopEvent,
+};
 use gumiho_mudang_scope::config::ProjectConfig;
 use gumiho_mudang_scope::core::graph::Graph;
 use gumiho_mudang_scope::core::indexer::Indexer;
@@ -117,21 +121,23 @@ fn run_full_index(
     let stats = indexer.index_full(project_root, config, graph, searcher)?;
 
     if args.json {
-        let output = serde_json::json!({
-            "command": "index",
-            "mode": "full",
-            "file_count": stats.file_count,
-            "symbol_count": stats.symbol_count,
-            "edge_count": stats.edge_count,
-            "duration_secs": stats.duration.as_secs_f64(),
-            "languages": stats.language_stats.iter().map(|ls| {
-                serde_json::json!({
-                    "language": ls.language,
-                    "file_count": ls.file_count,
-                    "symbol_count": ls.symbol_count,
+        let output = IndexFullResult {
+            command: "index",
+            mode: "full",
+            file_count: stats.file_count,
+            symbol_count: stats.symbol_count,
+            edge_count: stats.edge_count,
+            duration_secs: stats.duration.as_secs_f64(),
+            languages: stats
+                .language_stats
+                .iter()
+                .map(|ls| IndexLanguageStat {
+                    language: &ls.language,
+                    file_count: ls.file_count,
+                    symbol_count: ls.symbol_count,
                 })
-            }).collect::<Vec<_>>(),
-        });
+                .collect(),
+        };
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
         for ls in &stats.language_stats {
@@ -164,11 +170,11 @@ fn run_incremental_index(
 
     if stats.up_to_date {
         if args.json {
-            let output = serde_json::json!({
-                "command": "index",
-                "mode": "incremental",
-                "up_to_date": true,
-            });
+            let output = IndexIncrementalUpToDate {
+                command: "index",
+                mode: "incremental",
+                up_to_date: true,
+            };
             println!("{}", serde_json::to_string_pretty(&output)?);
         } else {
             eprintln!("Index up to date.");
@@ -177,24 +183,27 @@ fn run_incremental_index(
     }
 
     if args.json {
-        let output = serde_json::json!({
-            "command": "index",
-            "mode": "incremental",
-            "up_to_date": false,
-            "modified": stats.modified,
-            "added": stats.added,
-            "deleted": stats.deleted,
-            "symbol_count": stats.symbol_count,
-            "edge_count": stats.edge_count,
-            "duration_secs": stats.duration.as_secs_f64(),
-        });
+        let output = IndexIncrementalResult {
+            command: "index",
+            mode: "incremental",
+            up_to_date: false,
+            modified: &stats.modified,
+            added: &stats.added,
+            deleted: &stats.deleted,
+            symbol_count: stats.symbol_count,
+            edge_count: stats.edge_count,
+            duration_secs: stats.duration.as_secs_f64(),
+        };
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
-        formatter::print_incremental_result(
-            &stats.modified,
-            &stats.added,
-            &stats.deleted,
-            stats.duration.as_secs_f64(),
+        eprint!(
+            "{}",
+            formatter::IncrementalResultView {
+                modified: &stats.modified,
+                added: &stats.added,
+                deleted: &stats.deleted,
+                duration_secs: stats.duration.as_secs_f64(),
+            }
         );
     }
 
@@ -264,11 +273,10 @@ fn run_watch(
     // Emit start event
     let watch_start = Instant::now();
     if args.json {
-        let start_event = serde_json::json!({
-            "event": "start",
-            "project": config.project.name,
-            "languages": config.project.languages,
-            "timestamp": Utc::now().to_rfc3339(),
+        let start_event = IndexEvent::Start(IndexStartEvent {
+            project: &config.project.name,
+            languages: &config.project.languages,
+            timestamp: Utc::now().to_rfc3339(),
         });
         println!("{}", serde_json::to_string(&start_event)?);
     } else {
@@ -348,15 +356,14 @@ fn run_watch(
                 total_files_processed += files_changed as u64;
 
                 if args.json {
-                    let reindex_event = serde_json::json!({
-                        "event": "reindex",
-                        "files_changed": files_changed,
-                        "symbols_added": symbols_added,
-                        "symbols_removed": symbols_removed,
-                        "edges_added": edges_added,
-                        "edges_removed": edges_removed,
-                        "duration_ms": duration_ms,
-                        "timestamp": Utc::now().to_rfc3339(),
+                    let reindex_event = IndexEvent::Reindex(IndexReindexEvent {
+                        files_changed,
+                        symbols_added,
+                        symbols_removed,
+                        edges_added,
+                        edges_removed,
+                        duration_ms,
+                        timestamp: Utc::now().to_rfc3339(),
                     });
                     println!("{}", serde_json::to_string(&reindex_event)?);
                 } else {
@@ -390,12 +397,11 @@ fn run_watch(
     let uptime_secs = watch_start.elapsed().as_secs();
 
     if args.json {
-        let stop_event = serde_json::json!({
-            "event": "stop",
-            "total_reindexes": total_reindexes,
-            "total_files_processed": total_files_processed,
-            "uptime_seconds": uptime_secs,
-            "timestamp": Utc::now().to_rfc3339(),
+        let stop_event = IndexEvent::Stop(IndexStopEvent {
+            total_reindexes,
+            total_files_processed,
+            uptime_seconds: uptime_secs,
+            timestamp: Utc::now().to_rfc3339(),
         });
         println!("{}", serde_json::to_string(&stop_event)?);
     } else {

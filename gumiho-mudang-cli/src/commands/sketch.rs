@@ -14,25 +14,11 @@ use std::path::Path;
 use crate::commands::warn_if_stale;
 use crate::output::formatter;
 use crate::output::json::JsonOutput;
+use crate::output::schema::{
+    ClassSketch, EnumSketch, EnumVariantView, FieldView, FileSketch, GenericSketch,
+    InterfaceSketch, MethodSketch, SketchSymbol, SymbolSketch,
+};
 use gumiho_mudang_scope::core::graph::{Graph, Symbol};
-
-/// Strip internal fields from a Symbol for compact JSON output.
-/// Keeps only what agents need: name, kind, signature, line_start, line_end.
-fn compact_symbol(s: &Symbol) -> serde_json::Value {
-    serde_json::json!({
-        "name": s.name,
-        "kind": s.kind,
-        "signature": s.signature,
-        "file_path": s.file_path,
-        "line_start": s.line_start,
-        "line_end": s.line_end,
-    })
-}
-
-/// Compact a Vec of Symbol references.
-fn compact_symbols(syms: &[&Symbol]) -> Vec<serde_json::Value> {
-    syms.iter().map(|s| compact_symbol(s)).collect()
-}
 
 /// Arguments for the `scope sketch` command.
 #[derive(Args, Debug)]
@@ -100,6 +86,24 @@ pub fn run(args: &SketchArgs, project_root: &Path) -> Result<()> {
     run_symbol_sketch(args, &graph)
 }
 
+/// Emit a `JsonOutput<SymbolSketch>` to stdout.
+fn emit_json(
+    symbol_name: String,
+    data: SymbolSketch<'_>,
+    truncated: bool,
+    total: usize,
+) -> Result<()> {
+    let output = JsonOutput {
+        command: "sketch",
+        symbol: Some(symbol_name),
+        data,
+        truncated,
+        total,
+    };
+    println!("{}", serde_json::to_string_pretty(&output)?);
+    Ok(())
+}
+
 /// Sketch a single symbol (class, method, interface, etc.).
 fn run_symbol_sketch(args: &SketchArgs, graph: &Graph) -> Result<()> {
     let symbol = graph.find_symbol(&args.symbol)?.ok_or_else(|| {
@@ -121,68 +125,46 @@ fn run_symbol_sketch(args: &SketchArgs, graph: &Graph) -> Result<()> {
 }
 
 /// Sketch a class or struct.
-fn sketch_class(
-    args: &SketchArgs,
-    graph: &Graph,
-    symbol: &gumiho_mudang_scope::core::graph::Symbol,
-) -> Result<()> {
+fn sketch_class(args: &SketchArgs, graph: &Graph, symbol: &Symbol) -> Result<()> {
     let methods = graph.get_methods(&symbol.id)?;
     let relationships = graph.get_class_relationships(&symbol.id)?;
 
-    // Batch-fetch caller counts for all methods
     let method_ids: Vec<&str> = methods.iter().map(|m| m.id.as_str()).collect();
     let caller_counts = graph.get_caller_counts(&method_ids)?;
 
     if args.json || args.compact {
-        let (fields, all_methods): (Vec<_>, Vec<_>) =
+        let (field_syms, non_field_syms): (Vec<&Symbol>, Vec<&Symbol>) =
             methods.iter().partition(|m| m.kind == "property");
-        let truncated = all_methods.len() > args.limit;
-        let total = all_methods.len();
-        let actual_methods: Vec<_> = all_methods.into_iter().take(args.limit).collect();
+        let total = non_field_syms.len();
+        let truncated = total > args.limit;
 
-        let field_data: Vec<serde_json::Value> = fields
-            .iter()
-            .map(|f| {
-                serde_json::json!({
-                    "name": f.name,
-                    "signature": f.signature,
-                    "line_start": f.line_start,
-                })
-            })
+        let methods_view: Vec<SketchSymbol<'_>> = non_field_syms
+            .into_iter()
+            .take(args.limit)
+            .map(|m| SketchSymbol::pick(m, args.compact))
             .collect();
+        let fields: Vec<FieldView<'_>> = field_syms.into_iter().map(FieldView::from).collect();
 
-        let (sym_data, method_data) = if args.compact {
-            (
-                compact_symbol(symbol),
-                serde_json::json!(compact_symbols(&actual_methods)),
-            )
-        } else {
-            (serde_json::json!(symbol), serde_json::json!(actual_methods))
+        let sketch = ClassSketch {
+            symbol: SketchSymbol::pick(symbol, args.compact),
+            methods: methods_view,
+            fields,
+            caller_counts,
+            relationships: &relationships,
         };
 
-        let data = serde_json::json!({
-            "symbol": sym_data,
-            "methods": method_data,
-            "fields": field_data,
-            "caller_counts": caller_counts,
-            "relationships": relationships,
-        });
-        let output = JsonOutput {
-            command: "sketch",
-            symbol: Some(symbol.name.clone()),
-            data,
-            truncated,
-            total,
-        };
-        println!("{}", serde_json::to_string_pretty(&output)?);
+        emit_json(symbol.name.clone(), SymbolSketch::Class(sketch), truncated, total)?;
     } else {
-        formatter::print_class_sketch(
-            symbol,
-            &methods,
-            &caller_counts,
-            &relationships,
-            args.limit,
-            !args.no_docs,
+        print!(
+            "{}",
+            formatter::ClassSketchView {
+                symbol,
+                methods: &methods,
+                caller_counts: &caller_counts,
+                relationships: &relationships,
+                limit: args.limit,
+                show_docs: !args.no_docs,
+            }
         );
     }
 
@@ -190,85 +172,69 @@ fn sketch_class(
 }
 
 /// Sketch a method or function.
-fn sketch_method(
-    args: &SketchArgs,
-    graph: &Graph,
-    symbol: &gumiho_mudang_scope::core::graph::Symbol,
-) -> Result<()> {
+fn sketch_method(args: &SketchArgs, graph: &Graph, symbol: &Symbol) -> Result<()> {
     let outgoing_calls = graph.get_outgoing_calls(&symbol.id)?;
     let incoming_callers = graph.get_incoming_callers(&symbol.id)?;
 
     if args.json || args.compact {
-        let sym = if args.compact {
-            compact_symbol(symbol)
-        } else {
-            serde_json::json!(symbol)
+        let sketch = MethodSketch {
+            symbol: SketchSymbol::pick(symbol, args.compact),
+            calls: &outgoing_calls,
+            called_by: &incoming_callers,
         };
-        let data = serde_json::json!({
-            "symbol": sym,
-            "calls": outgoing_calls,
-            "called_by": incoming_callers,
-        });
-        let output = JsonOutput {
-            command: "sketch",
-            symbol: Some(symbol.name.clone()),
-            data,
-            truncated: false,
-            total: 1,
-        };
-        println!("{}", serde_json::to_string_pretty(&output)?);
+        emit_json(symbol.name.clone(), SymbolSketch::Method(sketch), false, 1)?;
     } else {
-        formatter::print_method_sketch(symbol, &outgoing_calls, &incoming_callers);
+        print!(
+            "{}",
+            formatter::MethodSketchView {
+                symbol,
+                outgoing_calls: &outgoing_calls,
+                incoming_callers: &incoming_callers,
+            }
+        );
     }
 
     Ok(())
 }
 
 /// Sketch an interface.
-fn sketch_interface(
-    args: &SketchArgs,
-    graph: &Graph,
-    symbol: &gumiho_mudang_scope::core::graph::Symbol,
-) -> Result<()> {
+fn sketch_interface(args: &SketchArgs, graph: &Graph, symbol: &Symbol) -> Result<()> {
     let methods = graph.get_methods(&symbol.id)?;
     let implementors = graph.get_implementors(&symbol.id)?;
     let relationships = graph.get_class_relationships(&symbol.id)?;
 
     if args.json || args.compact {
-        let sym = if args.compact {
-            compact_symbol(symbol)
-        } else {
-            serde_json::json!(symbol)
-        };
-        let truncated = methods.len() > args.limit;
         let total = methods.len();
-        let limited: Vec<_> = methods.iter().take(args.limit).collect();
-        let meths = if args.compact {
-            serde_json::json!(compact_symbols(&limited))
-        } else {
-            serde_json::json!(limited)
+        let truncated = total > args.limit;
+        let methods_view: Vec<SketchSymbol<'_>> = methods
+            .iter()
+            .take(args.limit)
+            .map(|m| SketchSymbol::pick(m, args.compact))
+            .collect();
+
+        let sketch = InterfaceSketch {
+            symbol: SketchSymbol::pick(symbol, args.compact),
+            methods: methods_view,
+            implementors: &implementors,
+            relationships: &relationships,
         };
-        let data = serde_json::json!({
-            "symbol": sym,
-            "methods": meths,
-            "implementors": implementors,
-            "relationships": relationships,
-        });
-        let output = JsonOutput {
-            command: "sketch",
-            symbol: Some(symbol.name.clone()),
-            data,
+
+        emit_json(
+            symbol.name.clone(),
+            SymbolSketch::Interface(sketch),
             truncated,
             total,
-        };
-        println!("{}", serde_json::to_string_pretty(&output)?);
+        )?;
     } else {
-        formatter::print_interface_sketch(
-            symbol,
-            &methods,
-            &implementors,
-            &relationships,
-            args.limit,
+        print!(
+            "{}",
+            formatter::InterfaceSketchView {
+                symbol,
+                methods: &methods,
+                implementors: &implementors,
+                relationships: &relationships,
+                limit: args.limit,
+            }
         );
     }
 
@@ -276,78 +242,45 @@ fn sketch_interface(
 }
 
 /// Sketch an enum — shows variants and caller count.
-fn sketch_enum(
-    args: &SketchArgs,
-    graph: &Graph,
-    symbol: &gumiho_mudang_scope::core::graph::Symbol,
-) -> Result<()> {
-    // get_methods returns all children by parent_id; filter for variants
+fn sketch_enum(args: &SketchArgs, graph: &Graph, symbol: &Symbol) -> Result<()> {
     let children = graph.get_methods(&symbol.id)?;
-    let variants: Vec<&gumiho_mudang_scope::core::graph::Symbol> =
-        children.iter().filter(|c| c.kind == "variant").collect();
+    let variants: Vec<&Symbol> = children.iter().filter(|c| c.kind == "variant").collect();
     let caller_count = graph.get_caller_count(&symbol.id)?;
 
     if args.json || args.compact {
-        let variant_data: Vec<serde_json::Value> = variants
-            .iter()
-            .map(|v| {
-                serde_json::json!({
-                    "name": v.name,
-                    "signature": v.signature,
-                    "line_start": v.line_start,
-                    "line_end": v.line_end,
-                })
-            })
-            .collect();
-        let sym = if args.compact {
-            compact_symbol(symbol)
-        } else {
-            serde_json::json!(symbol)
+        let variant_views: Vec<EnumVariantView<'_>> =
+            variants.iter().map(|v| EnumVariantView::from(*v)).collect();
+
+        let sketch = EnumSketch {
+            symbol: SketchSymbol::pick(symbol, args.compact),
+            variants: variant_views,
+            caller_count,
         };
-        let data = serde_json::json!({
-            "symbol": sym,
-            "variants": variant_data,
-            "caller_count": caller_count,
-        });
-        let output = JsonOutput {
-            command: "sketch",
-            symbol: Some(symbol.name.clone()),
-            data,
-            truncated: false,
-            total: 1,
-        };
-        println!("{}", serde_json::to_string_pretty(&output)?);
+
+        emit_json(symbol.name.clone(), SymbolSketch::Enum(sketch), false, 1)?;
     } else {
-        formatter::print_enum_sketch(symbol, &variants, caller_count);
+        print!(
+            "{}",
+            formatter::EnumSketchView {
+                symbol,
+                variants: &variants,
+                caller_count,
+            }
+        );
     }
 
     Ok(())
 }
 
 /// Sketch a generic symbol (const, type).
-fn sketch_generic(
-    args: &SketchArgs,
-    symbol: &gumiho_mudang_scope::core::graph::Symbol,
-) -> Result<()> {
+fn sketch_generic(args: &SketchArgs, symbol: &Symbol) -> Result<()> {
     if args.json || args.compact {
-        let sym = if args.compact {
-            compact_symbol(symbol)
-        } else {
-            serde_json::json!(symbol)
+        let sketch = GenericSketch {
+            symbol: SketchSymbol::pick(symbol, args.compact),
         };
-        let data = serde_json::json!({
-            "symbol": sym,
-        });
-        let output = JsonOutput {
-            command: "sketch",
-            symbol: Some(symbol.name.clone()),
-            data,
-            truncated: false,
-            total: 1,
-        };
-        println!("{}", serde_json::to_string_pretty(&output)?);
+        emit_json(symbol.name.clone(), SymbolSketch::Generic(sketch), false, 1)?;
     } else {
-        formatter::print_generic_sketch(symbol);
+        print!("{}", formatter::GenericSketchView { symbol });
     }
 
     Ok(())
@@ -366,31 +299,32 @@ fn run_file_sketch(args: &SketchArgs, graph: &Graph) -> Result<()> {
         );
     }
 
-    // Batch-fetch caller counts for all symbols in the file
     let symbol_ids: Vec<&str> = symbols.iter().map(|s| s.id.as_str()).collect();
     let caller_counts = graph.get_caller_counts(&symbol_ids)?;
 
     if args.json || args.compact {
-        let sym_data = if args.compact {
-            serde_json::json!(symbols.iter().map(compact_symbol).collect::<Vec<_>>())
-        } else {
-            serde_json::json!(symbols)
+        let total = symbols.len();
+        let symbols_view: Vec<SketchSymbol<'_>> = symbols
+            .iter()
+            .map(|s| SketchSymbol::pick(s, args.compact))
+            .collect();
+
+        let sketch = FileSketch {
+            file_path: &file_path,
+            symbols: symbols_view,
+            caller_counts,
         };
-        let data = serde_json::json!({
-            "file_path": file_path,
-            "symbols": sym_data,
-            "caller_counts": caller_counts,
-        });
-        let output = JsonOutput {
-            command: "sketch",
-            symbol: Some(file_path.clone()),
-            data,
-            truncated: false,
-            total: symbols.len(),
-        };
-        println!("{}", serde_json::to_string_pretty(&output)?);
+
+        emit_json(file_path.clone(), SymbolSketch::File(sketch), false, total)?;
     } else {
-        formatter::print_file_sketch(&file_path, &symbols, &caller_counts);
+        print!(
+            "{}",
+            formatter::FileSketchView {
+                file_path: &file_path,
+                symbols: &symbols,
+                caller_counts: &caller_counts,
+            }
+        );
     }
 
     Ok(())

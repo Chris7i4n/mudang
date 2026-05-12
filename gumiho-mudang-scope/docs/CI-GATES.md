@@ -23,10 +23,10 @@ When a gate is active, the script or test path listed below is the **authoritati
 | Indexer-only dispatch | R7 | `scripts/grep_dispatch.sh` | content readers (`read_to_string`, `read_to_end`, `read_line`, `BufRead`) in `scope-core/src/languages/`, or `register_languages!` / `dispatch_extension` / `dispatch_shebang` defined outside `languages/dispatch.rs` | `just ci-dispatch` | active (sprint 0002 — 2026-05-11) |
 | No `.scm` per framework | R5 | `scripts/audit_no_framework_scm.sh` (`find -type d` for `queries/*/frameworks` and `queries/frameworks` paths anywhere under `gumiho-mudang-scope/`) | any `queries/<lang>/frameworks/` directory exists in the scope sub-crate tree | `just ci-no-framework-scm` | active (sprint 0005 — 2026-05-12) |
 | Pattern catalog audit | R5 | `scripts/audit_patterns.sh` (awk-extracts every `Pattern { ... }` literal — single-line or multi-line — under `scope-core/src/frameworks/` and `scope-core/tests/synthetic_framework/`; inspects each block for `id: ""` literals) | any `Pattern { ... }` literal whose `id:` slot is the empty-string literal `""` (missing `available_in` or `predicate` fail at compile time because the fields are non-`Option`) | `just ci-patterns` | active (sprint 0005 — 2026-05-12) |
-| Output schema audit | R10 | `scripts/audit_output_schema.sh` | output struct has field named `error`, `warning`, `diagnostic`, `is_valid`, `lint`, `correctness` | `just ci-output-schema` | planned (Phase D) |
+| Output schema audit | R10 | `scripts/audit_output_schema.sh` (awk state-machine tracks `struct <Name> { ... }` blocks under `gumiho-mudang-cli/src/output/` + `gumiho-mudang-cli/src/commands/`; emits any field declaration whose name is in the banned set) | output struct has field named `error`, `warning`, `diagnostic`, `is_valid`, `lint`, `correctness` | `just ci-output-schema` | active (sprint 0006 — 2026-05-12) |
 | Macro definition-only | R11 | trait-shape audit (subset of R12) | function named `expand_*` in `gumiho-mudang-scope/scope-core/src/languages/` or `scope-core/src/extract/` (the trait-shape gate's `expand_*` arm) | `just ci-trait-shape` | active (sprint 0004 — 2026-05-11) |
 | Malformed-source harness | R6 | `cargo test --test malformed_sources` | plugin panics on any fixture; partial-malformed fixture produces empty `skipped_ranges`; snapshot diff on recorded reason / range | `just test-malformed` | planned (Phase E) |
-| Confidence audit | R8 | `scope audit confidence` (subcommand) | precision below tier target (`high ≥ 95%`, `medium ≥ 70%`, `low` no minimum) per `(kind, producer, pattern_id)` | `just audit-confidence` | planned (Phase D) |
+| Confidence audit | R8 | `scope audit confidence` (subcommand) — integration test suite `gumiho-mudang-cli/tests/integration/test_audit_confidence.rs` exercises every chunk-4-to-6 surface (emit-sample / label / drift gate / schema_version reject / tier gate fail). The mechanical regression gate this row activates is the test suite; the **continuous re-audit cycle** (precision drift detection over time via committed labelled samples + edge_id-stable join key) lives in [`POST-REFACTOR-PLAN.md` § Priority 1 — Self-correction cycle](POST-REFACTOR-PLAN.md#priority-1-immediately-post-refactor--self-correction-cycle) because both the labelled-sample workflow and the cross-reindex join key are post-refactor design work in their own right. | wiring break of the audit subcommand, `SampleRecord` field-order drift (breaks external labellers), drift gate removal, tier-gate threshold loosening, schema_version bump without contract update | `just audit-confidence` | active (sprint 0007 — 2026-05-12) |
 
 ---
 
@@ -58,7 +58,7 @@ The recipes are thin. The doc is canonical; the recipes call out to the canonica
 
 ```just
 # Run every active CI gate. CI calls this; humans can too.
-ci-gates: ci-trait-shape ci-no-spawn ci-no-network ci-immutable ci-context-shape ci-no-fs ci-dispatch ci-edge-sealed ci-no-framework-scm ci-patterns ci-output-schema test-builder test-typestate test-malformed
+ci-gates: ci-trait-shape ci-no-spawn ci-no-network ci-immutable ci-context-shape ci-no-fs ci-dispatch ci-edge-sealed ci-no-framework-scm ci-patterns ci-output-schema test-builder test-typestate test-malformed audit-confidence
 
 ci-trait-shape:
     ./scripts/audit_trait_shape.sh
@@ -103,8 +103,10 @@ test-malformed:
     cargo test --test malformed_sources
 
 audit-confidence:
-    cargo run --release -- audit confidence
+    cargo test -p gumiho-mudang-cli --test test_audit_confidence
 ```
+
+`audit-confidence` runs the integration suite, **not** an end-to-end labelled-sample replay. The suite is the mid-refactor regression gate; the continuous re-audit cycle (committed labelled samples, edge_id-stable join key, precision-drift detection over time) is post-refactor work — see [`POST-REFACTOR-PLAN.md` § Priority 1 — Self-correction cycle](POST-REFACTOR-PLAN.md#priority-1-immediately-post-refactor--self-correction-cycle).
 
 If `justfile` is later replaced by a `scripts/ci.sh` or removed entirely, the inventory above continues to define every gate. The recipes mirror the doc; the doc does not mirror the recipes.
 

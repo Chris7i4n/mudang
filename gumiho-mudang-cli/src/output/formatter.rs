@@ -1,4 +1,12 @@
-//! Human-readable output formatting for all Scope commands.
+//! Human-readable output rendering shared across every Scope command.
+//!
+//! After R10, plain-text output goes through `impl fmt::Display` on
+//! per-command view structs defined in this module and exposed by
+//! [`crate::output::schema`]. Callers write `print!("{view}")` instead
+//! of invoking free `print_*` functions; the `view` is constructed
+//! once and feeds both the JSON envelope (when `--json` is set) and
+//! the plain renderer. Procedural `println!` survives only inside the
+//! `fmt::Display` bodies, where it is rewritten to `writeln!(f, …)?`.
 //!
 //! Rules:
 //! - Separator line uses `─` (U+2500), never `-` or `=`
@@ -8,6 +16,7 @@
 //! - Similarity scores always 2 decimal places: `0.91`
 
 use std::collections::HashMap;
+use std::fmt;
 
 use crate::commands::entrypoints::EntrypointInfo;
 use crate::commands::flow::FlowPath;
@@ -35,15 +44,17 @@ pub fn format_line_range(start: u32, end: u32) -> String {
     }
 }
 
-/// Format the header line: `name  kind  file:line_range`
-fn print_header(symbol: &Symbol) {
+/// Write the header line `name  kind  file:line_range` followed by
+/// the separator. Shared by every symbol-scoped sketch renderer.
+fn write_header(symbol: &Symbol, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let path = normalize_path(&symbol.file_path);
     let line_range = format_line_range(symbol.line_start, symbol.line_end);
-    println!(
+    writeln!(
+        f,
         "{:<50}{}  {}:{}",
         symbol.name, symbol.kind, path, line_range
-    );
-    println!("{SEPARATOR}");
+    )?;
+    writeln!(f, "{SEPARATOR}")
 }
 
 /// Print a class sketch.
@@ -63,104 +74,112 @@ fn print_header(symbol: &Symbol) {
 /// fields:
 ///   private client: StripeClient
 /// ```
-pub fn print_class_sketch(
-    symbol: &Symbol,
-    methods: &[Symbol],
-    caller_counts: &HashMap<String, usize>,
-    relationships: &ClassRelationships,
-    limit: usize,
-    show_docs: bool,
-) {
-    print_header(symbol);
+/// Plain-text view for `scope sketch <class|struct>`.
+pub struct ClassSketchView<'a> {
+    pub symbol: &'a Symbol,
+    pub methods: &'a [Symbol],
+    pub caller_counts: &'a HashMap<String, usize>,
+    pub relationships: &'a ClassRelationships,
+    pub limit: usize,
+    pub show_docs: bool,
+}
 
-    // Dependencies line
-    if !relationships.dependencies.is_empty() {
-        println!("deps:     {}", relationships.dependencies.join(", "));
-    }
+impl fmt::Display for ClassSketchView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write_header(self.symbol, f)?;
 
-    // Extends line
-    if !relationships.extends.is_empty() {
-        println!("extends:  {}", relationships.extends.join(", "));
-    }
+        if !self.relationships.dependencies.is_empty() {
+            writeln!(
+                f,
+                "deps:     {}",
+                self.relationships.dependencies.join(", ")
+            )?;
+        }
+        if !self.relationships.extends.is_empty() {
+            writeln!(f, "extends:  {}", self.relationships.extends.join(", "))?;
+        }
+        if !self.relationships.implements.is_empty() {
+            writeln!(
+                f,
+                "implements: {}",
+                self.relationships.implements.join(", ")
+            )?;
+        }
 
-    // Implements line
-    if !relationships.implements.is_empty() {
-        println!("implements: {}", relationships.implements.join(", "));
-    }
+        let (method_syms, field_syms): (Vec<&Symbol>, Vec<&Symbol>) = self
+            .methods
+            .iter()
+            .partition(|m| m.kind == "method" || m.kind == "function");
 
-    // Separate sections: methods and fields
-    let (method_syms, field_syms): (Vec<&Symbol>, Vec<&Symbol>) = methods
-        .iter()
-        .partition(|m| m.kind == "method" || m.kind == "function");
+        if !method_syms.is_empty() {
+            writeln!(f)?;
+            writeln!(f, "methods:")?;
+            let display_methods = if method_syms.len() > self.limit {
+                &method_syms[..self.limit]
+            } else {
+                &method_syms
+            };
 
-    // Methods section
-    if !method_syms.is_empty() {
-        println!();
-        println!("methods:");
-        let display_methods = if method_syms.len() > limit {
-            &method_syms[..limit]
-        } else {
-            &method_syms
-        };
-
-        for method in display_methods {
-            // Show first line of docstring if available and docs are enabled
-            if show_docs {
-                if let Some(ref doc) = method.docstring {
-                    let first_line = doc.lines().next().unwrap_or("").trim();
-                    let clean = first_line
-                        .trim_start_matches("///")
-                        .trim_start_matches("//")
-                        .trim_start_matches("/**")
-                        .trim_start_matches("*")
-                        .trim_start_matches("*/")
-                        .trim();
-                    if !clean.is_empty() {
-                        println!("  /// {clean}");
+            for method in display_methods {
+                if self.show_docs {
+                    if let Some(ref doc) = method.docstring {
+                        let first_line = doc.lines().next().unwrap_or("").trim();
+                        let clean = first_line
+                            .trim_start_matches("///")
+                            .trim_start_matches("//")
+                            .trim_start_matches("/**")
+                            .trim_start_matches("*")
+                            .trim_start_matches("*/")
+                            .trim();
+                        if !clean.is_empty() {
+                            writeln!(f, "  /// {clean}")?;
+                        }
                     }
                 }
+
+                let sig = method_display_line(method);
+                let count = self.caller_counts.get(&method.id).copied().unwrap_or(0);
+                let count_label = if count > 0 {
+                    format!("[{count} caller{}]", if count == 1 { "" } else { "s" })
+                } else {
+                    "[internal]".to_string()
+                };
+                let padding = SEPARATOR
+                    .chars()
+                    .count()
+                    .saturating_sub(2 + sig.chars().count() + count_label.chars().count());
+                writeln!(
+                    f,
+                    "  {sig}{:>width$}",
+                    count_label,
+                    width = padding + count_label.len()
+                )?;
             }
 
-            let sig = method_display_line(method);
-            let count = caller_counts.get(&method.id).copied().unwrap_or(0);
-            let count_label = if count > 0 {
-                format!("[{count} caller{}]", if count == 1 { "" } else { "s" })
-            } else {
-                "[internal]".to_string()
-            };
-            // Right-align the caller count
-            let padding = SEPARATOR
-                .chars()
-                .count()
-                .saturating_sub(2 + sig.chars().count() + count_label.chars().count());
-            println!(
-                "  {sig}{:>width$}",
-                count_label,
-                width = padding + count_label.len()
-            );
+            if method_syms.len() > self.limit {
+                writeln!(
+                    f,
+                    "  ... {} more (use --limit to show more)",
+                    method_syms.len() - self.limit
+                )?;
+            }
         }
 
-        if method_syms.len() > limit {
-            println!(
-                "  ... {} more (use --limit to show more)",
-                method_syms.len() - limit
-            );
-        }
-    }
+        let field_syms: Vec<&Symbol> = field_syms
+            .into_iter()
+            .filter(|s| s.kind == "property")
+            .collect();
 
-    // Fields section (properties)
-    let field_syms: Vec<&Symbol> = field_syms
-        .into_iter()
-        .filter(|s| s.kind == "property")
-        .collect();
-
-    if !field_syms.is_empty() {
-        println!();
-        println!("fields:");
-        for field in &field_syms {
-            let sig = field.signature.as_deref().unwrap_or(&field.name);
-            println!("  {sig}");
+        if !field_syms.is_empty() {
+            writeln!(f)?;
+            writeln!(f, "fields:")?;
+            for field in &field_syms {
+                let sig = field.signature.as_deref().unwrap_or(&field.name);
+                writeln!(f, "  {sig}")?;
+            }
         }
+
+        Ok(())
     }
 }
 
@@ -174,48 +193,51 @@ pub fn print_class_sketch(
 /// calls:      validateCard, repo.findUser
 /// called by:  OrderController.checkout [x3]
 /// ```
-pub fn print_method_sketch(
-    symbol: &Symbol,
-    outgoing_calls: &[String],
-    incoming_callers: &[CallerInfo],
-) {
-    print_header(symbol);
+/// Plain-text view for `scope sketch <method|function>`.
+pub struct MethodSketchView<'a> {
+    pub symbol: &'a Symbol,
+    pub outgoing_calls: &'a [String],
+    pub incoming_callers: &'a [CallerInfo],
+}
 
-    // Language-specific enrichment line (annotations, decorators, receiver)
-    let enrichment = extract_enrichment_prefix(&symbol.language, &symbol.metadata);
-    if !enrichment.is_empty() {
-        println!("{enrichment}");
-    }
+impl fmt::Display for MethodSketchView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write_header(self.symbol, f)?;
 
-    // Modifiers line (only if any non-default modifiers exist)
-    let modifiers = extract_modifiers(&symbol.metadata);
-    if !modifiers.is_empty() {
-        println!("{}", modifiers.join(" "));
-    }
+        let enrichment = extract_enrichment_prefix(&self.symbol.language, &self.symbol.metadata);
+        if !enrichment.is_empty() {
+            writeln!(f, "{enrichment}")?;
+        }
 
-    // Signature line
-    if let Some(sig) = &symbol.signature {
-        println!("signature:  {sig}");
-    }
+        let modifiers = extract_modifiers(&self.symbol.metadata);
+        if !modifiers.is_empty() {
+            writeln!(f, "{}", modifiers.join(" "))?;
+        }
 
-    // Calls line
-    if !outgoing_calls.is_empty() {
-        println!("calls:      {}", outgoing_calls.join(", "));
-    }
+        if let Some(sig) = &self.symbol.signature {
+            writeln!(f, "signature:  {sig}")?;
+        }
 
-    // Called by line
-    if !incoming_callers.is_empty() {
-        let caller_parts: Vec<String> = incoming_callers
-            .iter()
-            .map(|c| {
-                if c.count > 1 {
-                    format!("{} [x{}]", c.name, c.count)
-                } else {
-                    c.name.clone()
-                }
-            })
-            .collect();
-        println!("called by:  {}", caller_parts.join(", "));
+        if !self.outgoing_calls.is_empty() {
+            writeln!(f, "calls:      {}", self.outgoing_calls.join(", "))?;
+        }
+
+        if !self.incoming_callers.is_empty() {
+            let caller_parts: Vec<String> = self
+                .incoming_callers
+                .iter()
+                .map(|c| {
+                    if c.count > 1 {
+                        format!("{} [x{}]", c.name, c.count)
+                    } else {
+                        c.name.clone()
+                    }
+                })
+                .collect();
+            writeln!(f, "called by:  {}", caller_parts.join(", "))?;
+        }
+
+        Ok(())
     }
 }
 
@@ -230,54 +252,64 @@ pub fn print_method_sketch(
 /// methods:
 ///   processPayment(amount: Decimal, userId: string) → Promise<PaymentResult>
 /// ```
-pub fn print_interface_sketch(
-    symbol: &Symbol,
-    methods: &[Symbol],
-    implementors: &[String],
-    relationships: &ClassRelationships,
-    limit: usize,
-) {
-    print_header(symbol);
+/// Plain-text view for `scope sketch <interface>`.
+pub struct InterfaceSketchView<'a> {
+    pub symbol: &'a Symbol,
+    pub methods: &'a [Symbol],
+    pub implementors: &'a [String],
+    pub relationships: &'a ClassRelationships,
+    pub limit: usize,
+}
 
-    if !relationships.dependencies.is_empty() {
-        println!("deps:     {}", relationships.dependencies.join(", "));
-    }
+impl fmt::Display for InterfaceSketchView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write_header(self.symbol, f)?;
 
-    if !relationships.extends.is_empty() {
-        println!("extends:  {}", relationships.extends.join(", "));
-    }
-
-    // Mixins via include/prepend/extend (Ruby modules) or interface inheritance.
-    if !relationships.implements.is_empty() {
-        println!("implements: {}", relationships.implements.join(", "));
-    }
-
-    // Implemented by
-    if !implementors.is_empty() {
-        println!("implemented by:  {}", implementors.join(", "));
-    }
-
-    // Methods section
-    if !methods.is_empty() {
-        println!();
-        println!("methods:");
-        let display_methods = if methods.len() > limit {
-            &methods[..limit]
-        } else {
-            methods
-        };
-
-        for method in display_methods {
-            let sig = method_display_line(method);
-            println!("  {sig}");
+        if !self.relationships.dependencies.is_empty() {
+            writeln!(
+                f,
+                "deps:     {}",
+                self.relationships.dependencies.join(", ")
+            )?;
+        }
+        if !self.relationships.extends.is_empty() {
+            writeln!(f, "extends:  {}", self.relationships.extends.join(", "))?;
+        }
+        if !self.relationships.implements.is_empty() {
+            writeln!(
+                f,
+                "implements: {}",
+                self.relationships.implements.join(", ")
+            )?;
+        }
+        if !self.implementors.is_empty() {
+            writeln!(f, "implemented by:  {}", self.implementors.join(", "))?;
         }
 
-        if methods.len() > limit {
-            println!(
-                "  ... {} more (use --limit to show more)",
-                methods.len() - limit
-            );
+        if !self.methods.is_empty() {
+            writeln!(f)?;
+            writeln!(f, "methods:")?;
+            let display_methods = if self.methods.len() > self.limit {
+                &self.methods[..self.limit]
+            } else {
+                self.methods
+            };
+
+            for method in display_methods {
+                let sig = method_display_line(method);
+                writeln!(f, "  {sig}")?;
+            }
+
+            if self.methods.len() > self.limit {
+                writeln!(
+                    f,
+                    "  ... {} more (use --limit to show more)",
+                    self.methods.len() - self.limit
+                )?;
+            }
         }
+
+        Ok(())
     }
 }
 
@@ -290,31 +322,39 @@ pub fn print_interface_sketch(
 ///   PaymentService          class     12-89    [11 callers]
 ///   processPayment          method    34-67    [11 callers]
 /// ```
-pub fn print_file_sketch(
-    file_path: &str,
-    symbols: &[Symbol],
-    caller_counts: &HashMap<String, usize>,
-) {
-    let path = normalize_path(file_path);
-    println!("{path}");
-    println!("{SEPARATOR}");
+/// Plain-text view for `scope sketch <file path>`.
+pub struct FileSketchView<'a> {
+    pub file_path: &'a str,
+    pub symbols: &'a [Symbol],
+    pub caller_counts: &'a HashMap<String, usize>,
+}
 
-    for sym in symbols {
-        let line_range = format_line_range(sym.line_start, sym.line_end);
-        let count = caller_counts.get(&sym.id).copied().unwrap_or(0);
-        let count_label = if count > 0 {
-            format!("[{count} caller{}]", if count == 1 { "" } else { "s" })
-        } else {
-            "[internal]".to_string()
-        };
-        println!(
-            "  {:<24}{:<10}{:<9}{}",
-            sym.name, sym.kind, line_range, count_label
-        );
+impl fmt::Display for FileSketchView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let path = normalize_path(self.file_path);
+        writeln!(f, "{path}")?;
+        writeln!(f, "{SEPARATOR}")?;
+
+        for sym in self.symbols {
+            let line_range = format_line_range(sym.line_start, sym.line_end);
+            let count = self.caller_counts.get(&sym.id).copied().unwrap_or(0);
+            let count_label = if count > 0 {
+                format!("[{count} caller{}]", if count == 1 { "" } else { "s" })
+            } else {
+                "[internal]".to_string()
+            };
+            writeln!(
+                f,
+                "  {:<24}{:<10}{:<9}{}",
+                sym.name, sym.kind, line_range, count_label
+            )?;
+        }
+
+        Ok(())
     }
 }
 
-/// Print an enum sketch — variants and caller count.
+/// Plain-text view for `scope sketch <enum>`.
 ///
 /// Format:
 /// ```text
@@ -327,37 +367,50 @@ pub fn print_file_sketch(
 ///
 /// [3 callers]
 /// ```
-pub fn print_enum_sketch(symbol: &Symbol, variants: &[&Symbol], caller_count: usize) {
-    print_header(symbol);
+pub struct EnumSketchView<'a> {
+    pub symbol: &'a Symbol,
+    pub variants: &'a [&'a Symbol],
+    pub caller_count: usize,
+}
 
-    if !variants.is_empty() {
-        println!("variants:");
-        for v in variants {
-            // Show signature (data shape) if available, otherwise just the name
-            let display = v.signature.as_deref().unwrap_or(&v.name);
-            println!("  {display}");
+impl fmt::Display for EnumSketchView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write_header(self.symbol, f)?;
+
+        if !self.variants.is_empty() {
+            writeln!(f, "variants:")?;
+            for v in self.variants {
+                let display = v.signature.as_deref().unwrap_or(&v.name);
+                writeln!(f, "  {display}")?;
+            }
         }
-    }
 
-    println!();
-    if caller_count > 0 {
-        println!(
-            "[{caller_count} caller{}]",
-            if caller_count == 1 { "" } else { "s" }
-        );
-    } else {
-        println!("[internal]");
+        writeln!(f)?;
+        if self.caller_count > 0 {
+            writeln!(
+                f,
+                "[{} caller{}]",
+                self.caller_count,
+                if self.caller_count == 1 { "" } else { "s" }
+            )
+        } else {
+            writeln!(f, "[internal]")
+        }
     }
 }
 
-/// Print a generic symbol sketch (const, type, struct).
-///
-/// Falls back to a simple header + signature.
-pub fn print_generic_sketch(symbol: &Symbol) {
-    print_header(symbol);
+/// Plain-text view for `scope sketch <const|type|struct>` — header + signature.
+pub struct GenericSketchView<'a> {
+    pub symbol: &'a Symbol,
+}
 
-    if let Some(sig) = &symbol.signature {
-        println!("signature:  {sig}");
+impl fmt::Display for GenericSketchView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write_header(self.symbol, f)?;
+        if let Some(sig) = &self.symbol.signature {
+            writeln!(f, "signature:  {sig}")?;
+        }
+        Ok(())
     }
 }
 
@@ -547,34 +600,48 @@ fn extract_modifiers(metadata_json: &str) -> Vec<String> {
 /// src/controllers/order.ts:134      OrderController.retryPayment
 /// ... 8 more (use --limit to show more)
 /// ```
-pub fn print_refs(symbol_name: &str, refs: &[Reference], total: usize) {
-    println!(
-        "{} \u{2014} {} reference{}",
-        symbol_name,
-        total,
-        if total == 1 { "" } else { "s" }
-    );
-    println!("{SEPARATOR}");
+/// Plain-text view for a flat `scope refs <symbol>` listing.
+pub struct RefsView<'a> {
+    pub symbol_name: &'a str,
+    pub refs: &'a [Reference],
+    pub total: usize,
+}
 
-    for r in refs {
-        let path = normalize_path(&r.file_path);
-        let location = if let Some(line) = r.line {
-            format!("{path}:{line}")
-        } else {
-            path
-        };
-        let display_text = r.snippet_line.as_deref().unwrap_or(&r.context);
-        let truncated_text = truncate_str(display_text.trim(), 80);
-        println!("{:<40}{}", location, truncated_text);
+impl fmt::Display for RefsView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(
+            f,
+            "{} \u{2014} {} reference{}",
+            self.symbol_name,
+            self.total,
+            if self.total == 1 { "" } else { "s" }
+        )?;
+        writeln!(f, "{SEPARATOR}")?;
 
-        // Show multi-line context if available
-        if let Some(ref snippet) = r.snippet {
-            print_snippet_context(snippet, r.line);
+        for r in self.refs {
+            let path = normalize_path(&r.file_path);
+            let location = if let Some(line) = r.line {
+                format!("{path}:{line}")
+            } else {
+                path
+            };
+            let display_text = r.snippet_line.as_deref().unwrap_or(&r.context);
+            let truncated_text = truncate_str(display_text.trim(), 80);
+            writeln!(f, "{:<40}{}", location, truncated_text)?;
+
+            if let Some(ref snippet) = r.snippet {
+                write_snippet_context(snippet, r.line, f)?;
+            }
         }
-    }
 
-    if refs.len() < total {
-        println!("... {} more (use --limit to show more)", total - refs.len());
+        if self.refs.len() < self.total {
+            writeln!(
+                f,
+                "... {} more (use --limit to show more)",
+                self.total - self.refs.len()
+            )?;
+        }
+        Ok(())
     }
 }
 
@@ -591,76 +658,104 @@ pub fn print_refs(symbol_name: &str, refs: &[Reference], total: usize) {
 /// extended (1):
 ///   src/payments/stripe-service.ts:4  class StripeService extends PaymentService
 /// ```
-pub fn print_refs_grouped(symbol_name: &str, groups: &[(String, Vec<Reference>)], total: usize) {
-    println!(
-        "{} \u{2014} {} reference{}",
-        symbol_name,
-        total,
-        if total == 1 { "" } else { "s" }
-    );
-    println!("{SEPARATOR}");
+/// Plain-text view for `scope refs <class>` with kind-grouped buckets.
+pub struct RefsGroupedView<'a> {
+    pub symbol_name: &'a str,
+    pub groups: &'a [(String, Vec<Reference>)],
+    pub total: usize,
+}
 
-    let mut shown = 0;
-    for (kind, refs) in groups {
-        let kind_label = humanize_edge_kind(kind);
-        println!("{kind_label} ({}):", refs.len());
-        for r in refs {
-            let path = normalize_path(&r.file_path);
-            let location = if let Some(line) = r.line {
-                format!("{path}:{line}")
-            } else {
-                path
-            };
-            let display_text = r.snippet_line.as_deref().unwrap_or(&r.context);
-            let truncated_text = truncate_str(display_text.trim(), 80);
-            println!("  {:<38}{}", location, truncated_text);
+impl fmt::Display for RefsGroupedView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(
+            f,
+            "{} \u{2014} {} reference{}",
+            self.symbol_name,
+            self.total,
+            if self.total == 1 { "" } else { "s" }
+        )?;
+        writeln!(f, "{SEPARATOR}")?;
 
-            // Show multi-line context if available
-            if let Some(ref snippet) = r.snippet {
-                print_snippet_context(snippet, r.line);
+        let mut shown = 0;
+        for (kind, refs) in self.groups {
+            let kind_label = humanize_edge_kind(kind);
+            writeln!(f, "{kind_label} ({}):", refs.len())?;
+            for r in refs {
+                let path = normalize_path(&r.file_path);
+                let location = if let Some(line) = r.line {
+                    format!("{path}:{line}")
+                } else {
+                    path
+                };
+                let display_text = r.snippet_line.as_deref().unwrap_or(&r.context);
+                let truncated_text = truncate_str(display_text.trim(), 80);
+                writeln!(f, "  {:<38}{}", location, truncated_text)?;
+
+                if let Some(ref snippet) = r.snippet {
+                    write_snippet_context(snippet, r.line, f)?;
+                }
             }
+            shown += refs.len();
+            writeln!(f)?;
         }
-        shown += refs.len();
-        println!();
-    }
 
-    if shown < total {
-        println!("... {} more (use --limit to show more)", total - shown);
+        if shown < self.total {
+            writeln!(
+                f,
+                "... {} more (use --limit to show more)",
+                self.total - shown
+            )?;
+        }
+        Ok(())
     }
 }
 
 /// Print file-level references.
 ///
 /// Same as `print_refs` but with the file path as header.
-pub fn print_file_refs(file_path: &str, refs: &[Reference], total: usize) {
-    let path = normalize_path(file_path);
-    println!(
-        "{} \u{2014} {} reference{}",
-        path,
-        total,
-        if total == 1 { "" } else { "s" }
-    );
-    println!("{SEPARATOR}");
+/// Plain-text view for `scope refs <file path>`.
+pub struct FileRefsView<'a> {
+    pub file_path: &'a str,
+    pub refs: &'a [Reference],
+    pub total: usize,
+}
 
-    for r in refs {
-        let rpath = normalize_path(&r.file_path);
-        let location = if let Some(line) = r.line {
-            format!("{rpath}:{line}")
-        } else {
-            rpath
-        };
-        let display_text = r.snippet_line.as_deref().unwrap_or(&r.context);
-        let truncated_text = truncate_str(display_text.trim(), 80);
-        println!("{:<40}{}", location, truncated_text);
+impl fmt::Display for FileRefsView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let path = normalize_path(self.file_path);
+        writeln!(
+            f,
+            "{} \u{2014} {} reference{}",
+            path,
+            self.total,
+            if self.total == 1 { "" } else { "s" }
+        )?;
+        writeln!(f, "{SEPARATOR}")?;
 
-        // Show multi-line context if available
-        if let Some(ref snippet) = r.snippet {
-            print_snippet_context(snippet, r.line);
+        for r in self.refs {
+            let rpath = normalize_path(&r.file_path);
+            let location = if let Some(line) = r.line {
+                format!("{rpath}:{line}")
+            } else {
+                rpath
+            };
+            let display_text = r.snippet_line.as_deref().unwrap_or(&r.context);
+            let truncated_text = truncate_str(display_text.trim(), 80);
+            writeln!(f, "{:<40}{}", location, truncated_text)?;
+
+            if let Some(ref snippet) = r.snippet {
+                write_snippet_context(snippet, r.line, f)?;
+            }
         }
-    }
 
-    if refs.len() < total {
-        println!("... {} more (use --limit to show more)", total - refs.len());
+        if self.refs.len() < self.total {
+            writeln!(
+                f,
+                "... {} more (use --limit to show more)",
+                self.total - self.refs.len()
+            )?;
+        }
+        Ok(())
     }
 }
 
@@ -677,22 +772,28 @@ pub fn print_file_refs(file_path: &str, refs: &[Reference], total: usize) {
 /// calls:
 ///   stripe.charges.create   (external)
 /// ```
-pub fn print_deps(symbol_name: &str, deps: &[Dependency], max_depth: usize) {
+/// Shared body for the symbol- and file-scoped dep renderers — emits
+/// the header line, separator, and kind-grouped dep listing.
+fn write_deps_body(
+    header_lhs: &str,
+    deps: &[Dependency],
+    max_depth: usize,
+    f: &mut fmt::Formatter<'_>,
+) -> fmt::Result {
     let depth_label = if max_depth <= 1 {
         "direct dependencies".to_string()
     } else {
         format!("transitive dependencies (depth {max_depth})")
     };
 
-    println!("{} \u{2014} {}", symbol_name, depth_label);
-    println!("{SEPARATOR}");
+    writeln!(f, "{} \u{2014} {}", header_lhs, depth_label)?;
+    writeln!(f, "{SEPARATOR}")?;
 
     if deps.is_empty() {
-        println!("(no dependencies found)");
-        return;
+        writeln!(f, "(no dependencies found)")?;
+        return Ok(());
     }
 
-    // Group by kind
     let mut groups: Vec<(String, Vec<&Dependency>)> = Vec::new();
     for dep in deps {
         if let Some(group) = groups.iter_mut().find(|(k, _)| *k == dep.kind) {
@@ -704,79 +805,54 @@ pub fn print_deps(symbol_name: &str, deps: &[Dependency], max_depth: usize) {
     }
 
     for (kind, group_deps) in &groups {
-        // Check if all deps in this group are external
         let all_external = group_deps.iter().all(|d| d.is_external);
         let kind_label = if all_external {
             format!("{kind} (external):")
         } else {
             format!("{kind}:")
         };
-        println!("{kind_label}");
+        writeln!(f, "{kind_label}")?;
 
         for dep in group_deps {
             if dep.is_external {
-                println!("  {:<24}(external)", dep.name);
+                writeln!(f, "  {:<24}(external)", dep.name)?;
             } else if let Some(fp) = &dep.file_path {
                 let path = normalize_path(fp);
-                println!("  {:<24}{}", dep.name, path);
+                writeln!(f, "  {:<24}{}", dep.name, path)?;
             } else {
-                println!("  {}", dep.name);
+                writeln!(f, "  {}", dep.name)?;
             }
         }
 
-        println!();
+        writeln!(f)?;
+    }
+    Ok(())
+}
+
+/// Plain-text view for `scope deps <symbol>`.
+pub struct DepsView<'a> {
+    pub symbol_name: &'a str,
+    pub deps: &'a [Dependency],
+    pub max_depth: usize,
+}
+
+impl fmt::Display for DepsView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write_deps_body(self.symbol_name, self.deps, self.max_depth, f)
     }
 }
 
-/// Print file-level dependencies.
-pub fn print_file_deps(file_path: &str, deps: &[Dependency], max_depth: usize) {
-    let path = normalize_path(file_path);
-    let depth_label = if max_depth <= 1 {
-        "direct dependencies".to_string()
-    } else {
-        format!("transitive dependencies (depth {max_depth})")
-    };
+/// Plain-text view for `scope deps <file path>`.
+pub struct FileDepsView<'a> {
+    pub file_path: &'a str,
+    pub deps: &'a [Dependency],
+    pub max_depth: usize,
+}
 
-    println!("{} \u{2014} {}", path, depth_label);
-    println!("{SEPARATOR}");
-
-    if deps.is_empty() {
-        println!("(no dependencies found)");
-        return;
-    }
-
-    // Group by kind
-    let mut groups: Vec<(String, Vec<&Dependency>)> = Vec::new();
-    for dep in deps {
-        if let Some(group) = groups.iter_mut().find(|(k, _)| *k == dep.kind) {
-            group.1.push(dep);
-        } else {
-            let kind = dep.kind.clone();
-            groups.push((kind, vec![dep]));
-        }
-    }
-
-    for (kind, group_deps) in &groups {
-        let all_external = group_deps.iter().all(|d| d.is_external);
-        let kind_label = if all_external {
-            format!("{kind} (external):")
-        } else {
-            format!("{kind}:")
-        };
-        println!("{kind_label}");
-
-        for dep in group_deps {
-            if dep.is_external {
-                println!("  {:<24}(external)", dep.name);
-            } else if let Some(fp) = &dep.file_path {
-                let fpath = normalize_path(fp);
-                println!("  {:<24}{}", dep.name, fpath);
-            } else {
-                println!("  {}", dep.name);
-            }
-        }
-
-        println!();
+impl fmt::Display for FileDepsView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let path = normalize_path(self.file_path);
+        write_deps_body(&path, self.deps, self.max_depth, f)
     }
 }
 
@@ -799,56 +875,72 @@ pub fn print_file_deps(file_path: &str, deps: &[Dependency], max_depth: usize) {
 ///   tests/unit/order.test.ts
 ///   ... (4 more)
 /// ```
-pub fn print_impact(symbol_name: &str, result: &ImpactResult) {
-    println!("Impact analysis: {symbol_name}");
-    println!("{SEPARATOR}");
+/// Plain-text view for `scope impact <symbol>` (and `scope callers
+/// <symbol> --depth N` when `N > 1`, which shares the underlying
+/// `ImpactResult`).
+pub struct ImpactView<'a> {
+    pub symbol_name: &'a str,
+    pub result: &'a ImpactResult,
+}
 
-    if result.nodes_by_depth.is_empty() && result.test_files.is_empty() {
-        println!("(no impact detected)");
-        return;
-    }
+impl fmt::Display for ImpactView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Impact analysis: {}", self.symbol_name)?;
+        writeln!(f, "{SEPARATOR}")?;
 
-    for (depth, nodes) in &result.nodes_by_depth {
-        let depth_label = impact_depth_label(*depth);
-        println!("{depth_label} ({}):", nodes.len());
-
-        let max_display = 10;
-        let display_nodes = if nodes.len() > max_display {
-            &nodes[..max_display]
-        } else {
-            nodes
-        };
-
-        for node in display_nodes {
-            let path = normalize_path(&node.file_path);
-            println!("  {:<40}{}", node.name, path);
+        if self.result.nodes_by_depth.is_empty() && self.result.test_files.is_empty() {
+            writeln!(f, "(no impact detected)")?;
+            return Ok(());
         }
 
-        if nodes.len() > max_display {
-            println!("  ... ({} more)", nodes.len() - max_display);
+        for (depth, nodes) in &self.result.nodes_by_depth {
+            let depth_label = impact_depth_label(*depth);
+            writeln!(f, "{depth_label} ({}):", nodes.len())?;
+
+            let max_display = 10;
+            let display_nodes = if nodes.len() > max_display {
+                &nodes[..max_display]
+            } else {
+                nodes.as_slice()
+            };
+
+            for node in display_nodes {
+                let path = normalize_path(&node.file_path);
+                writeln!(f, "  {:<40}{}", node.name, path)?;
+            }
+
+            if nodes.len() > max_display {
+                writeln!(f, "  ... ({} more)", nodes.len() - max_display)?;
+            }
+
+            writeln!(f)?;
         }
 
-        println!();
-    }
+        if !self.result.test_files.is_empty() {
+            writeln!(f, "Test files affected: {}", self.result.test_files.len())?;
 
-    if !result.test_files.is_empty() {
-        println!("Test files affected: {}", result.test_files.len());
+            let max_display = 10;
+            let display_tests = if self.result.test_files.len() > max_display {
+                &self.result.test_files[..max_display]
+            } else {
+                self.result.test_files.as_slice()
+            };
 
-        let max_display = 10;
-        let display_tests = if result.test_files.len() > max_display {
-            &result.test_files[..max_display]
-        } else {
-            &result.test_files
-        };
+            for node in display_tests {
+                let path = normalize_path(&node.file_path);
+                writeln!(f, "  {path}")?;
+            }
 
-        for node in display_tests {
-            let path = normalize_path(&node.file_path);
-            println!("  {path}");
+            if self.result.test_files.len() > max_display {
+                writeln!(
+                    f,
+                    "  ... ({} more)",
+                    self.result.test_files.len() - max_display
+                )?;
+            }
         }
 
-        if result.test_files.len() > max_display {
-            println!("  ... ({} more)", result.test_files.len() - max_display);
-        }
+        Ok(())
     }
 }
 
@@ -864,55 +956,69 @@ pub fn print_impact(symbol_name: &str, result: &ImpactResult) {
 /// Path 2: SubscriptionRenewalWorker.autoRenewDue
 ///   └─→ SubscriptionService.processRenewal          src/services/sub.ts:72
 /// ```
-pub fn print_trace(symbol_name: &str, result: &TraceResult, total: usize, truncated: bool) {
-    let path_count = result.paths.len();
-    let path_word = if path_count == 1 { "path" } else { "paths" };
+/// Plain-text view for `scope trace <symbol>`.
+pub struct TraceView<'a> {
+    pub symbol_name: &'a str,
+    pub result: &'a TraceResult,
+    pub total: usize,
+    pub truncated: bool,
+}
 
-    let display_count = if truncated { total } else { path_count };
-    println!(
-        "{} \u{2014} {} entry {}",
-        symbol_name, display_count, path_word
-    );
-    println!("{SEPARATOR}");
+impl fmt::Display for TraceView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let path_count = self.result.paths.len();
+        let path_word = if path_count == 1 { "path" } else { "paths" };
 
-    if result.paths.is_empty() {
-        println!("(no entry paths found)");
-        return;
-    }
+        let display_count = if self.truncated {
+            self.total
+        } else {
+            path_count
+        };
+        writeln!(
+            f,
+            "{} \u{2014} {} entry {}",
+            self.symbol_name, display_count, path_word
+        )?;
+        writeln!(f, "{SEPARATOR}")?;
 
-    for (i, call_path) in result.paths.iter().enumerate() {
-        if call_path.steps.is_empty() {
-            continue;
+        if self.result.paths.is_empty() {
+            writeln!(f, "(no entry paths found)")?;
+            return Ok(());
         }
 
-        // First step: the entry point (no arrow prefix)
-        let entry = &call_path.steps[0];
-        let entry_name = entry.symbol_name.clone();
-        println!("Path {}: {}", i + 1, entry_name);
+        for (i, call_path) in self.result.paths.iter().enumerate() {
+            if call_path.steps.is_empty() {
+                continue;
+            }
 
-        // Subsequent steps: indented with └─→
-        for (step_idx, step) in call_path.steps.iter().enumerate().skip(1) {
-            let indent = "  ".repeat(step_idx);
-            let step_name = step.symbol_name.clone();
-            let path = normalize_path(&step.file_path);
-            let location = format!("{path}:{}", step.line);
-            println!(
-                "{indent}\u{2514}\u{2500}\u{2192} {:<40}{}",
-                step_name, location
-            );
+            let entry = &call_path.steps[0];
+            writeln!(f, "Path {}: {}", i + 1, entry.symbol_name)?;
+
+            for (step_idx, step) in call_path.steps.iter().enumerate().skip(1) {
+                let indent = "  ".repeat(step_idx);
+                let path = normalize_path(&step.file_path);
+                let location = format!("{path}:{}", step.line);
+                writeln!(
+                    f,
+                    "{indent}\u{2514}\u{2500}\u{2192} {:<40}{}",
+                    step.symbol_name, location
+                )?;
+            }
+
+            if i < path_count - 1 {
+                writeln!(f)?;
+            }
         }
 
-        // Blank line between paths (but not after the last one)
-        if i < path_count - 1 {
-            println!();
+        if self.truncated {
+            writeln!(
+                f,
+                "... {} more paths (use --limit to show more)",
+                self.total - path_count
+            )?;
         }
-    }
 
-    if truncated {
-        println!(
-            "... {} more paths (use --limit to show more)",
-            total - path_count
-        );
+        Ok(())
     }
 }
 
@@ -925,39 +1031,49 @@ pub fn print_trace(symbol_name: &str, result: &TraceResult, total: usize, trunca
 ///
 /// ─ 2 paths found (depth limit: 10)
 /// ```
-pub fn print_flow(start: &str, end: &str, paths: &[FlowPath], total: usize, depth_limit: usize) {
-    if paths.is_empty() {
-        println!(
-            "No path found from {} to {} within depth {}.",
-            start, end, depth_limit
-        );
-        return;
-    }
+/// Plain-text view for `scope flow <start> <end>`.
+pub struct FlowView<'a> {
+    pub start: &'a str,
+    pub end: &'a str,
+    pub paths: &'a [FlowPath],
+    pub total: usize,
+    pub depth_limit: usize,
+}
 
-    for (i, path) in paths.iter().enumerate() {
-        // Line 1: symbol names connected by ` → `
-        let names: Vec<&str> = path.steps.iter().map(|s| s.name.as_str()).collect();
-        println!("{}", names.join(" \u{2192} "));
-
-        // Line 2 (indented): file:line for each step, connected by `  →  `
-        let locations: Vec<String> = path
-            .steps
-            .iter()
-            .map(|s| format!("{}:{}", normalize_path(&s.file_path), s.line_start))
-            .collect();
-        println!("  {}", locations.join("  \u{2192}  "));
-
-        // Blank line between paths (but not after the last one)
-        if i < paths.len() - 1 {
-            println!();
+impl fmt::Display for FlowView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.paths.is_empty() {
+            writeln!(
+                f,
+                "No path found from {} to {} within depth {}.",
+                self.start, self.end, self.depth_limit
+            )?;
+            return Ok(());
         }
-    }
 
-    let path_word = if total == 1 { "path" } else { "paths" };
-    println!(
-        "\n\u{2500} {} {} found (depth limit: {})",
-        total, path_word, depth_limit
-    );
+        for (i, path) in self.paths.iter().enumerate() {
+            let names: Vec<&str> = path.steps.iter().map(|s| s.name.as_str()).collect();
+            writeln!(f, "{}", names.join(" \u{2192} "))?;
+
+            let locations: Vec<String> = path
+                .steps
+                .iter()
+                .map(|s| format!("{}:{}", normalize_path(&s.file_path), s.line_start))
+                .collect();
+            writeln!(f, "  {}", locations.join("  \u{2192}  "))?;
+
+            if i < self.paths.len() - 1 {
+                writeln!(f)?;
+            }
+        }
+
+        let path_word = if self.total == 1 { "path" } else { "paths" };
+        writeln!(
+            f,
+            "\n\u{2500} {} {} found (depth limit: {})",
+            self.total, path_word, self.depth_limit
+        )
+    }
 }
 
 /// Print entry points grouped by type.
@@ -973,58 +1089,64 @@ pub fn print_flow(start: &str, end: &str, paths: &[FlowPath], total: usize, dept
 /// Background Workers:
 ///   PaymentRetryWorker             src/Infrastructure/Workers/PaymentRetryWorker.cs
 /// ```
-pub fn print_entrypoints(
-    groups: &[(String, Vec<EntrypointInfo>)],
-    total: usize,
-    file_count: usize,
-) {
-    let file_word = if file_count == 1 { "file" } else { "files" };
-    println!(
-        "Entrypoints \u{2014} {} across {} {}",
-        total, file_count, file_word
-    );
-    println!("{SEPARATOR}");
+/// Plain-text view for `scope entrypoints`.
+pub struct EntrypointsView<'a> {
+    pub groups: &'a [(String, Vec<EntrypointInfo>)],
+    pub total: usize,
+    pub file_count: usize,
+}
 
-    if groups.is_empty() {
-        println!("(no entry points found)");
-        return;
-    }
+impl fmt::Display for EntrypointsView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let file_word = if self.file_count == 1 { "file" } else { "files" };
+        writeln!(
+            f,
+            "Entrypoints \u{2014} {} across {} {}",
+            self.total, self.file_count, file_word
+        )?;
+        writeln!(f, "{SEPARATOR}")?;
 
-    for (i, (group_name, entries)) in groups.iter().enumerate() {
-        println!("{group_name}:");
-
-        // Calculate max name width for alignment within this group.
-        let max_name_len = entries
-            .iter()
-            .map(|e| e.name.chars().count())
-            .max()
-            .unwrap_or(0);
-        let name_width = max_name_len.max(20) + 2; // Minimum 20 chars + padding
-
-        for entry in entries {
-            let path = normalize_path(&entry.file_path);
-            let suffix = if entry.method_count > 0 {
-                format!(
-                    "   \u{2192} {} method{}",
-                    entry.method_count,
-                    if entry.method_count == 1 { "" } else { "s" }
-                )
-            } else {
-                String::new()
-            };
-            println!(
-                "  {:<width$}{}{}",
-                entry.name,
-                path,
-                suffix,
-                width = name_width
-            );
+        if self.groups.is_empty() {
+            writeln!(f, "(no entry points found)")?;
+            return Ok(());
         }
 
-        // Blank line between groups (but not after the last one).
-        if i < groups.len() - 1 {
-            println!();
+        for (i, (group_name, entries)) in self.groups.iter().enumerate() {
+            writeln!(f, "{group_name}:")?;
+
+            let max_name_len = entries
+                .iter()
+                .map(|e| e.name.chars().count())
+                .max()
+                .unwrap_or(0);
+            let name_width = max_name_len.max(20) + 2;
+
+            for entry in entries {
+                let path = normalize_path(&entry.file_path);
+                let suffix = if entry.method_count > 0 {
+                    format!(
+                        "   \u{2192} {} method{}",
+                        entry.method_count,
+                        if entry.method_count == 1 { "" } else { "s" }
+                    )
+                } else {
+                    String::new()
+                };
+                writeln!(
+                    f,
+                    "  {:<width$}{}{}",
+                    entry.name,
+                    path,
+                    suffix,
+                    width = name_width
+                )?;
+            }
+
+            if i < self.groups.len() - 1 {
+                writeln!(f)?;
+            }
         }
+        Ok(())
     }
 }
 
@@ -1047,107 +1169,110 @@ pub fn print_entrypoints(
 ///   Api/                    7 files    62 symbols
 ///   Application/            22 files   145 symbols
 /// ```
-pub fn print_map(
-    project_name: &str,
-    stats: &MapStats,
-    entrypoints: &[(String, Vec<EntrypointInfo>)],
-    core_symbols: &[CoreSymbol],
-    directories: &[DirStats],
-) {
-    // Header line: project-name — N files, N symbols, N edges
-    println!(
-        "{} \u{2014} {} files, {} symbols, {} edges",
-        project_name,
-        format_number(stats.file_count),
-        format_number(stats.symbol_count),
-        format_number(stats.edge_count),
-    );
-    println!("{SEPARATOR}");
+/// Plain-text view for `scope map`.
+pub struct MapView<'a> {
+    pub project_name: &'a str,
+    pub stats: &'a MapStats,
+    pub entrypoints: &'a [(String, Vec<EntrypointInfo>)],
+    pub core_symbols: &'a [CoreSymbol],
+    pub directories: &'a [DirStats],
+}
 
-    // Languages line.
-    if !stats.languages.is_empty() {
-        println!("Languages: {}", stats.languages.join(", "));
-    }
+impl fmt::Display for MapView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(
+            f,
+            "{} \u{2014} {} files, {} symbols, {} edges",
+            self.project_name,
+            format_number(self.stats.file_count),
+            format_number(self.stats.symbol_count),
+            format_number(self.stats.edge_count),
+        )?;
+        writeln!(f, "{SEPARATOR}")?;
 
-    // Entry points section.
-    let mut ep_count = 0usize;
-    let mut ep_lines: Vec<String> = Vec::new();
-
-    for (_group_name, entries) in entrypoints {
-        for entry in entries {
-            let path = normalize_path(&entry.file_path);
-            // Extract directory portion of the path.
-            let dir = if let Some(pos) = path.rfind('/') {
-                format!("{}/", &path[..pos])
-            } else {
-                String::new()
-            };
-
-            // Strip leading "src/" for brevity.
-            let display_dir = dir.strip_prefix("src/").unwrap_or(&dir).to_string();
-
-            let suffix = if entry.method_count > 0 {
-                format!(
-                    "   \u{2192} {} method{}",
-                    entry.method_count,
-                    if entry.method_count == 1 { "" } else { "s" }
-                )
-            } else {
-                String::new()
-            };
-
-            ep_lines.push(format!("  {:<32}{:<32}{}", entry.name, display_dir, suffix));
-            ep_count += 1;
+        if !self.stats.languages.is_empty() {
+            writeln!(f, "Languages: {}", self.stats.languages.join(", "))?;
         }
-    }
 
-    if !ep_lines.is_empty() {
-        println!();
-        println!("Entry points:");
-        let max_display = 8;
-        for line in ep_lines.iter().take(max_display) {
-            println!("{line}");
-        }
-        if ep_count > max_display {
-            println!("  ... {} more", ep_count - max_display);
-        }
-    }
+        let mut ep_count = 0usize;
+        let mut ep_lines: Vec<String> = Vec::new();
 
-    // Core symbols section.
-    if !core_symbols.is_empty() {
-        println!();
-        println!("Core symbols (by caller count):");
-        for sym in core_symbols {
-            let path = normalize_path(&sym.file_path);
-            // Strip leading "src/" for brevity.
-            let display_path = path.strip_prefix("src/").unwrap_or(&path).to_string();
+        for (_group_name, entries) in self.entrypoints {
+            for entry in entries {
+                let path = normalize_path(&entry.file_path);
+                let dir = if let Some(pos) = path.rfind('/') {
+                    format!("{}/", &path[..pos])
+                } else {
+                    String::new()
+                };
 
-            let caller_label = format!(
-                "{} caller{}",
-                sym.caller_count,
-                if sym.caller_count == 1 { "" } else { "s" }
-            );
-            println!("  {:<32}{:<14}{}", sym.name, caller_label, display_path);
-        }
-    }
+                let display_dir = dir.strip_prefix("src/").unwrap_or(&dir).to_string();
 
-    // Architecture section.
-    if !directories.is_empty() {
-        println!();
-        println!("Architecture:");
-        for dir in directories {
-            let file_label = format!(
-                "{} file{}",
-                dir.file_count,
-                if dir.file_count == 1 { "" } else { "s" }
-            );
-            let sym_label = format!(
-                "{} symbol{}",
-                dir.symbol_count,
-                if dir.symbol_count == 1 { "" } else { "s" }
-            );
-            println!("  {:<24}{:<14}{}", dir.directory, file_label, sym_label);
+                let suffix = if entry.method_count > 0 {
+                    format!(
+                        "   \u{2192} {} method{}",
+                        entry.method_count,
+                        if entry.method_count == 1 { "" } else { "s" }
+                    )
+                } else {
+                    String::new()
+                };
+
+                ep_lines.push(format!("  {:<32}{:<32}{}", entry.name, display_dir, suffix));
+                ep_count += 1;
+            }
         }
+
+        if !ep_lines.is_empty() {
+            writeln!(f)?;
+            writeln!(f, "Entry points:")?;
+            let max_display = 8;
+            for line in ep_lines.iter().take(max_display) {
+                writeln!(f, "{line}")?;
+            }
+            if ep_count > max_display {
+                writeln!(f, "  ... {} more", ep_count - max_display)?;
+            }
+        }
+
+        if !self.core_symbols.is_empty() {
+            writeln!(f)?;
+            writeln!(f, "Core symbols (by caller count):")?;
+            for sym in self.core_symbols {
+                let path = normalize_path(&sym.file_path);
+                let display_path = path.strip_prefix("src/").unwrap_or(&path).to_string();
+
+                let caller_label = format!(
+                    "{} caller{}",
+                    sym.caller_count,
+                    if sym.caller_count == 1 { "" } else { "s" }
+                );
+                writeln!(
+                    f,
+                    "  {:<32}{:<14}{}",
+                    sym.name, caller_label, display_path
+                )?;
+            }
+        }
+
+        if !self.directories.is_empty() {
+            writeln!(f)?;
+            writeln!(f, "Architecture:")?;
+            for dir in self.directories {
+                let file_label = format!(
+                    "{} file{}",
+                    dir.file_count,
+                    if dir.file_count == 1 { "" } else { "s" }
+                );
+                let sym_label = format!(
+                    "{} symbol{}",
+                    dir.symbol_count,
+                    if dir.symbol_count == 1 { "" } else { "s" }
+                );
+                writeln!(f, "  {:<24}{:<14}{}", dir.directory, file_label, sym_label)?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -1170,30 +1295,38 @@ fn impact_depth_label(depth: usize) -> &'static str {
 ///   Added:    src/payments/refund.ts
 /// Updated in 0.3s.
 /// ```
-pub fn print_incremental_result(
-    modified: &[String],
-    added: &[String],
-    deleted: &[String],
-    duration_secs: f64,
-) {
-    let total = modified.len() + added.len() + deleted.len();
-    eprintln!(
-        "{} file{} changed. Re-indexing...",
-        total,
-        if total == 1 { "" } else { "s" }
-    );
+/// Plain-text view for the incremental-index summary. The caller
+/// writes this view to **stderr** via `eprint!("{view}")` (it is a
+/// progress message, not output data).
+pub struct IncrementalResultView<'a> {
+    pub modified: &'a [String],
+    pub added: &'a [String],
+    pub deleted: &'a [String],
+    pub duration_secs: f64,
+}
 
-    for path in modified {
-        eprintln!("  Modified: {}", normalize_path(path));
-    }
-    for path in added {
-        eprintln!("  Added:    {}", normalize_path(path));
-    }
-    for path in deleted {
-        eprintln!("  Deleted:  {}", normalize_path(path));
-    }
+impl fmt::Display for IncrementalResultView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let total = self.modified.len() + self.added.len() + self.deleted.len();
+        writeln!(
+            f,
+            "{} file{} changed. Re-indexing...",
+            total,
+            if total == 1 { "" } else { "s" }
+        )?;
 
-    eprintln!("Updated in {duration_secs:.1}s.");
+        for path in self.modified {
+            writeln!(f, "  Modified: {}", normalize_path(path))?;
+        }
+        for path in self.added {
+            writeln!(f, "  Added:    {}", normalize_path(path))?;
+        }
+        for path in self.deleted {
+            writeln!(f, "  Deleted:  {}", normalize_path(path))?;
+        }
+
+        writeln!(f, "Updated in {:.1}s.", self.duration_secs)
+    }
 }
 
 /// Print search results from `scope find`.
@@ -1206,22 +1339,32 @@ pub fn print_incremental_result(
 /// 0.88  errorHandler (auth branch)           src/api/middleware/errors.ts:67  function
 /// 0.85  TokenValidator.onExpired             src/auth/token.ts:112          method
 /// ```
-pub fn print_find_results(query: &str, results: &[SearchResult]) {
-    println!("Results for: \"{query}\"");
-    println!("{SEPARATOR}");
+/// Plain-text view for `scope find <query>`.
+pub struct FindResultsView<'a> {
+    pub query: &'a str,
+    pub results: &'a [SearchResult],
+}
 
-    if results.is_empty() {
-        println!("(no results found)");
-        return;
-    }
+impl fmt::Display for FindResultsView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Results for: \"{}\"", self.query)?;
+        writeln!(f, "{SEPARATOR}")?;
 
-    for result in results {
-        let path = normalize_path(&result.file_path);
-        let location = format!("{path}:{}", result.line_start);
-        println!(
-            "{:.2}  {:<40}{:<36}  {}",
-            result.score, result.name, location, result.kind
-        );
+        if self.results.is_empty() {
+            writeln!(f, "(no results found)")?;
+            return Ok(());
+        }
+
+        for result in self.results {
+            let path = normalize_path(&result.file_path);
+            let location = format!("{path}:{}", result.line_start);
+            writeln!(
+                f,
+                "{:.2}  {:<40}{:<36}  {}",
+                result.score, result.name, location, result.kind
+            )?;
+        }
+        Ok(())
     }
 }
 
@@ -1235,21 +1378,25 @@ pub fn print_find_results(query: &str, results: &[SearchResult]) {
 ///   Edges:      12,340
 ///   Last index: 2 minutes ago
 /// ```
-pub fn print_status(
-    status_label: &str,
-    symbol_count: usize,
-    file_count: usize,
-    edge_count: usize,
-    last_indexed: Option<&str>,
-) {
-    println!("Index status: {status_label}");
-    println!("  Symbols:    {}", format_number(symbol_count));
-    println!("  Files:      {}", format_number(file_count));
-    println!("  Edges:      {}", format_number(edge_count));
-    if let Some(relative) = last_indexed {
-        println!("  Last index: {relative}");
-    } else {
-        println!("  Last index: never");
+/// Plain-text view for `scope status`.
+pub struct StatusView<'a> {
+    pub status_label: &'a str,
+    pub symbol_count: usize,
+    pub file_count: usize,
+    pub edge_count: usize,
+    pub last_indexed: Option<&'a str>,
+}
+
+impl fmt::Display for StatusView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Index status: {}", self.status_label)?;
+        writeln!(f, "  Symbols:    {}", format_number(self.symbol_count))?;
+        writeln!(f, "  Files:      {}", format_number(self.file_count))?;
+        writeln!(f, "  Edges:      {}", format_number(self.edge_count))?;
+        match self.last_indexed {
+            Some(relative) => writeln!(f, "  Last index: {relative}"),
+            None => writeln!(f, "  Last index: never"),
+        }
     }
 }
 
@@ -1282,15 +1429,18 @@ fn truncate_str(s: &str, max_chars: usize) -> String {
     }
 }
 
-/// Print multi-line snippet context with line numbers.
+/// Write multi-line snippet context with line numbers.
 ///
 /// Marks the reference line with `>` and other lines with a space.
-fn print_snippet_context(snippet: &[String], ref_line: Option<i64>) {
-    // We need to figure out what line number the first snippet line corresponds to.
-    // The snippet is centered around ref_line, so first line = ref_line - (snippet.len()-1)/2 approx.
-    // But we need the actual start line. We can compute it from ref_line and snippet length.
-    let Some(line_num) = ref_line else { return };
-    let ref_idx_in_snippet = snippet.len() / 2; // approximate center
+fn write_snippet_context(
+    snippet: &[String],
+    ref_line: Option<i64>,
+    f: &mut fmt::Formatter<'_>,
+) -> fmt::Result {
+    let Some(line_num) = ref_line else {
+        return Ok(());
+    };
+    let ref_idx_in_snippet = snippet.len() / 2;
     let start_line = (line_num as usize).saturating_sub(ref_idx_in_snippet);
 
     for (i, code) in snippet.iter().enumerate() {
@@ -1300,70 +1450,79 @@ fn print_snippet_context(snippet: &[String], ref_line: Option<i64>) {
         } else {
             " "
         };
-        println!("  {marker} {current_line:>4} | {code}");
+        writeln!(f, "  {marker} {current_line:>4} | {code}")?;
     }
+    Ok(())
 }
 
 /// Print workspace member list in human-readable format.
 ///
 /// Shows each member's name, path, index status, file count, and symbol count.
-pub fn print_workspace_list(
-    workspace_name: &str,
-    members: &[crate::commands::workspace::MemberStatus],
-) {
-    println!("Workspace: {workspace_name}");
-    println!("{SEPARATOR}");
+/// Plain-text view for `scope workspace list`.
+pub struct WorkspaceListView<'a> {
+    pub workspace_name: &'a str,
+    pub members: &'a [crate::commands::workspace::MemberStatus],
+}
 
-    if members.is_empty() {
-        println!("  (no members)");
-        return;
-    }
+impl fmt::Display for WorkspaceListView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Workspace: {}", self.workspace_name)?;
+        writeln!(f, "{SEPARATOR}")?;
 
-    // Find column widths
-    let max_name = members
-        .iter()
-        .map(|m| m.name.len())
-        .max()
-        .unwrap_or(4)
-        .max(4);
-    let max_path = members
-        .iter()
-        .map(|m| m.path.len())
-        .max()
-        .unwrap_or(4)
-        .max(4);
+        if self.members.is_empty() {
+            writeln!(f, "  (no members)")?;
+            return Ok(());
+        }
 
-    // Header
-    println!(
-        "  {:<name_w$}  {:<path_w$}  {:<15}  {:>5}  {:>7}",
-        "Name",
-        "Path",
-        "Status",
-        "Files",
-        "Symbols",
-        name_w = max_name,
-        path_w = max_path,
-    );
+        let max_name = self
+            .members
+            .iter()
+            .map(|m| m.name.len())
+            .max()
+            .unwrap_or(4)
+            .max(4);
+        let max_path = self
+            .members
+            .iter()
+            .map(|m| m.path.len())
+            .max()
+            .unwrap_or(4)
+            .max(4);
 
-    for member in members {
-        println!(
+        writeln!(
+            f,
             "  {:<name_w$}  {:<path_w$}  {:<15}  {:>5}  {:>7}",
-            member.name,
-            normalize_path(&member.path),
-            member.status,
-            if member.file_count > 0 {
-                format_number(member.file_count)
-            } else {
-                "─".to_string()
-            },
-            if member.symbol_count > 0 {
-                format_number(member.symbol_count)
-            } else {
-                "─".to_string()
-            },
+            "Name",
+            "Path",
+            "Status",
+            "Files",
+            "Symbols",
             name_w = max_name,
             path_w = max_path,
-        );
+        )?;
+
+        for member in self.members {
+            writeln!(
+                f,
+                "  {:<name_w$}  {:<path_w$}  {:<15}  {:>5}  {:>7}",
+                member.name,
+                normalize_path(&member.path),
+                member.status,
+                if member.file_count > 0 {
+                    format_number(member.file_count)
+                } else {
+                    "─".to_string()
+                },
+                if member.symbol_count > 0 {
+                    format_number(member.symbol_count)
+                } else {
+                    "─".to_string()
+                },
+                name_w = max_name,
+                path_w = max_path,
+            )?;
+        }
+        Ok(())
     }
 }
 
@@ -1382,96 +1541,122 @@ fn humanize_edge_kind(kind: &str) -> &str {
 }
 
 /// Print workspace status showing per-member status and aggregate totals.
-pub fn print_workspace_status(
-    workspace_name: &str,
-    members: &[crate::commands::status::MemberStatusData],
-    total_symbols: usize,
-    total_files: usize,
-    total_edges: usize,
-) {
-    println!("Workspace: {workspace_name}");
-    println!("{SEPARATOR}");
+/// Plain-text view for `scope status --workspace`.
+pub struct WorkspaceStatusView<'a> {
+    pub workspace_name: &'a str,
+    pub members: &'a [crate::commands::status::MemberStatusData],
+    pub total_symbols: usize,
+    pub total_files: usize,
+    pub total_edges: usize,
+}
 
-    for m in members {
-        let status_label = if m.status.index_exists {
-            if m.status.symbol_count == 0 {
-                "empty"
+impl fmt::Display for WorkspaceStatusView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Workspace: {}", self.workspace_name)?;
+        writeln!(f, "{SEPARATOR}")?;
+
+        for m in self.members {
+            let status_label = if m.status.index_exists {
+                if m.status.symbol_count == 0 {
+                    "empty"
+                } else {
+                    "indexed"
+                }
             } else {
-                "indexed"
-            }
-        } else {
-            "not indexed"
-        };
-        let last = m.status.last_indexed_relative.as_deref().unwrap_or("never");
-        println!(
-            "  {:<16}{:<14}{:>6} files  {:>7} symbols  {:>7} edges  {}",
-            m.name,
-            status_label,
-            format_number(m.status.file_count),
-            format_number(m.status.symbol_count),
-            format_number(m.status.edge_count),
-            last,
-        );
-    }
+                "not indexed"
+            };
+            let last = m.status.last_indexed_relative.as_deref().unwrap_or("never");
+            writeln!(
+                f,
+                "  {:<16}{:<14}{:>6} files  {:>7} symbols  {:>7} edges  {}",
+                m.name,
+                status_label,
+                format_number(m.status.file_count),
+                format_number(m.status.symbol_count),
+                format_number(m.status.edge_count),
+                last,
+            )?;
+        }
 
-    println!("{SEPARATOR}");
-    println!(
-        "  {:<16}{:<14}{:>6} files  {:>7} symbols  {:>7} edges",
-        "Total",
-        "",
-        format_number(total_files),
-        format_number(total_symbols),
-        format_number(total_edges),
-    );
+        writeln!(f, "{SEPARATOR}")?;
+        writeln!(
+            f,
+            "  {:<16}{:<14}{:>6} files  {:>7} symbols  {:>7} edges",
+            "Total",
+            "",
+            format_number(self.total_files),
+            format_number(self.total_symbols),
+            format_number(self.total_edges),
+        )
+    }
 }
 
 /// Print workspace refs: references tagged with project names.
-pub fn print_workspace_refs(
-    symbol_name: &str,
-    refs: &[gumiho_mudang_scope::core::workspace_graph::WorkspaceRef],
-    total: usize,
-) {
-    println!(
-        "{} \u{2014} {} reference{} (workspace)",
-        symbol_name,
-        total,
-        if total == 1 { "" } else { "s" }
-    );
-    println!("{SEPARATOR}");
+/// Plain-text view for workspace-wide `scope refs --workspace <symbol>`.
+pub struct WorkspaceRefsView<'a> {
+    pub symbol_name: &'a str,
+    pub refs: &'a [gumiho_mudang_scope::core::workspace_graph::WorkspaceRef],
+    pub total: usize,
+}
 
-    for wr in refs {
-        let r = &wr.reference;
-        let path = normalize_path(&r.file_path);
-        let location = if let Some(line) = r.line {
-            format!("{path}:{line}")
-        } else {
-            path
-        };
-        let display_text = r.snippet_line.as_deref().unwrap_or(&r.context);
-        let truncated_text = truncate_str(display_text.trim(), 70);
-        println!("[{:<12}] {:<36}{}", wr.project, location, truncated_text);
+impl fmt::Display for WorkspaceRefsView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(
+            f,
+            "{} \u{2014} {} reference{} (workspace)",
+            self.symbol_name,
+            self.total,
+            if self.total == 1 { "" } else { "s" }
+        )?;
+        writeln!(f, "{SEPARATOR}")?;
+
+        for wr in self.refs {
+            let r = &wr.reference;
+            let path = normalize_path(&r.file_path);
+            let location = if let Some(line) = r.line {
+                format!("{path}:{line}")
+            } else {
+                path
+            };
+            let display_text = r.snippet_line.as_deref().unwrap_or(&r.context);
+            let truncated_text = truncate_str(display_text.trim(), 70);
+            writeln!(
+                f,
+                "[{:<12}] {:<36}{}",
+                wr.project, location, truncated_text
+            )?;
+        }
+        Ok(())
     }
 }
 
 /// Print workspace find results with project labels.
-pub fn print_workspace_find_results(
-    query: &str,
-    results: &[crate::commands::find::WorkspaceSearchResult],
-) {
-    println!(
-        "find \"{}\" \u{2014} {} result{}",
-        query,
-        results.len(),
-        if results.len() == 1 { "" } else { "s" }
-    );
-    println!("{SEPARATOR}");
+/// Plain-text view for workspace-wide `scope find --workspace <query>`.
+pub struct WorkspaceFindResultsView<'a> {
+    pub query: &'a str,
+    pub results: &'a [crate::commands::find::WorkspaceSearchResult],
+}
 
-    for r in results {
-        let path = normalize_path(&r.result.file_path);
-        let line_range = format_line_range(r.result.line_start, r.result.line_end);
-        println!(
-            "[{:<12}] {:<32}{:<8}  {path}:{line_range}  ({:.2})",
-            r.project, r.result.name, r.result.kind, r.result.score
-        );
+impl fmt::Display for WorkspaceFindResultsView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(
+            f,
+            "find \"{}\" \u{2014} {} result{}",
+            self.query,
+            self.results.len(),
+            if self.results.len() == 1 { "" } else { "s" }
+        )?;
+        writeln!(f, "{SEPARATOR}")?;
+
+        for r in self.results {
+            let path = normalize_path(&r.result.file_path);
+            let line_range = format_line_range(r.result.line_start, r.result.line_end);
+            writeln!(
+                f,
+                "[{:<12}] {:<32}{:<8}  {path}:{line_range}  ({:.2})",
+                r.project, r.result.name, r.result.kind, r.result.score
+            )?;
+        }
+        Ok(())
     }
 }

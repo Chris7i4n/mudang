@@ -73,7 +73,7 @@ and the plugin-skip channel feeding R6 all land here.
       are now explicit ([§ R2 Acceptance](../ARCHITECTURAL-REFACTOR.md#r2--languageplugin-output-type-closure)).
 - [ ] A fixture where a plugin emits a `skipped_ranges` entry produces
       a `file_hashes` row containing that entry verbatim alongside any
-      tree-sitter-error skips (R6 lights this gate up in sprint 0007;
+      tree-sitter-error skips (R6 lights this gate up in sprint 0008;
       the **wiring** lands here).
 
 ### R2 metadata population ([source](../ARCHITECTURAL-REFACTOR.md#r0--schema-closures) and [Language playbook Step 5](../LANGUAGE-PLAYBOOK.md#metadata-schema-for-framework-primitives))
@@ -233,6 +233,6 @@ Per [`README.md` § Reporting hooks](./README.md#4-reporting-hooks) and
 - Macro definition-only trait shape — sprint 0004 (R11).
 - Trait-shape audit + process-spawn denylist — sprint 0004 (R12).
 - Framework plugin trait body and predicates — sprint 0005 (R5).
-- Confidence audit subcommand and typed output schema — sprint 0006
-  (R8, R10).
-- Malformed-source fixtures and integration test — sprint 0007 (R6).
+- Typed output schema — sprint 0006 (R10).
+- Confidence audit subcommand — sprint 0007 (R8).
+- Malformed-source fixtures and integration test — sprint 0008 (R6).

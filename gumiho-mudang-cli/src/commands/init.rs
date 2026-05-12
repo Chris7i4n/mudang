@@ -128,12 +128,12 @@ pub fn run(args: &InitArgs, project_root: &Path) -> Result<()> {
         .collect();
 
     if args.json {
-        let output = serde_json::json!({
-            "command": "init",
-            "project_name": project_name,
-            "languages": languages,
-            "scope_dir": ".scope/"
-        });
+        let output = crate::output::schema::InitResult {
+            command: "init",
+            project_name: &project_name,
+            languages: languages.iter().map(String::as_str).collect(),
+            scope_dir: ".scope/",
+        };
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
         println!("Initialised .scope/ for project: {project_name}");

@@ -178,7 +178,14 @@ fn run_single(args: &EntrypointsArgs, project_root: &Path) -> Result<()> {
         };
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
-        formatter::print_entrypoints(&groups, total, file_count);
+        print!(
+            "{}",
+            formatter::EntrypointsView {
+                groups: &groups,
+                total,
+                file_count,
+            }
+        );
     }
 
     Ok(())
@@ -236,7 +243,14 @@ fn run_workspace(
         };
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
-        formatter::print_entrypoints(&all_groups, total, file_count);
+        print!(
+            "{}",
+            formatter::EntrypointsView {
+                groups: &all_groups,
+                total,
+                file_count,
+            }
+        );
     }
 
     Ok(())

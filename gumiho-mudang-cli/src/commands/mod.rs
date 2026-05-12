@@ -1,6 +1,7 @@
 /// CLI subcommand implementations for Scope.
 ///
 /// Each module corresponds to one `scope` subcommand.
+pub mod audit;
 pub mod deps;
 pub mod diff;
 pub mod entrypoints;

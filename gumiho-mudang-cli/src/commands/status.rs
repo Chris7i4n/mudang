@@ -170,12 +170,15 @@ fn run_single(args: &StatusArgs, project_root: &Path) -> Result<()> {
         };
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
-        formatter::print_status(
-            status_label,
-            symbol_count,
-            file_count,
-            edge_count,
-            last_indexed_relative.as_deref(),
+        print!(
+            "{}",
+            formatter::StatusView {
+                status_label,
+                symbol_count,
+                file_count,
+                edge_count,
+                last_indexed: last_indexed_relative.as_deref(),
+            }
         );
     }
 
@@ -269,12 +272,15 @@ fn run_workspace(args: &StatusArgs, workspace_root: &Path, config: &WorkspaceCon
         };
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
-        formatter::print_workspace_status(
-            &config.workspace.name,
-            &member_statuses,
-            total_symbols,
-            total_files,
-            total_edges,
+        print!(
+            "{}",
+            formatter::WorkspaceStatusView {
+                workspace_name: &config.workspace.name,
+                members: &member_statuses,
+                total_symbols,
+                total_files,
+                total_edges,
+            }
         );
     }
 

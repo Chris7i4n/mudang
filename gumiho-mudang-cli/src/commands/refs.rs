@@ -22,6 +22,7 @@ use std::path::Path;
 
 use crate::output::formatter;
 use crate::output::json::JsonOutput;
+use crate::output::schema::{RefsGroup, RefsGrouped};
 use crate::Context;
 use gumiho_mudang_scope::config::project::is_vendor_path;
 use gumiho_mudang_scope::config::workspace::WorkspaceConfig;
@@ -144,7 +145,13 @@ pub(super) fn run_callers_transitive(
         };
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
-        formatter::print_impact(&args.symbol, &result);
+        print!(
+            "{}",
+            formatter::ImpactView {
+                symbol_name: &args.symbol,
+                result: &result,
+            }
+        );
     }
 
     Ok(())
@@ -276,14 +283,15 @@ fn run_symbol_refs(args: &RefsArgs, graph: &Graph, project_root: &Path) -> Resul
         }
 
         if args.json {
-            let data = serde_json::json!({
-                "groups": groups.iter().map(|(kind, refs)| {
-                    serde_json::json!({
-                        "kind": kind,
-                        "refs": refs,
+            let data = RefsGrouped {
+                groups: groups
+                    .iter()
+                    .map(|(kind, refs)| RefsGroup {
+                        kind: kind.as_str(),
+                        refs: refs.as_slice(),
                     })
-                }).collect::<Vec<_>>(),
-            });
+                    .collect(),
+            };
             let output = JsonOutput {
                 command: "refs",
                 symbol: Some(args.symbol.clone()),
@@ -293,7 +301,14 @@ fn run_symbol_refs(args: &RefsArgs, graph: &Graph, project_root: &Path) -> Resul
             };
             println!("{}", serde_json::to_string_pretty(&output)?);
         } else {
-            formatter::print_refs_grouped(&args.symbol, &groups, total);
+            print!(
+                "{}",
+                formatter::RefsGroupedView {
+                    symbol_name: &args.symbol,
+                    groups: &groups,
+                    total,
+                }
+            );
         }
     } else {
         // Flat output for functions/methods or filtered queries
@@ -313,7 +328,14 @@ fn run_symbol_refs(args: &RefsArgs, graph: &Graph, project_root: &Path) -> Resul
             };
             println!("{}", serde_json::to_string_pretty(&output)?);
         } else {
-            formatter::print_refs(&args.symbol, &refs, total);
+            print!(
+                "{}",
+                formatter::RefsView {
+                    symbol_name: &args.symbol,
+                    refs: &refs,
+                    total,
+                }
+            );
         }
     }
 
@@ -341,7 +363,14 @@ fn run_file_refs(args: &RefsArgs, graph: &Graph, project_root: &Path) -> Result<
         };
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
-        formatter::print_file_refs(&file_path, &refs, total);
+        print!(
+            "{}",
+            formatter::FileRefsView {
+                file_path: &file_path,
+                refs: &refs,
+                total,
+            }
+        );
     }
 
     Ok(())
@@ -372,7 +401,7 @@ fn run_workspace(args: &RefsArgs, workspace_root: &Path, config: &WorkspaceConfi
             let output = JsonOutput {
                 command: "refs",
                 symbol: Some(args.symbol.clone()),
-                data: &Vec::<serde_json::Value>::new(),
+                data: &ws_refs,
                 truncated: false,
                 total: 0,
             };
@@ -395,7 +424,14 @@ fn run_workspace(args: &RefsArgs, workspace_root: &Path, config: &WorkspaceConfi
         };
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
-        formatter::print_workspace_refs(&args.symbol, &ws_refs, total);
+        print!(
+            "{}",
+            formatter::WorkspaceRefsView {
+                symbol_name: &args.symbol,
+                refs: &ws_refs,
+                total,
+            }
+        );
     }
 
     Ok(())

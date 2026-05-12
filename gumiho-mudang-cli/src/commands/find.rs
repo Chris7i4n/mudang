@@ -110,7 +110,13 @@ fn run_single(args: &FindArgs, project_root: &Path) -> Result<()> {
         };
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
-        formatter::print_find_results(&args.query, &results);
+        print!(
+            "{}",
+            formatter::FindResultsView {
+                query: &args.query,
+                results: &results,
+            }
+        );
     }
 
     Ok(())
@@ -183,7 +189,13 @@ fn run_workspace(args: &FindArgs, workspace_root: &Path, config: &WorkspaceConfi
         };
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
-        formatter::print_workspace_find_results(&args.query, &all_results);
+        print!(
+            "{}",
+            formatter::WorkspaceFindResultsView {
+                query: &args.query,
+                results: &all_results,
+            }
+        );
     }
 
     Ok(())

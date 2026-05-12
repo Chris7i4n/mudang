@@ -61,7 +61,13 @@ pub fn run(args: &RdepsArgs, project_root: &Path) -> Result<()> {
         };
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
-        formatter::print_impact(&args.symbol, &result);
+        print!(
+            "{}",
+            formatter::ImpactView {
+                symbol_name: &args.symbol,
+                result: &result,
+            }
+        );
     }
 
     Ok(())

@@ -262,6 +262,20 @@ pub enum Commands {
     ///   scope workspace list              — show all members and status
     ///   scope workspace list --json       — machine-readable output
     Workspace(commands::workspace::WorkspaceArgs),
+
+    /// Audit the indexed graph for quality regressions.
+    ///
+    /// `scope audit confidence` runs a precision audit per
+    /// (kind, tier, producer, pattern_id) against the reference fixture
+    /// corpus. Recall is measured by integration-test snapshots, not by
+    /// this subcommand. See `docs/AUDIT-LABEL-SCHEMA.md` for the JSONL
+    /// sample-file contract used by external labellers.
+    ///
+    /// Examples:
+    ///   scope audit confidence
+    ///   scope audit confidence --emit-sample sample.jsonl
+    ///   scope audit confidence --label sample.jsonl --format tsv
+    Audit(commands::audit::AuditArgs),
 }
 
 /// The resolved execution context: single project or workspace.
@@ -365,6 +379,10 @@ fn main() -> Result<()> {
         Commands::Setup(args) => {
             let root = project_root_from_context(&ctx)?;
             commands::setup::run(args, root)
+        }
+        Commands::Audit(args) => {
+            let root = project_root_from_context(&ctx)?;
+            commands::audit::run(args, root)
         }
 
         // --- Workspace management subcommands ---
