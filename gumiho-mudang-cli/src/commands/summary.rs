@@ -13,6 +13,7 @@ use clap::Args;
 use std::path::Path;
 
 use crate::output::json::JsonOutput;
+use crate::output::schema::{FileSummary, Summary, SymbolSummary};
 use gumiho_mudang_scope::core::graph::Graph;
 
 use super::looks_like_file_path;
@@ -70,21 +71,21 @@ pub fn run(args: &SummaryArgs, project_root: &Path) -> Result<()> {
     };
 
     if args.json {
-        let data = serde_json::json!({
-            "name": sym.name,
-            "kind": sym.kind,
-            "file_path": sym.file_path,
-            "line_start": sym.line_start,
-            "line_end": sym.line_end,
-            "signature": sym.signature,
-            "callers": callers,
-            "outgoing_calls": dep_count,
-            "methods": method_count,
+        let data = Summary::Symbol(SymbolSummary {
+            name: &sym.name,
+            kind: &sym.kind,
+            file_path: &sym.file_path,
+            line_start: sym.line_start,
+            line_end: sym.line_end,
+            signature: sym.signature.as_deref(),
+            callers,
+            outgoing_calls: dep_count,
+            methods: method_count,
         });
         let envelope = JsonOutput {
             command: "summary",
             symbol: Some(sym.name.clone()),
-            data: &data,
+            data,
             truncated: false,
             total: 1,
         };
@@ -135,15 +136,15 @@ fn run_file_summary(args: &SummaryArgs, graph: &Graph) -> Result<()> {
         .collect();
 
     if args.json {
-        let data = serde_json::json!({
-            "file_path": file_path,
-            "symbol_count": symbols.len(),
-            "top_level": kinds,
+        let data = Summary::File(FileSummary {
+            file_path: &file_path,
+            symbol_count: symbols.len(),
+            top_level: kinds,
         });
         let envelope = JsonOutput {
             command: "summary",
             symbol: Some(file_path.clone()),
-            data: &data,
+            data,
             truncated: false,
             total: symbols.len(),
         };

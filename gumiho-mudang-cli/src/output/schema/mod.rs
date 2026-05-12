@@ -23,10 +23,12 @@
 
 pub mod compact_symbol;
 pub mod edge_summary;
+pub mod summary;
 pub mod symbol_sketch;
 
 pub use compact_symbol::CompactSymbol;
 pub use edge_summary::EdgeSummary;
+pub use summary::{FileSummary, Summary, SymbolSummary};
 pub use symbol_sketch::{
     ClassSketch, EnumSketch, EnumVariantView, FieldView, FileSketch, GenericSketch,
     InterfaceSketch, MethodSketch, SketchSymbol, SymbolSketch,
