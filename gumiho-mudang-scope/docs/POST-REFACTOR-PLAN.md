@@ -20,6 +20,29 @@ Phase E acceptance is the entry condition. Every bullet below must hold before a
 
 ---
 
+## Priority 1 (immediately post-refactor) — Self-correction cycle
+
+R8 (sprint 0007) ships the **sensor**: `scope audit confidence` measures per-`(producer, pattern_id)` precision against a labelled fixture corpus and fails the build when any tier is below target. The JSONL sample format ([`AUDIT-LABEL-SCHEMA.md`](AUDIT-LABEL-SCHEMA.md)) is the contract that lets any external labeller (LLM, LSP cross-check, hybrid) plug in.
+
+R8 alone does **not** close the loop. When a tier falls below target, a human still has to read the labelled samples, find the failing pattern, and patch the extractor by hand. The next index run then emits corrected edges (existing persisted edges are not retroactively fixed — `wipe-and-reindex` per CHARTER §2 is the migration path).
+
+This priority-1 work ships the **actuator** — the closed loop that converts R8 signal into automated extractor improvement. It is **first** in this document because every other item below assumes precision is trustworthy; without the loop, precision drift is found late and fixed by hand.
+
+### Sub-items (no internal ordering — each unblocks the others)
+
+- **(a) Loop architecture document.** A new `docs/SELF-CORRECTION-CYCLE.md` formalising the pipeline: `R8 audit signal → labelled corpus → analyzer (ML / LLM / heuristic) → extractor patch suggestion → human review → merge → next index run`. Names the contract surfaces, the human gate, the rollback path when an analyzer-suggested patch regresses precision elsewhere.
+- **(b) Reference labeller crates.** External-to-Scope crates that implement the JSONL contract: `scope-audit-labeller-llm` (provider-agnostic LLM wrapper), `scope-audit-labeller-lsp` (per-language LSP cross-check via `tower-lsp` clients), `scope-audit-labeller-hybrid` (LLM-first, human-reviews-diffs). These live in a separate workspace so Scope's surface stays minimal; they consume only the schema.
+- **(c) Continuous re-audit in CI.** Per-PR run of `scope audit confidence --label committed-sample.jsonl` against the committed labelled corpus, with a precision diff printed in the PR body (`rust.calls.method: 96% → 94% (-2pp, 2 new failures)`). Catches extractor regressions before merge. Sample size capped for CPU budget; full audit still runs nightly.
+- **(d) Per-language `lang_version` detector matrix.** Populate the `lang_version` JSONL slot atomically across all seven supported languages: Rust (edition + rust-version from `Cargo.toml` — module exists), Go (`go.mod` directive — module exists), Python (`requires-python` from `pyproject.toml` / `setup.py`), TypeScript (`tsconfig.json` `target`), Java (Maven `<source>/<target>` + Gradle source compatibility — two build systems), C# (`<TargetFramework>` from `.csproj`), Ruby (`.ruby-version` + Gemfile `ruby` directive). Sprint 0007 emits `null` for every language; this sub-item turns all seven on in a single delivery so the labelled corpus does not split into a "versioned" and "unversioned" era. Per-language detector wiring is workspace-side only and does not violate R4's `LanguageWorkspaceContext` shape (these stay off the plugin trait surface).
+- **(e) Labelled corpus accumulation policy.** Committed `*.jsonl` files under `scope-core/tests/fixtures/reference/<lang>/audit-samples/` are regression assets. Sample provenance recorded per-commit (labeller used, date). Old samples are kept until the underlying fixture is removed — stable precision over time is itself the signal.
+- **(f) ML-driven extractor patch suggester.** Long-horizon: an analyzer that reads labelled failures, locates the offending pattern in the extractor source, and proposes a code patch (branch on an AST shape, downgrade the confidence stamp, add a guard). The human review gate stays mandatory — this is a suggester, not an applier. Triggers when the labelled corpus is large enough to train a meaningful model (heuristic: 1000+ samples across ≥4 languages).
+
+### Gate to start
+
+Phase E acceptance (per "Gate" section above). Specifically: R8 must be `shipped` and the reference fixture corpus must be committed, so this priority has a working sensor to build on.
+
+---
+
 ## Cross-cutting items (charter §6 soft-expansion zone, not absorbed by refactor)
 
 The refactor absorbed several soft-expansion items into its R-moves (resolution pass → R3, domain edge kinds → R0, config-file readers → R4, confidence/provenance metadata → R0, decorator/annotation argument capture → R0 + R5). The items below are the **remainder**: they sit in the soft-expansion zone but require new work after the refactor closes.
