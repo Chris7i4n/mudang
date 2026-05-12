@@ -468,7 +468,10 @@ fn test_audit_confidence_label_rejects_tampered_confidence_field() {
 }
 
 #[test]
-fn test_audit_confidence_label_rejects_null_labels() {
+fn test_audit_confidence_label_rejects_all_null_labels() {
+    // Codex round-3 P2-2 resolution: --label *tolerates* partial coverage
+    // per the schema doc, but a sample where no record at all has been
+    // labelled means no labelling has happened; that case still aborts.
     let (_dir, root) = setup_indexed_fixture();
     let sample = root.join("sample.jsonl");
 
@@ -488,8 +491,128 @@ fn test_audit_confidence_label_rejects_null_labels() {
         .current_dir(&root)
         .assert()
         .failure()
-        .stderr(contains("label=null"))
-        .stderr(contains("complete labelling"));
+        .stderr(contains("every record has label=null"))
+        .stderr(contains("no labelling has been performed"));
+}
+
+#[test]
+fn test_audit_confidence_label_tolerates_partial_coverage() {
+    // Codex round-3 P2-2: per AUDIT-LABEL-SCHEMA.md the LSP cross-check
+    // labeller leaves records it cannot classify as `label:null`. The
+    // doc explicitly says "--label tolerates partial coverage". The
+    // chunk-5 hard-rejection was wrong; the resolution drops null
+    // records from group accumulation so the precision denominator is
+    // honest (= number of labelled records per group).
+    let (_dir, root) = setup_indexed_fixture();
+    let sample = root.join("sample.jsonl");
+
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--emit-sample"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .success();
+
+    // Label half of the records true; leave the other half null.
+    let raw = std::fs::read_to_string(&sample).unwrap();
+    let mut out_lines = Vec::new();
+    for (i, l) in raw
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+        .enumerate()
+    {
+        if i % 2 == 0 {
+            out_lines.push(l.replace("\"label\":null", "\"label\":true"));
+        } else {
+            out_lines.push(l.to_string()); // leave null
+        }
+    }
+    std::fs::write(&sample, out_lines.join("\n") + "\n").unwrap();
+
+    let out = Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--label"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .success();
+
+    let stdout = String::from_utf8_lossy(&out.get_output().stdout).to_string();
+    let report: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let rows = report["report"].as_array().expect("report array");
+    assert!(!rows.is_empty(), "partial-coverage report still has rows");
+    for row in rows {
+        let n = row["sample_size"].as_u64().unwrap();
+        let k = row["correct_count"].as_u64().unwrap();
+        assert!(n > 0, "sample_size must be > 0 for emitted rows");
+        // Half-and-half labelling with all-true on labelled side:
+        // every emitted row has correct_count == sample_size.
+        assert_eq!(k, n, "precision denominator must be labelled-count");
+        assert_eq!(row["precision"].as_f64().unwrap(), 1.0);
+    }
+}
+
+#[test]
+fn test_audit_confidence_emit_refuses_to_overwrite_existing_file() {
+    // Codex round-3 P2-1: --emit-sample pointed at an indexed source
+    // path previously truncated the working tree (File::create) and
+    // would then emit empty / wrong source_snippets for edges in that
+    // file. Fix: refuse to overwrite anything at the destination.
+    let (_dir, root) = setup_indexed_fixture();
+    let sample = root.join("preexisting.jsonl");
+    std::fs::write(&sample, "this file already exists\n").unwrap();
+
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--emit-sample"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .failure()
+        .stderr(contains("refusing to overwrite an existing path"));
+
+    // The pre-existing file is intact.
+    let after = std::fs::read_to_string(&sample).unwrap();
+    assert_eq!(after, "this file already exists\n");
+}
+
+#[test]
+fn test_audit_confidence_label_rejects_duplicate_edge_ids() {
+    // Codex round-3 P2-3: duplicate edge_id in JSONL collapsed in the
+    // freshness set but still double-counted in the precision report.
+    let (_dir, root) = setup_indexed_fixture();
+    let sample = root.join("sample.jsonl");
+
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--emit-sample"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .success();
+
+    // Label all true, then append a duplicate of the first record.
+    let raw = std::fs::read_to_string(&sample).unwrap();
+    let labelled: Vec<String> = raw
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+        .map(|l| l.replace("\"label\":null", "\"label\":true"))
+        .collect();
+    let mut with_dup = labelled.clone();
+    with_dup.push(labelled[0].clone()); // exact duplicate
+    std::fs::write(&sample, with_dup.join("\n") + "\n").unwrap();
+
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--label"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .failure()
+        .stderr(contains("integrity check failed"))
+        .stderr(contains("repeated across multiple records"))
+        .stderr(contains("on lines"));
 }
 
 #[test]

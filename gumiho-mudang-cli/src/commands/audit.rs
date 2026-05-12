@@ -334,8 +334,30 @@ fn emit_sample(
 
     enforce_freshness(graph, project_root, &sample)?;
 
-    let file = File::create(out_path)
-        .with_context(|| format!("failed to create sample file {}", out_path.display()))?;
+    // Refuse to clobber an existing file at the sample destination
+    // (codex round 3 P2-1): the previous `File::create` would have
+    // truncated any pre-existing file at `out_path` — including an
+    // indexed source file the operator misnamed. Snippets for other
+    // edges in that file would then read the truncated content and
+    // emit empty / wrong `source_snippet`s, and the indexed source
+    // would be silently corrupted. `OpenOptions::new().write(true)
+    // .create_new(true)` errors with `AlreadyExists` if anything is
+    // at the path; the operator removes it or picks a new path.
+    // There is no `--force` flag — silent overwrite of the working
+    // tree from an audit subcommand is the same class of dishonesty
+    // the auditor immutability rule (AUDIT-LABEL-SCHEMA.md § Auditor
+    // immutability rule) forbids.
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(out_path)
+        .with_context(|| {
+            format!(
+                "failed to create sample file {} (refusing to overwrite an existing path; \
+                 remove the file or pick a new path)",
+                out_path.display()
+            )
+        })?;
     let mut writer = BufWriter::new(file);
     for row in &sample {
         let snippet = read_source_snippet(project_root, &row.file_path, row.line)?;
@@ -407,19 +429,36 @@ fn label_pass(
         records.push((idx + 1, record));
     }
 
-    // Reject incomplete labelling: every row must carry a true/false
-    // verdict before precision can be computed. Mixing labelled and
-    // unlabelled rows in one report would mis-state the denominator —
-    // either we'd inflate precision by ignoring nulls or deflate it by
-    // counting them as wrong. Either choice is dishonest. Mechanical
-    // refusal until the labeller finishes is the only honest path.
+    // Partial labelling: `label=null` records are *skipped*, not rejected.
+    //
+    // Codex round 3 P2-2 surfaced a contradiction between the chunk-5
+    // hard-rejection of nulls and the documented LSP-cross-check
+    // labeller flow in `docs/AUDIT-LABEL-SCHEMA.md` (which explicitly
+    // says "leave undecided; --label tolerates partial coverage" for
+    // edge kinds the LSP cannot classify).
+    //
+    // Resolution: tolerate partial coverage, but stay honest about the
+    // denominator. `compute_precision_report` filters records with
+    // `label.is_none()` *before* group accumulation, so:
+    // - `sample_size` per row = number of LABELLED records in the group
+    //   (the precision denominator)
+    // - `correct_count` per row = number of `label = true` records
+    // - precision = correct_count / sample_size — meaningful even when
+    //   the labeller covered only part of the sample
+    // - groups where every record was skipped (`sample_size == 0`)
+    //   do not appear in the report (no denominator => no precision)
+    //
+    // This matches the schema doc's stated semantics and preserves the
+    // Priority 2 honesty principle: the denominator is never inflated
+    // by counting null records as judged. A future schema bump may add
+    // a sibling `skipped_count` column to surface the partial-coverage
+    // ratio per group; that lands in POST-REFACTOR-PLAN.md § Priority 1.
     let unlabelled = records.iter().filter(|(_, r)| r.label.is_none()).count();
-    if unlabelled > 0 {
+    if unlabelled == records.len() {
         anyhow::bail!(
-            "{}: {unlabelled} of {} record(s) have label=null; complete labelling before re-running --label. \
-             Each record's `label` must be `true` (correct) or `false` (incorrect) per docs/AUDIT-LABEL-SCHEMA.md.",
+            "{}: every record has label=null; no labelling has been performed. \
+             A labeller must fill at least one record's `label` field before --label can produce a report.",
             in_path.display(),
-            records.len(),
         );
     }
 
@@ -441,10 +480,16 @@ fn label_pass(
     let mut unparseable: Vec<(usize, String)> = Vec::new();
     let mut unknown: Vec<(usize, i64)> = Vec::new();
     let mut parsed_ids: BTreeSet<i64> = BTreeSet::new();
+    // Duplicate-detection map: edge_id -> Vec<line_no>. Any entry with
+    // len > 1 is a duplicate, which would otherwise collapse in the
+    // `parsed_ids` set but still double-count in the precision report
+    // (codex round 3 P2-3).
+    let mut by_id: BTreeMap<i64, Vec<usize>> = BTreeMap::new();
     for (line_no, record) in &records {
         match record.edge_id.parse::<i64>() {
             Err(_) => unparseable.push((*line_no, record.edge_id.clone())),
             Ok(id) => {
+                by_id.entry(id).or_default().push(*line_no);
                 if !indexed.contains(&id) {
                     unknown.push((*line_no, id));
                 } else {
@@ -453,12 +498,16 @@ fn label_pass(
             }
         }
     }
-    if !unparseable.is_empty() || !unknown.is_empty() {
+    let duplicates: Vec<(i64, Vec<usize>)> = by_id
+        .into_iter()
+        .filter(|(_, lines)| lines.len() > 1)
+        .collect();
+    if !unparseable.is_empty() || !unknown.is_empty() || !duplicates.is_empty() {
         use std::fmt::Write as _;
         let mut msg = String::new();
         msg.push_str(
-            "sample-file integrity check failed: every record's `edge_id` must parse as i64 \
-             and resolve to a row in the current index. ",
+            "sample-file integrity check failed: every record's `edge_id` must parse as i64, \
+             resolve to a row in the current index, and appear at most once. ",
         );
         if !unparseable.is_empty() {
             let _ = writeln!(
@@ -480,12 +529,30 @@ fn label_pass(
                 let _ = writeln!(msg, "    {}: line {}: edge_id = {}", in_path.display(), line_no, id);
             }
         }
+        if !duplicates.is_empty() {
+            let _ = writeln!(
+                msg,
+                "\n  {} edge_id(s) repeated across multiple records (would double-count in the precision report):",
+                duplicates.len()
+            );
+            for (id, lines) in &duplicates {
+                let lines_csv: Vec<String> = lines.iter().map(|n| n.to_string()).collect();
+                let _ = writeln!(
+                    msg,
+                    "    {}: edge_id = {} on lines {}",
+                    in_path.display(),
+                    id,
+                    lines_csv.join(", ")
+                );
+            }
+        }
         msg.push_str(
             "\nRemediation: re-emit the sample against the current index \
-             (`scope audit confidence --emit-sample <new-path>`) and re-label. \
-             There is no `--allow-integrity-skip` escape — silently dropping \
-             these records from the drift gate while still counting them in the \
-             precision report would violate AUDIT-LABEL-SCHEMA.md § Auditor immutability rule.",
+             (`scope audit confidence --emit-sample <new-path>`) and re-label, \
+             ensuring each edge_id appears at most once. \
+             There is no `--allow-integrity-skip` escape — silently dropping or \
+             collapsing these records while still counting them in the precision \
+             report would violate AUDIT-LABEL-SCHEMA.md § Auditor immutability rule.",
         );
         return Err(anyhow::anyhow!(msg));
     }
@@ -681,13 +748,22 @@ pub fn check_tier_gate(report: &PrecisionReport) -> Result<()> {
 /// schema. Group iteration order is sorted (`BTreeMap`) so the report
 /// is byte-for-byte deterministic given the same input.
 ///
-/// `precision = correct_count as f64 / sample_size as f64`. The caller
-/// must ensure every record carries a non-null label before calling —
-/// `label_pass` enforces that at the parse boundary.
+/// Records with `label.is_none()` are **skipped** before accumulation —
+/// per the schema doc's "partial coverage" allowance for LSP-cross-check
+/// labellers that can only classify some edge kinds. The reported
+/// `sample_size` is therefore the number of *labelled* records per group
+/// (the precision denominator); a group whose every record was skipped
+/// does not appear in the report.
+///
+/// `precision = correct_count as f64 / sample_size as f64`.
 pub fn compute_precision_report(records: &[SampleRecord]) -> PrecisionReport {
     let mut groups: BTreeMap<(String, String, String, String), (usize, usize)> =
         BTreeMap::new();
     for r in records {
+        let label = match r.label {
+            Some(b) => b,
+            None => continue, // partial-coverage skip; not counted in denominator
+        };
         let key = (
             r.kind.clone(),
             r.confidence.clone(),
@@ -695,16 +771,17 @@ pub fn compute_precision_report(records: &[SampleRecord]) -> PrecisionReport {
             r.pattern_id.clone(),
         );
         let entry = groups.entry(key).or_insert((0, 0));
-        entry.0 += 1; // sample_size
-        if r.label == Some(true) {
+        entry.0 += 1; // sample_size = labelled records in this group
+        if label {
             entry.1 += 1; // correct_count
         }
     }
 
     let rows = groups
         .into_iter()
+        .filter(|(_, (n, _))| *n > 0)
         .map(|((kind, tier, producer, pattern_id), (n, k))| {
-            let precision = if n == 0 { 0.0 } else { k as f64 / n as f64 };
+            let precision = k as f64 / n as f64;
             ReportRow {
                 kind,
                 tier,
