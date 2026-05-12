@@ -1,12 +1,12 @@
 // Builder requires fields (R1): omitting `.confidence(...)` must
 // prevent `.build()` from compiling.
 
-use scope_core::{Edge, EdgeKind, Producer};
+use scope_core::{EdgeKind, Producer, RawEdge};
 
 fn main() {
     // No .confidence() call — `.build()` is not implemented for
     // EdgeBuilder<_, _, _, No, _, _>.
-    let _ = Edge::builder()
+    let _ = RawEdge::builder()
         .from("a")
         .to("b")
         .kind(EdgeKind::Calls)

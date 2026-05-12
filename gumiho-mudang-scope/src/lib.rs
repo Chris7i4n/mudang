@@ -32,7 +32,7 @@ pub mod core {
 }
 
 pub use scope_core::{config, languages, parser, types};
-pub use scope_core::{Edge, Symbol};
+pub use scope_core::{RawEdge, Symbol};
 pub use scope_graph::graph;
 pub use scope_index::{indexer, watcher};
 pub use scope_search::{embedder, searcher};

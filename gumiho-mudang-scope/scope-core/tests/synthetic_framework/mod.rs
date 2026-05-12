@@ -25,7 +25,7 @@ use scope_core::frameworks::{
     Detection, DetectedVersion, FrameworkPlugin, Pattern, ResolvedVersion, UnknownVersionPolicy,
 };
 use scope_core::languages::LanguageId;
-use scope_core::types::{Edge, Symbol};
+use scope_core::types::Symbol;
 use scope_core::workspace_context::{
     Dependency, FileId, FrameworkVersions, FrameworkWorkspaceContext, LanguageWorkspaceContext,
     Lockfile, ModuleLayout, Package,
@@ -78,7 +78,7 @@ impl FrameworkPlugin for SyntheticPlugin {
     fn match_edges(
         &self,
         symbols: &[Symbol],
-        _edges: &[Edge],
+        _edges: &[RawEdge],
         version: ResolvedVersion,
     ) -> Vec<RawEdge> {
         let mut out = Vec::new();
@@ -228,11 +228,11 @@ pub fn all_patterns() -> Vec<Pattern> {
 // `ResolvedVersion` (R5 doc fixes the signature); the predicate slot
 // on `Pattern` is therefore a catalog marker for `audit_patterns.sh`
 // rather than a live dispatcher.
-fn per_symbol_predicate_stub(_symbols: &[Symbol], _edges: &[Edge]) -> Vec<RawEdge> {
+fn per_symbol_predicate_stub(_symbols: &[Symbol], _edges: &[RawEdge]) -> Vec<RawEdge> {
     Vec::new()
 }
 
-fn cross_crate_predicate_stub(_symbols: &[Symbol], _edges: &[Edge]) -> Vec<RawEdge> {
+fn cross_crate_predicate_stub(_symbols: &[Symbol], _edges: &[RawEdge]) -> Vec<RawEdge> {
     Vec::new()
 }
 

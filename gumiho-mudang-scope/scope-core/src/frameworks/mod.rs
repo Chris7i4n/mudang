@@ -2,7 +2,7 @@
 //!
 //! Defines the `FrameworkPlugin` trait and supporting types.
 //! `FrameworkPlugin` consumes already-extracted `&[Symbol]` and
-//! `&[Edge]` plus a resolved framework version, and emits `RawEdge`s
+//! `&[RawEdge]` plus a resolved framework version, and emits `RawEdge`s
 //! that the R3 resolver promotes to `InsertableEdge`. **It never sees
 //! tree-sitter nodes, source text, or filesystem paths.** This is the
 //! mechanical safeguard for `LANGUAGE-PLAYBOOK.md` E2 — frameworks
@@ -35,7 +35,7 @@
 //! Variant B (eager metadata) ships: language plugins populate the
 //! three reserved metadata keys (`decorators`, `annotations`,
 //! `template_calls`) on `Symbol.metadata` (R0 schema); framework
-//! plugins read that metadata + `&[Edge]` and emit derived edges only
+//! plugins read that metadata + `&[RawEdge]` and emit derived edges only
 //! when their predicate fires.
 //!
 //! See `docs/ARCHITECTURAL-REFACTOR.md` § R5 for the full target
@@ -44,7 +44,7 @@
 
 use crate::edge::{EdgeKind, RawEdge};
 use crate::languages::LanguageId;
-use crate::types::{Edge, Symbol};
+use crate::types::Symbol;
 use crate::workspace_context::FrameworkWorkspaceContext;
 use semver::{Version, VersionReq};
 
@@ -85,7 +85,7 @@ pub trait FrameworkPlugin: Send + Sync {
     fn match_edges(
         &self,
         symbols: &[Symbol],
-        edges: &[Edge],
+        edges: &[RawEdge],
         version: ResolvedVersion,
     ) -> Vec<RawEdge>;
 }
@@ -180,7 +180,7 @@ pub struct Pattern {
     /// Predicate function: receives pre-filtered symbols/edges,
     /// returns `RawEdge`s. Each `RawEdge` MUST have
     /// `producer = Producer::Framework(plugin.name())`.
-    pub predicate: fn(&[Symbol], &[Edge]) -> Vec<RawEdge>,
+    pub predicate: fn(&[Symbol], &[RawEdge]) -> Vec<RawEdge>,
 }
 
 pub mod dispatch;

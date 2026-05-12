@@ -1,10 +1,10 @@
 // Builder forbids status (R1): `EdgeBuilder` exposes no `.status(...)`
 // method. Status is the resolver's output (R3), never the extractor's.
 
-use scope_core::{Confidence, Edge, EdgeKind, Producer};
+use scope_core::{Confidence, EdgeKind, Producer, RawEdge};
 
 fn main() {
-    let _ = Edge::builder()
+    let _ = RawEdge::builder()
         .from("a")
         .to("b")
         .kind(EdgeKind::Calls)

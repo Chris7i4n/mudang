@@ -22,7 +22,7 @@ pub use extract::{Capture, MetadataEntry, MetadataField, RawCaptures, SkippedRan
 pub use frameworks::{
     Detection, DetectedVersion, FrameworkPlugin, Pattern, ResolvedVersion, UnknownVersionPolicy,
 };
-pub use types::{Edge, Symbol};
+pub use types::Symbol;
 pub use workspace_context::{
     Dependency, FileId, FrameworkVersions, FrameworkWorkspaceContext, LanguageWorkspaceContext,
     Lockfile, ModuleLayout, NoopWorkspaceContext, Package,

@@ -14,7 +14,7 @@ use scope_core::config::ProjectConfig;
 use scope_core::extract::SkippedRange;
 use scope_core::languages::LanguageId;
 use scope_core::parser::CodeParser;
-use scope_core::{Edge, Symbol};
+use scope_core::{RawEdge, Symbol};
 use scope_graph::graph::{FileHashRow, Graph};
 use scope_search::searcher::Searcher;
 
@@ -515,7 +515,7 @@ struct ParsedFile {
     rel_path: String,
     hash: String,
     symbols: Vec<Symbol>,
-    edges: Vec<Edge>,
+    edges: Vec<RawEdge>,
     lang: LanguageId,
     /// Concatenation of plugin-driven skips and tree-sitter parser-recovery
     /// skips for this file, in source order. R6 / R2 plumbing — written to

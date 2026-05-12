@@ -1,7 +1,7 @@
 error[E0599]: no method named `status` found for struct `EdgeBuilder<F, T, K, C, P, I>` in the current scope
   --> tests/compile_fail/builder/no_status_method.rs:15:10
    |
- 7 |       let _ = Edge::builder()
+ 7 |       let _ = RawEdge::builder()
    |  _____________-
  8 | |         .from("a")
  9 | |         .to("b")

@@ -23,7 +23,7 @@ use std::collections::HashSet;
 
 use super::{Detection, DetectedVersion, FrameworkPlugin, ResolvedVersion, UnknownVersionPolicy};
 use crate::edge::RawEdge;
-use crate::types::{Edge, Symbol};
+use crate::types::Symbol;
 use crate::workspace_context::FrameworkWorkspaceContext;
 
 /// Run every framework plugin's predicate over `symbols` + `edges`,
@@ -51,7 +51,7 @@ pub fn run_frameworks(
     plugins: &[Box<dyn FrameworkPlugin>],
     ctx: &dyn FrameworkWorkspaceContext,
     symbols: &[Symbol],
-    edges: &[Edge],
+    edges: &[RawEdge],
 ) -> Vec<RawEdge> {
     let mut out = Vec::new();
     for plugin in plugins {
@@ -75,8 +75,8 @@ pub fn run_frameworks(
 pub fn apply_pre_filter(
     detection: &Detection,
     symbols: &[Symbol],
-    edges: &[Edge],
-) -> (Vec<Symbol>, Vec<Edge>) {
+    edges: &[RawEdge],
+) -> (Vec<Symbol>, Vec<RawEdge>) {
     let lang_slugs: HashSet<&'static str> = detection
         .applies_to_languages
         .iter()
@@ -90,7 +90,7 @@ pub fn apply_pre_filter(
         .collect();
 
     let kept_ids: HashSet<&str> = filtered_symbols.iter().map(|s| s.id.as_str()).collect();
-    let filtered_edges: Vec<Edge> = edges
+    let filtered_edges: Vec<RawEdge> = edges
         .iter()
         .filter(|e| kept_ids.contains(e.from_id()))
         .cloned()

@@ -1,7 +1,7 @@
 error[E0599]: no method named `build` found for struct `EdgeBuilder<Yes, Yes, Yes, No, Yes, Yes>` in the current scope
   --> tests/compile_fail/builder/missing_confidence.rs:15:10
    |
- 9 |       let _ = Edge::builder()
+ 9 |       let _ = RawEdge::builder()
    |  _____________-
 10 | |         .from("a")
 11 | |         .to("b")

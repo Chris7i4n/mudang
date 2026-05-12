@@ -1,10 +1,12 @@
 //! Core types shared across scope sub-crates.
 //!
-//! `Symbol` and `Edge` are the type backbone of parser output,
-//! language-plugin signatures, indexer pipeline, graph storage, and
-//! search results. They live in `scope-core` so that
-//! `gumiho-mudang-edit` (phase E) can depend on `scope-core` alone
-//! without inheriting SQLite via `scope-graph`.
+//! `Symbol` is the type backbone of parser output, language-plugin
+//! signatures, indexer pipeline, graph storage, and search results.
+//! Edge types live in [`crate::edge`]: `RawEdge` (extractor output)
+//! and `InsertableEdge` (resolver output, owned by `scope-graph`).
+//! Both live in `scope-core` so that `gumiho-mudang-edit` (phase E)
+//! can depend on `scope-core` alone without inheriting SQLite via
+//! `scope-graph`.
 
 use serde::{Deserialize, Serialize};
 
@@ -35,12 +37,3 @@ pub struct Symbol {
     pub metadata: String,
 }
 
-/// Legacy `Edge` name re-aliased to [`crate::edge::RawEdge`] (R1).
-///
-/// Plugin return types and the façade re-export keep the historical
-/// name; production code holds either a `RawEdge` (extractor output)
-/// or an `InsertableEdge` (resolver output). External `Edge { … }`
-/// struct-literal construction is a compile error because the
-/// underlying `RawEdge` has `pub(crate)` fields; the only entry point
-/// is [`Edge::builder`] (provided as an inherent fn on `RawEdge`).
-pub type Edge = crate::edge::RawEdge;

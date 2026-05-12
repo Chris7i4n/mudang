@@ -12,7 +12,7 @@ use sha2::{Digest, Sha256};
 // resolutions § 2.
 pub use crate::resolve::InsertableEdge;
 use scope_core::extract::SkippedRange;
-pub use scope_core::{Edge, RawEdge, Symbol};
+pub use scope_core::{RawEdge, Symbol};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
@@ -2565,7 +2565,7 @@ mod tests {
         use scope_core::{Confidence, EdgeKind, Producer};
 
         // Edge uses bare name as to_id (the bug scenario)
-        let raw_bare = Edge::builder()
+        let raw_bare = RawEdge::builder()
             .from("src/order.ts::checkout::function::5")
             .to("processPayment")
             .kind(EdgeKind::Calls)
@@ -2577,7 +2577,7 @@ mod tests {
             .build();
 
         // Edge uses member-call pattern as to_id
-        let raw_member = Edge::builder()
+        let raw_member = RawEdge::builder()
             .from("src/order.ts::checkout::function::5")
             .to("svc.processPayment")
             .kind(EdgeKind::Calls)

@@ -13,7 +13,8 @@ use tree_sitter::{Parser, Query, QueryCursor};
 use crate::extract::Capture;
 use crate::languages::dispatch;
 use crate::languages::id::LanguageId;
-use crate::types::{Edge, Symbol};
+use crate::edge::RawEdge;
+use crate::types::Symbol;
 
 /// A registered language with its compiled queries.
 struct LanguageEntry {
@@ -193,7 +194,7 @@ impl CodeParser {
         file_path: &str,
         source: &str,
         lang: LanguageId,
-    ) -> Result<Vec<Edge>> {
+    ) -> Result<Vec<RawEdge>> {
         let entry = self
             .find_entry(lang)
             .ok_or_else(|| anyhow::anyhow!("Language {lang} not loaded"))?;
@@ -323,7 +324,7 @@ impl CodeParser {
         file_path: &str,
         source: &str,
         symbols: &[Symbol],
-    ) -> Result<Vec<Edge>> {
+    ) -> Result<Vec<RawEdge>> {
         let entry = self
             .find_entry(LanguageId::Rust)
             .ok_or_else(|| anyhow::anyhow!("Rust language not loaded"))?;
