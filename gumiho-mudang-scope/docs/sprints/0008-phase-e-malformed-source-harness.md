@@ -86,23 +86,27 @@ becomes eligible immediately afterwards.
 
 ---
 
-## Ambiguities to clarify before code lands
+## Ambiguities — resolved on `main` before branch opens
 
-Each ambiguity below is resolved by an amendment to
-`ARCHITECTURAL-REFACTOR.md` R6 on `main` **before** this sprint's
-branch opens.
+All three pre-Phase-E ambiguities below are resolved in
+[`ARCHITECTURAL-REFACTOR.md § R6 → Sprint 0008 pre-branch ambiguity resolutions`](../ARCHITECTURAL-REFACTOR.md#r6--malformed-source-test-harness)
+landed on `main` per `sprints/README.md § 3 ambiguity protocol`. Sprint
+0008 implementation reads the locked resolutions; this section restates
+the answer for navigation only.
 
-1. **Fixture provenance.** Same question as sprint 0006's reference
-   corpus: anonymized real-project malformed snippets vs hand-crafted
-   synthetic. R6 implies hand-crafted ("deliberately broken sources").
-   Confirm placement: `tests/fixtures/malformed/<language>/<case>/`.
-2. **Plugins that have no concept of a given malformation category.**
-   Example: Python has no "missing closing tag in JSX" case. Whether
-   each category is mandatory per language or skipped when N/A is
-   unspecified. Confirm — likely "per-language minimum 5 fixtures,
-   categories chosen per language's grammar".
-3. **Snapshot tool.** R6 mentions `insta` indirectly; confirm `insta`
-   is the chosen tool and the snapshot output path discipline.
+1. **Fixture provenance + placement** — hand-crafted synthetic at
+   `gumiho-mudang-scope/scope-core/tests/fixtures/malformed/<language_slug>/<case>/`,
+   mirroring the R8 `reference/` corpus scaffold. Each fixture directory
+   carries the broken source plus an `expected.md` (or similar) pinning
+   the human-readable skipped-range expectation.
+2. **Per-language category coverage** — 5-fixture floor per language is
+   mechanical; category selection is per-language editorial driven by
+   each language's grammar (JSX missing-close-tag is TS/TSX-only;
+   Python has no braces — "broken indent" / "EOF mid-block" fills the
+   slot). Categories recorded in each fixture's `expected.md`.
+3. **Snapshot tool** — `insta`. Sprint 0008 adds `insta = { workspace = true }`
+   to `scope-core/Cargo.toml` `[dev-dependencies]`. Snapshot path follows
+   `insta` defaults (`<test_module_dir>/snapshots/*.snap`).
 
 ---
 

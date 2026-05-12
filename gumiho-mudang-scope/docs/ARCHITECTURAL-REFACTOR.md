@@ -387,6 +387,11 @@ Each move has: **ID, rules it enforces, current state, target state, migration s
   - CI fails when any plugin panics on any fixture in the malformed set.
   - CI fails when a partially-malformed fixture produces an empty `skipped_ranges` (silent skip is no longer acceptable).
   - Snapshot tests pin the recorded reason and range per fixture so future regressions surface as snapshot diffs.
+- **Sprint 0008 pre-branch ambiguity resolutions** (recorded here before sprint 0008's branch opens per `sprints/README.md § 3 ambiguity protocol`):
+  - **Fixture provenance**: hand-crafted synthetic (matches R6's "deliberately broken sources" phrasing). Real-project malformed snippets are not used — sourcing is rare, licensing-fragile, and inherits anonymization questions for no upside over hand-crafted patterns that exercise the same recovery paths.
+  - **Fixture placement**: `gumiho-mudang-scope/scope-core/tests/fixtures/malformed/<language_slug>/<case>/` — mirrors the R8 `reference/` corpus scaffold (sprint 0007). One subtree per supported `LanguageId`. Per-fixture directory holds the broken source file + an adjacent `expected.md` (or similar) noting which lines the human reader expects in `skipped_ranges` so the snapshot test has a paired specification.
+  - **Per-language category coverage**: 5-fixture floor per language; categories chosen per language's grammar — not every category exists in every language. E.g. JSX missing-close-tag is TS/TSX-only; Python has no braces, so the "unbalanced braces" slot becomes "broken indent" or "EOF mid-block". The 5 chosen categories are recorded inside each fixture directory's `expected.md`; the floor is mechanical (test harness counts fixtures per language), the category selection is per-language editorial.
+  - **Snapshot tool**: `insta` confirmed. Already in workspace `[workspace.dependencies]` and used by `gumiho-mudang-cli` dev-deps. Sprint 0008 adds `insta = { workspace = true }` to `scope-core/Cargo.toml` `[dev-dependencies]`. Snapshot location follows `insta` defaults (`<test_module_dir>/snapshots/*.snap`).
 
 ### R7 — Indexer-level dispatch enforcement
 
