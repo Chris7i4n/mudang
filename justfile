@@ -66,7 +66,7 @@ gate: fmt-check clippy test
 # this recipe. See sprint 0001 DOD #3.
 
 # Run every active refactor gate.
-gate-refactor: ci-edge-sealed test-builder test-typestate ci-context-shape ci-no-fs ci-dispatch ci-trait-shape ci-no-spawn ci-no-network ci-immutable ci-no-framework-scm ci-patterns ci-output-schema audit-confidence test-malformed
+gate-refactor: ci-edge-sealed test-builder test-typestate ci-context-shape ci-no-fs ci-dispatch ci-trait-shape ci-no-spawn ci-no-network ci-immutable ci-no-framework-scm ci-patterns ci-output-schema audit-confidence test-malformed gate-charter
 
 ci-edge-sealed:
     ./scripts/grep_edge_sealed.sh
@@ -135,6 +135,20 @@ audit-confidence:
 # diffs.
 test-malformed:
     cargo test -p scope-core --test malformed_sources
+
+# Sprint 0009 (Phase E close) — Charter sweep gate.
+#
+# Refuses re-introduction of any compatibility-shim shape that sprint
+# 0009 chunks 1 and 2 retired. Each check in the script targets a
+# specific shim — the `gumiho_mudang_scope::core::*` namespace-synth,
+# the `pub type Edge = RawEdge` alias, `INSERT OR IGNORE`, the
+# `scope impact` CLI command, the `command_label: &'static str`
+# deprecation-alias parameter, etc. Charter § 2 (single-operator
+# posture) + § 3 invariant 8 (no backward-compatibility shims) are
+# the source of truth; this script is the mechanical successor to
+# the chunk-2 manual grep pass.
+gate-charter:
+    ./scripts/gate_charter.sh
 
 # --- Install ---
 
