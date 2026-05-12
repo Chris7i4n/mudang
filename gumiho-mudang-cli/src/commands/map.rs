@@ -210,12 +210,15 @@ fn run_single(args: &MapArgs, project_root: &Path) -> Result<()> {
         };
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
-        formatter::print_map(
-            project_name,
-            &stats,
-            &ep_groups,
-            &core_symbols,
-            &architecture,
+        print!(
+            "{}",
+            formatter::MapView {
+                project_name,
+                stats: &stats,
+                entrypoints: &ep_groups,
+                core_symbols: &core_symbols,
+                directories: &architecture,
+            }
         );
     }
 
@@ -328,12 +331,15 @@ fn run_workspace(args: &MapArgs, workspace_root: &Path, config: &WorkspaceConfig
         };
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
-        formatter::print_map(
-            &config.workspace.name,
-            &stats,
-            &ep_groups,
-            &all_core,
-            &architecture,
+        print!(
+            "{}",
+            formatter::MapView {
+                project_name: &config.workspace.name,
+                stats: &stats,
+                entrypoints: &ep_groups,
+                core_symbols: &all_core,
+                directories: &architecture,
+            }
         );
     }
 

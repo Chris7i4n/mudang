@@ -1089,58 +1089,64 @@ impl fmt::Display for FlowView<'_> {
 /// Background Workers:
 ///   PaymentRetryWorker             src/Infrastructure/Workers/PaymentRetryWorker.cs
 /// ```
-pub fn print_entrypoints(
-    groups: &[(String, Vec<EntrypointInfo>)],
-    total: usize,
-    file_count: usize,
-) {
-    let file_word = if file_count == 1 { "file" } else { "files" };
-    println!(
-        "Entrypoints \u{2014} {} across {} {}",
-        total, file_count, file_word
-    );
-    println!("{SEPARATOR}");
+/// Plain-text view for `scope entrypoints`.
+pub struct EntrypointsView<'a> {
+    pub groups: &'a [(String, Vec<EntrypointInfo>)],
+    pub total: usize,
+    pub file_count: usize,
+}
 
-    if groups.is_empty() {
-        println!("(no entry points found)");
-        return;
-    }
+impl fmt::Display for EntrypointsView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let file_word = if self.file_count == 1 { "file" } else { "files" };
+        writeln!(
+            f,
+            "Entrypoints \u{2014} {} across {} {}",
+            self.total, self.file_count, file_word
+        )?;
+        writeln!(f, "{SEPARATOR}")?;
 
-    for (i, (group_name, entries)) in groups.iter().enumerate() {
-        println!("{group_name}:");
-
-        // Calculate max name width for alignment within this group.
-        let max_name_len = entries
-            .iter()
-            .map(|e| e.name.chars().count())
-            .max()
-            .unwrap_or(0);
-        let name_width = max_name_len.max(20) + 2; // Minimum 20 chars + padding
-
-        for entry in entries {
-            let path = normalize_path(&entry.file_path);
-            let suffix = if entry.method_count > 0 {
-                format!(
-                    "   \u{2192} {} method{}",
-                    entry.method_count,
-                    if entry.method_count == 1 { "" } else { "s" }
-                )
-            } else {
-                String::new()
-            };
-            println!(
-                "  {:<width$}{}{}",
-                entry.name,
-                path,
-                suffix,
-                width = name_width
-            );
+        if self.groups.is_empty() {
+            writeln!(f, "(no entry points found)")?;
+            return Ok(());
         }
 
-        // Blank line between groups (but not after the last one).
-        if i < groups.len() - 1 {
-            println!();
+        for (i, (group_name, entries)) in self.groups.iter().enumerate() {
+            writeln!(f, "{group_name}:")?;
+
+            let max_name_len = entries
+                .iter()
+                .map(|e| e.name.chars().count())
+                .max()
+                .unwrap_or(0);
+            let name_width = max_name_len.max(20) + 2;
+
+            for entry in entries {
+                let path = normalize_path(&entry.file_path);
+                let suffix = if entry.method_count > 0 {
+                    format!(
+                        "   \u{2192} {} method{}",
+                        entry.method_count,
+                        if entry.method_count == 1 { "" } else { "s" }
+                    )
+                } else {
+                    String::new()
+                };
+                writeln!(
+                    f,
+                    "  {:<width$}{}{}",
+                    entry.name,
+                    path,
+                    suffix,
+                    width = name_width
+                )?;
+            }
+
+            if i < self.groups.len() - 1 {
+                writeln!(f)?;
+            }
         }
+        Ok(())
     }
 }
 
@@ -1163,107 +1169,110 @@ pub fn print_entrypoints(
 ///   Api/                    7 files    62 symbols
 ///   Application/            22 files   145 symbols
 /// ```
-pub fn print_map(
-    project_name: &str,
-    stats: &MapStats,
-    entrypoints: &[(String, Vec<EntrypointInfo>)],
-    core_symbols: &[CoreSymbol],
-    directories: &[DirStats],
-) {
-    // Header line: project-name — N files, N symbols, N edges
-    println!(
-        "{} \u{2014} {} files, {} symbols, {} edges",
-        project_name,
-        format_number(stats.file_count),
-        format_number(stats.symbol_count),
-        format_number(stats.edge_count),
-    );
-    println!("{SEPARATOR}");
+/// Plain-text view for `scope map`.
+pub struct MapView<'a> {
+    pub project_name: &'a str,
+    pub stats: &'a MapStats,
+    pub entrypoints: &'a [(String, Vec<EntrypointInfo>)],
+    pub core_symbols: &'a [CoreSymbol],
+    pub directories: &'a [DirStats],
+}
 
-    // Languages line.
-    if !stats.languages.is_empty() {
-        println!("Languages: {}", stats.languages.join(", "));
-    }
+impl fmt::Display for MapView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(
+            f,
+            "{} \u{2014} {} files, {} symbols, {} edges",
+            self.project_name,
+            format_number(self.stats.file_count),
+            format_number(self.stats.symbol_count),
+            format_number(self.stats.edge_count),
+        )?;
+        writeln!(f, "{SEPARATOR}")?;
 
-    // Entry points section.
-    let mut ep_count = 0usize;
-    let mut ep_lines: Vec<String> = Vec::new();
-
-    for (_group_name, entries) in entrypoints {
-        for entry in entries {
-            let path = normalize_path(&entry.file_path);
-            // Extract directory portion of the path.
-            let dir = if let Some(pos) = path.rfind('/') {
-                format!("{}/", &path[..pos])
-            } else {
-                String::new()
-            };
-
-            // Strip leading "src/" for brevity.
-            let display_dir = dir.strip_prefix("src/").unwrap_or(&dir).to_string();
-
-            let suffix = if entry.method_count > 0 {
-                format!(
-                    "   \u{2192} {} method{}",
-                    entry.method_count,
-                    if entry.method_count == 1 { "" } else { "s" }
-                )
-            } else {
-                String::new()
-            };
-
-            ep_lines.push(format!("  {:<32}{:<32}{}", entry.name, display_dir, suffix));
-            ep_count += 1;
+        if !self.stats.languages.is_empty() {
+            writeln!(f, "Languages: {}", self.stats.languages.join(", "))?;
         }
-    }
 
-    if !ep_lines.is_empty() {
-        println!();
-        println!("Entry points:");
-        let max_display = 8;
-        for line in ep_lines.iter().take(max_display) {
-            println!("{line}");
-        }
-        if ep_count > max_display {
-            println!("  ... {} more", ep_count - max_display);
-        }
-    }
+        let mut ep_count = 0usize;
+        let mut ep_lines: Vec<String> = Vec::new();
 
-    // Core symbols section.
-    if !core_symbols.is_empty() {
-        println!();
-        println!("Core symbols (by caller count):");
-        for sym in core_symbols {
-            let path = normalize_path(&sym.file_path);
-            // Strip leading "src/" for brevity.
-            let display_path = path.strip_prefix("src/").unwrap_or(&path).to_string();
+        for (_group_name, entries) in self.entrypoints {
+            for entry in entries {
+                let path = normalize_path(&entry.file_path);
+                let dir = if let Some(pos) = path.rfind('/') {
+                    format!("{}/", &path[..pos])
+                } else {
+                    String::new()
+                };
 
-            let caller_label = format!(
-                "{} caller{}",
-                sym.caller_count,
-                if sym.caller_count == 1 { "" } else { "s" }
-            );
-            println!("  {:<32}{:<14}{}", sym.name, caller_label, display_path);
-        }
-    }
+                let display_dir = dir.strip_prefix("src/").unwrap_or(&dir).to_string();
 
-    // Architecture section.
-    if !directories.is_empty() {
-        println!();
-        println!("Architecture:");
-        for dir in directories {
-            let file_label = format!(
-                "{} file{}",
-                dir.file_count,
-                if dir.file_count == 1 { "" } else { "s" }
-            );
-            let sym_label = format!(
-                "{} symbol{}",
-                dir.symbol_count,
-                if dir.symbol_count == 1 { "" } else { "s" }
-            );
-            println!("  {:<24}{:<14}{}", dir.directory, file_label, sym_label);
+                let suffix = if entry.method_count > 0 {
+                    format!(
+                        "   \u{2192} {} method{}",
+                        entry.method_count,
+                        if entry.method_count == 1 { "" } else { "s" }
+                    )
+                } else {
+                    String::new()
+                };
+
+                ep_lines.push(format!("  {:<32}{:<32}{}", entry.name, display_dir, suffix));
+                ep_count += 1;
+            }
         }
+
+        if !ep_lines.is_empty() {
+            writeln!(f)?;
+            writeln!(f, "Entry points:")?;
+            let max_display = 8;
+            for line in ep_lines.iter().take(max_display) {
+                writeln!(f, "{line}")?;
+            }
+            if ep_count > max_display {
+                writeln!(f, "  ... {} more", ep_count - max_display)?;
+            }
+        }
+
+        if !self.core_symbols.is_empty() {
+            writeln!(f)?;
+            writeln!(f, "Core symbols (by caller count):")?;
+            for sym in self.core_symbols {
+                let path = normalize_path(&sym.file_path);
+                let display_path = path.strip_prefix("src/").unwrap_or(&path).to_string();
+
+                let caller_label = format!(
+                    "{} caller{}",
+                    sym.caller_count,
+                    if sym.caller_count == 1 { "" } else { "s" }
+                );
+                writeln!(
+                    f,
+                    "  {:<32}{:<14}{}",
+                    sym.name, caller_label, display_path
+                )?;
+            }
+        }
+
+        if !self.directories.is_empty() {
+            writeln!(f)?;
+            writeln!(f, "Architecture:")?;
+            for dir in self.directories {
+                let file_label = format!(
+                    "{} file{}",
+                    dir.file_count,
+                    if dir.file_count == 1 { "" } else { "s" }
+                );
+                let sym_label = format!(
+                    "{} symbol{}",
+                    dir.symbol_count,
+                    if dir.symbol_count == 1 { "" } else { "s" }
+                );
+                writeln!(f, "  {:<24}{:<14}{}", dir.directory, file_label, sym_label)?;
+            }
+        }
+        Ok(())
     }
 }
 
