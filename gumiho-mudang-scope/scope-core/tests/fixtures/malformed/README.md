@@ -24,10 +24,12 @@ the harness checks four things:
 2. **Parseable prefix produces ≥ 1 symbol** — the index is not silently
    empty just because a tail is malformed.
 3. **`file_hashes.skipped_ranges` is non-empty** — the indexer must
-   honestly record which line range was skipped, with reason
-   `tree_sitter_error`, `unrecoverable_node`, or
-   `plugin_skip:<plugin>:<rationale>`. Silent drops are no longer
-   acceptable.
+   honestly record which line range was skipped, with reason from one
+   of the three families the implementation emits:
+   `tree_sitter_error:syntax_error` (tree-sitter ERROR node),
+   `tree_sitter_error:missing_node` (tree-sitter MISSING node), or
+   `plugin_skip:<plugin>:<rationale>` (plugin-driven skip).
+   Silent drops are no longer acceptable.
 4. **Snapshot test pins the recorded reason + range** — regressions
    surface as `insta` snapshot diffs. The pinned range covers the lines
    that each fixture's `expected.md` says should be skipped.
@@ -90,8 +92,11 @@ Each fixture directory contains exactly:
     the trailing function body unparseable").
   - The **line range** the harness's snapshot should record as
     `skipped_ranges` (e.g. `lines 17–24` — inclusive, 1-indexed).
-  - The **reason tag** expected in `skipped_ranges` (one of
-    `tree_sitter_error`, `unrecoverable_node`,
+  - The **reason tag** expected in `skipped_ranges`. `expected.md`
+    typically writes the family prefix (e.g. `tree_sitter_error`); the
+    `insta` snapshot test in chunk 4 pins the precise subkind emitted
+    by `error_scan.rs` (one of `tree_sitter_error:syntax_error`,
+    `tree_sitter_error:missing_node`, or
     `plugin_skip:<plugin>:<rationale>`).
 
 Sprint 0008 chunk 1 lands the directory skeleton (this file + per-lang
@@ -135,9 +140,10 @@ The contract:
    `localhost`, `42`.
 
 When a fixture is added, the commit message states (a) the category
-name, (b) the recovery reason expected
-(`tree_sitter_error` / `unrecoverable_node` / `plugin_skip:…`), and
-(c) which of rules 1–4 above the contributor checked.
+name, (b) the expected recovery-reason family
+(`tree_sitter_error` / `plugin_skip:…` — the family prefix; the snapshot
+pins the precise subkind), and (c) which of rules 1–4 above the
+contributor checked.
 
 ---
 

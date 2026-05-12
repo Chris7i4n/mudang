@@ -51,9 +51,14 @@ becomes eligible immediately afterwards.
 ### R6 acceptance ([source](../ARCHITECTURAL-REFACTOR.md#r6--malformed-source-test-harness))
 
 - [ ] Indexer behaviour: when tree-sitter recovery encounters an
-      `ERROR` node region, the parser records the region's line range
-      and reason (`tree_sitter_error`, `unrecoverable_node`,
-      `plugin_skip:<plugin>:<rationale>`) into `skipped_ranges`.
+      `ERROR` or `MISSING` node region, the parser records the region's
+      line range and reason
+      (`tree_sitter_error:syntax_error` for ERROR,
+      `tree_sitter_error:missing_node` for MISSING, or
+      `plugin_skip:<plugin>:<rationale>` for plugin-driven skips) into
+      `skipped_ranges`. Wiring confirmed by chunk 3 indexer audit;
+      `scope-core/src/extract/error_scan.rs::scan_tree_sitter_errors`
+      is the canonical emitter.
 - [ ] Plugin-driven skips appended with reason
       `plugin_skip:<plugin_name>:<rationale>` (the wiring landed in
       sprint 0003; this sprint verifies it).

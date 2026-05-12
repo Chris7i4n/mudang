@@ -9,10 +9,15 @@
 //! - `reason = "tree_sitter_error:syntax_error"` for `ERROR` nodes
 //! - `reason = "tree_sitter_error:missing_node"` for `MISSING` nodes
 //!
-//! Both share the `tree_sitter_error:` prefix that the sprint 0007 R6
+//! Both share the `tree_sitter_error:` prefix that the sprint 0008 R6
 //! malformed-source harness greps to distinguish parser-recovery skips
 //! from plugin-driven skips (the latter use `plugin_skip:` per
-//! [`SkippedRange::reason`] convention).
+//! [`SkippedRange::reason`] convention). These two `tree_sitter_error:*`
+//! subkinds plus `plugin_skip:<plugin>:<rationale>` are the **only**
+//! reason families the indexer emits — `is_error()` and `is_missing()`
+//! are tree-sitter's only error-node accessors, so there is no separate
+//! "unrecoverable" category; a MISSING node is the closest analog and
+//! is already captured by `tree_sitter_error:missing_node`.
 //!
 //! ## Charter alignment
 //!

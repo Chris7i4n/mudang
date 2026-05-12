@@ -114,7 +114,7 @@ pub struct RawCaptures {
     /// Plugin-driven skipped ranges. Each entry is a region the plugin
     /// chose not to analyse (e.g., a macro body it cannot interpret).
     /// The indexer merges these with tree-sitter-error skips into
-    /// `file_hashes.skipped_ranges` (R6, sprint 0007). The extractor
+    /// `file_hashes.skipped_ranges` (R6, sprint 0008). The extractor
     /// passes them through unchanged; charter invariant 5
     /// (tree-sitter resilience) forbids any reorder / merge / filter
     /// at this layer.
