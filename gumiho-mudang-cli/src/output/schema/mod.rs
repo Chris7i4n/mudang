@@ -27,11 +27,16 @@
 //! them).
 
 pub mod compact_symbol;
+pub mod index;
 pub mod refs;
 pub mod summary;
 pub mod symbol_sketch;
 
 pub use compact_symbol::CompactSymbol;
+pub use index::{
+    IndexEvent, IndexFullResult, IndexIncrementalResult, IndexIncrementalUpToDate,
+    IndexLanguageStat, IndexReindexEvent, IndexStartEvent, IndexStopEvent,
+};
 pub use refs::{RefsGroup, RefsGrouped};
 pub use summary::{FileSummary, Summary, SymbolSummary};
 pub use symbol_sketch::{
