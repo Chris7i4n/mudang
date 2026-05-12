@@ -49,13 +49,17 @@ Each line is a JSON object with the following fields:
 
 ### Reserved-for-future fields
 
-Sprint 0007 does **not** define additional fields. Future schema bumps may add (with corresponding `schema_version` bump):
+Sprint 0007 does **not** define additional fields. The binary `label: bool | null` verdict of `schema_version: "1"` is **minimum-viable for the plug-point only** — sufficient to demonstrate the contract and exercise the audit pipeline, but information-poor for closing the self-correction loop. A labeller that can only say *"yes / no / I don't know"* leaves the operator (and the post-refactor patch suggester) with no diagnostic signal: *"wrong"* gives no fix direction, *"skipped"* gives no truth-claim. Richer **qualitative verdict types** — the auditor saying *"Scope claimed X, here is the evidence that Y is the truth"* — are the actionable signal and ship together in `schema_version: "2"`, designed by [`POST-REFACTOR-PLAN.md` § Priority 1 — Self-correction cycle](POST-REFACTOR-PLAN.md#priority-1-immediately-post-refactor--self-correction-cycle) sub-item (g):
 
-- `evidence` (`object | null`) — for LSP labellers to carry the cross-check result (e.g. `{"resolver": "rust-analyzer", "target_uri": "..."}`).
-- `confidence_proposed` (`string | null`) — for labellers that suggest a corrected tier rather than a binary verdict.
+- `evidence` (`object | null`) — labeller-supplied structured evidence behind the verdict. Schema is labeller-defined; conventional keys: `{"resolver": "rust-analyzer", "target_uri": "...", "definition_range": [...]}` for LSP cross-check; `{"model": "claude-sonnet-4-6", "reasoning": "...", "prompt_hash": "..."}` for LLM. The auditor records the *how*, not just the *what*.
+- `target_proposed` (`string | null`) — labeller's correction for `to`. *"Scope said `to = foo::bar`; I see this call resolves to `foo::baz` instead."* Feeds the patch suggester to localise the extractor bug.
+- `kind_proposed` (`string | null`) — labeller's correction for `kind`. *"Scope said `references_type`; this is actually `calls`."*
+- `confidence_proposed` (`string | null`) — labeller's correction for `confidence`. Distinct from a binary "wrong" verdict: the labeller may agree the edge is correct but say the confidence stamp is overstated (or understated).
+- `reasoning_text` (`string | null`) — free-text human (or LLM) explanation. The post-hoc audit trail when a `false` verdict is reviewed months later.
+- `labeller_id` (`string | null`) — identifier of which labeller produced this verdict, for multi-labeller aggregation (Priority 1 sub-item (i)). Conventional values: `"lsp:rust-analyzer"`, `"llm:claude-sonnet-4-6"`, `"human:<initials>"`.
 - `lang_version_evidence` (`string | null`) — for distinguishing detected vs declared version.
 
-None of these ship in `schema_version: "1"`. Adding any of them is a `schema_version` bump to `"2"` with a migration note here.
+None of these ship in `schema_version: "1"`. Adding any of them is a `schema_version` bump to `"2"` with a migration note here. The bump is bundled with the Priority 1 actuator work because the schema is one of three coupled surfaces (record-side fields here, report-side coverage fields documented inline in `gumiho-mudang-cli/src/commands/audit.rs`, DB audit-history persistence in [`POST-REFACTOR-PLAN.md` § Priority 1 sub-item (j)](POST-REFACTOR-PLAN.md#priority-1-immediately-post-refactor--self-correction-cycle)).
 
 ---
 

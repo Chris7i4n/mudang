@@ -66,7 +66,7 @@ gate: fmt-check clippy test
 # this recipe. See sprint 0001 DOD #3.
 
 # Run every active refactor gate.
-gate-refactor: ci-edge-sealed test-builder test-typestate ci-context-shape ci-no-fs ci-dispatch ci-trait-shape ci-no-spawn ci-no-network ci-immutable ci-no-framework-scm ci-patterns ci-output-schema
+gate-refactor: ci-edge-sealed test-builder test-typestate ci-context-shape ci-no-fs ci-dispatch ci-trait-shape ci-no-spawn ci-no-network ci-immutable ci-no-framework-scm ci-patterns ci-output-schema audit-confidence
 
 ci-edge-sealed:
     ./scripts/grep_edge_sealed.sh
@@ -106,6 +106,22 @@ ci-patterns:
 
 ci-output-schema:
     ./scripts/audit_output_schema.sh
+
+# R8 (sprint 0007) — Confidence audit subcommand regression gate.
+#
+# Runs the integration suite that exercises every chunk-4-to-6 surface:
+# JSONL emit shape, --label parsing, SHA-256 drift gate, schema_version
+# rejection, --emit-sample/--label mutex, tier gate pass + fail, JSON +
+# TSV report shape. This is the *mechanical regression* gate — wiring
+# break of the subcommand, SampleRecord field-order drift (would break
+# external labellers), drift-gate removal, tier-target loosening, etc.
+#
+# This is NOT the continuous re-audit cycle. Committed labelled samples
+# + cross-reindex join key + precision-drift detection over time are
+# post-refactor work — see POST-REFACTOR-PLAN.md § Priority 1 —
+# Self-correction cycle.
+audit-confidence:
+    cargo test -p gumiho-mudang-cli --test test_audit_confidence
 
 # --- Install ---
 

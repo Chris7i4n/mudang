@@ -39,14 +39,24 @@ R10 was shipped in [sprint 0006](./0006-phase-d-typed-output-schema.md).
 - [ ] Help text and report header **both** state: *"precision report; recall is measured by integration-test snapshots, not this subcommand."*
 - [ ] The reference fixture corpus is committed and version-controlled at `gumiho-mudang-scope/scope-core/tests/fixtures/reference/<language_slug>/` per the pre-Phase-D ambiguity #1 resolution.
 - [ ] Sampling protocol per the pre-Phase-D ambiguity #2 resolution: default `N = 30` per `(kind, confidence)` cell, `--sample-size N` override, `--seed N` for reproducibility (default fixed compile-time constant).
-- [ ] Manual labelling pipeline per the pre-Phase-D ambiguity #3 resolution: two-phase workflow `scope audit confidence --emit-sample <path>` → maintainer fills `label` slot → `scope audit confidence --label <path>`.
-- [ ] Output format per the pre-Phase-D ambiguity #4 resolution: default `--format json` with top-level `schema_version: "1"`, plus `--format tsv` for shell pipelines.
+- [ ] Manual labelling pipeline per the pre-Phase-D ambiguity #3 resolution (extended in commit `56780b2` on `main` to lock the JSONL plug-point contract): two-phase workflow `scope audit confidence --emit-sample <path>` → **anything** fills the `label` slot (human, LLM script, LSP cross-check script, hybrid pipeline) → `scope audit confidence --label <path>`. Scope spawns no labeller subprocess; the JSONL file is the contract. See [`ARCHITECTURAL-REFACTOR.md` § R8 → Operational shape → Labelling channel](../ARCHITECTURAL-REFACTOR.md#r8--confidence-audit-subcommand) for the extension rationale.
+- [ ] Output format per the pre-Phase-D ambiguity #4 resolution (extended in commit `56780b2` on `main` to lock the sample-row JSONL schema): default `--format json` for the **report** with top-level `schema_version: "1"`, plus `--format tsv`. The **sample file** (`--emit-sample` / `--label`) is JSONL per [`AUDIT-LABEL-SCHEMA.md`](../AUDIT-LABEL-SCHEMA.md) with required fields `edge_id` / `kind` / `confidence` / `producer` / `pattern_id` / `from` / `to` / `source_snippet` / `lang_version: Option<String>` / `label: Option<bool>`. Sprint 0007 always emits `lang_version = null`; per-language detector wiring is a separate atomic delivery in [`POST-REFACTOR-PLAN.md` § Priority 1 sub-item (d)](../POST-REFACTOR-PLAN.md#priority-1-immediately-post-refactor--self-correction-cycle).
+- [ ] `docs/AUDIT-LABEL-SCHEMA.md` referenced from `--help` text of `scope audit confidence --emit-sample` and from the report header, so external labeller authors (LLM, LSP, hybrid) discover the contract directly from the CLI.
 
 ---
 
 ## Ambiguities to clarify before code lands
 
-All four pre-Phase-D ambiguities were resolved on `main` in commit `cdf24bb` ahead of sprint 0006 — see [`ARCHITECTURAL-REFACTOR.md` § R8 → Operational shape](../ARCHITECTURAL-REFACTOR.md#r8--confidence-audit-subcommand) and the sprint 0006 doc's restated summary. Sprint 0007 inherits the resolutions; no new ambiguities open here.
+All four pre-Phase-D ambiguities were resolved on `main` in commit `cdf24bb` ahead of sprint 0006 — see [`ARCHITECTURAL-REFACTOR.md` § R8 → Operational shape](../ARCHITECTURAL-REFACTOR.md#r8--confidence-audit-subcommand) and the sprint 0006 doc's restated summary. Sprint 0007 inherits the resolutions verbatim.
+
+**Extensions landed on `main` in commit `56780b2`** (before any R8 code chunk lands, per §3 ambiguity protocol):
+
+- Ambiguity #3 (labelling channel) extended to lock the **JSONL sample file as the plug-point contract** for any external labeller (LLM, LSP cross-check, hybrid, human). Scope spawns no subprocess. `--labeller <executable>` is explicitly **not** part of R8.
+- Ambiguity #4 (output format) extended to lock the **JSONL sample-row schema** at `schema_version: "1"` with a reserved `lang_version: Option<String>` slot (always `null` in sprint 0007; populated atomically across all seven languages in a later sprint).
+- Full schema documentation lives in the new [`AUDIT-LABEL-SCHEMA.md`](../AUDIT-LABEL-SCHEMA.md).
+- Self-correction cycle (continuous re-audit, labeller crates, ML-driven extractor patch suggester, lang_version detector matrix) is queued as **Priority 1** in [`POST-REFACTOR-PLAN.md`](../POST-REFACTOR-PLAN.md#priority-1-immediately-post-refactor--self-correction-cycle).
+
+No new ambiguities open here.
 
 ---
 

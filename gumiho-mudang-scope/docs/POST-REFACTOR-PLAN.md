@@ -36,6 +36,48 @@ This priority-1 work ships the **actuator** — the closed loop that converts R8
 - **(d) Per-language `lang_version` detector matrix.** Populate the `lang_version` JSONL slot atomically across all seven supported languages: Rust (edition + rust-version from `Cargo.toml` — module exists), Go (`go.mod` directive — module exists), Python (`requires-python` from `pyproject.toml` / `setup.py`), TypeScript (`tsconfig.json` `target`), Java (Maven `<source>/<target>` + Gradle source compatibility — two build systems), C# (`<TargetFramework>` from `.csproj`), Ruby (`.ruby-version` + Gemfile `ruby` directive). Sprint 0007 emits `null` for every language; this sub-item turns all seven on in a single delivery so the labelled corpus does not split into a "versioned" and "unversioned" era. Per-language detector wiring is workspace-side only and does not violate R4's `LanguageWorkspaceContext` shape (these stay off the plugin trait surface).
 - **(e) Labelled corpus accumulation policy.** Committed `*.jsonl` files under `scope-core/tests/fixtures/reference/<lang>/audit-samples/` are regression assets. Sample provenance recorded per-commit (labeller used, date). Old samples are kept until the underlying fixture is removed — stable precision over time is itself the signal.
 - **(f) ML-driven extractor patch suggester.** Long-horizon: an analyzer that reads labelled failures, locates the offending pattern in the extractor source, and proposes a code patch (branch on an AST shape, downgrade the confidence stamp, add a guard). The human review gate stays mandatory — this is a suggester, not an applier. Triggers when the labelled corpus is large enough to train a meaningful model (heuristic: 1000+ samples across ≥4 languages).
+- **(g) Richer auditor verdict types — JSONL `schema_version` bump `"1"` → `"2"`.** Sprint 0007 locked the JSONL sample-row at `schema_version: "1"` with a binary `label: bool | null` verdict. That surface is **minimum-viable for the plug-point only**: a binary correct/wrong/skipped is information-poor signal — a labeller saying "wrong" tells you nothing about *why* it is wrong, and "skipped" tells you nothing about *what* was actually true. The actionable signal for closing the self-correction loop is **qualitative**: the auditor saying *"Scope claimed X, here is the evidence that Y is the truth"* — proposed corrected target, proposed corrected kind, proposed corrected confidence tier, free-text reasoning, cross-check evidence. The schema-bump-2 record adds (each `null` on emit, populated by capable labellers; partial population tolerated):
+  - **`evidence: object | null`** — labeller-supplied structured evidence behind the verdict. Schema is labeller-defined; conventional keys: `{"resolver": "rust-analyzer", "target_uri": "...", "definition_range": [...]}` for LSP cross-check; `{"model": "claude-sonnet-4-6", "reasoning": "...", "prompt_hash": "..."}` for LLM. The auditor records the *how*, not just the *what*.
+  - **`target_proposed: string | null`** — labeller's correction for `to`. *"Scope said `to = foo::bar`; I see this call resolves to `foo::baz` instead."* This is the actionable diff: feeds the ML-driven patch suggester ((f)) to localise the extractor bug.
+  - **`kind_proposed: string | null`** — labeller's correction for `kind`. *"Scope said `references_type`; this is actually `calls` (the call expression is parenthesised after the identifier)."*
+  - **`confidence_proposed: string | null`** — labeller's correction for `confidence`. *"Scope said `high`; I see overload ambiguity here, this should be `medium`."* Distinct from a binary "wrong" verdict: the labeller may agree the edge is correct but say the confidence stamp is overstated.
+  - **`reasoning_text: string | null`** — free-text human (or LLM) explanation. The post-hoc audit trail when a `false` verdict is reviewed months later.
+  - **`lang_version_evidence: string | null`** — for distinguishing detected vs declared version (already named in `AUDIT-LABEL-SCHEMA.md` § Reserved-for-future fields).
+
+  The bump lands together with sub-item (h) (coverage surfacing on the report side) and sub-item (j) (DB storage shape), because all three are entry points for the same qualitative-signal surface. `schema_version: "1"` labellers continue to work — `--label` accepts both versions, treating the new fields as `null` when absent. Removing or repurposing existing `"1"` fields is still charter-grade.
+
+- **(h) Per-group coverage surfaced on the precision report.** Sprint 0007 ships `--label` with a hard rule: precision is computed over labelled records only (`label = true | false`), records with `label = null` are skipped. The report's `sample_size` per group is therefore the labelled count — the precision denominator. But the report does **not** today surface *how many records were skipped*. An operator reading `calls/high/rust/method: precision=1.0, sample_size=15` cannot tell whether the labeller covered every record (transparent) or only 15 out of 45 (opaque — 2/3 unaudited). That gap is acknowledged in the report header (see `COVERAGE_LIMITATION_NOTE` in `gumiho-mudang-cli/src/commands/audit.rs` and the inline comment on `compute_precision_report`); it closes here. The schema-bump-2 report adds:
+  - **`skipped_count: usize`** per row — number of records in this group whose label was `null`.
+  - **`labelled_count: usize`** per row — explicit alias for `sample_size`, kept side-by-side with `skipped_count` so the report is self-documenting (no need to compute `total = sample_size + skipped_count` mentally).
+  - **`coverage_ratio: f64`** per row — `labelled_count / (labelled_count + skipped_count)`. Computed once at write time so consumers don't re-derive.
+  - **Top-level `coverage_summary: { records_total: usize, records_labelled: usize, records_skipped: usize, distinct_groups_with_coverage: usize, distinct_groups_fully_skipped: usize }`** — single-glance view of overall labelling depth across the whole sample.
+
+  Honesty implication: paired with (g)'s richer verdict types, the operator finally sees the **full** signal — what Scope claimed, what the labeller could and could not judge, and where it disagreed with reasons.
+
+- **(i) Multi-labeller verdict aggregation.** Realistic labelling pipelines run several labellers in series or parallel (LSP fast-path for `calls`, LLM for everything else, human reviewer for diffs) and produce conflicting verdicts on the same `edge_id`. Sprint 0007 has no aggregation surface — each `--label` invocation consumes one file. (i) designs:
+  - **Multi-source JSONL format** — multiple labellers' outputs concatenated or merged, each record carrying a new `labeller_id: string` field (added in (g)'s schema bump) identifying which labeller produced the verdict.
+  - **Aggregation policy** — when LSP says `true`, LLM says `false`, human says `null`, what does the precision report say for that edge? Options:
+    - Priority order (e.g., human overrides LLM overrides LSP)
+    - Quorum (n-of-m agree → use that; disagreement → flag for review)
+    - Per-labeller confidence weight (`labeller_id` → trust score, applied to `confidence_proposed`)
+    - Hybrid (use the LSP fast-path when available; fall back to LLM; defer to human on confirmed disagreement)
+  - **Disagreement diagnostics** — when labellers disagree on `kind_proposed` or `target_proposed`, that disagreement is itself a precision-system signal worth surfacing (one labeller is wrong; or the edge is ambiguous; or Scope's stamp is the source of the confusion).
+  - **Policy lives in the runner, not in Scope** — the labeller-crates ecosystem from (b) carries aggregation; Scope's `--label` reads the *aggregated* JSONL output. No new flag on the subcommand.
+
+- **(j) Audit-history persistence in the DB — separate writable namespace, auditor immutability preserved.** Sprint 0007's `--label` consumes a JSONL file and emits a stdout/stdout report. Nothing of the audit result flows back to `graph.db`. That keeps the auditor-immutability rule absolute *for the source-derived tables* (`edges`, `symbols`, `file_hashes`) but means **historical audit data is not queryable**. A pattern that fails precision every Tuesday for three months produces three months of independent reports — Scope itself cannot say *"this pattern_id has trended downward over N audits"*. (j) designs the persistence layer:
+  - **New table `edge_audit_history`** (or analogous) — schema: `(audit_id, edge_id, labelled_at, labeller_id, label, target_proposed, kind_proposed, confidence_proposed, evidence_json)`. Append-only; one row per (audit run × edge) tuple a labeller weighed in on. Indexed by `(edge_id, audit_id)` and `(labeller_id, audit_id)`.
+  - **Sibling auditor-immutability rule** — the table is writable by `scope audit confidence --label` but *never* mutates `edges` / `symbols` / `file_hashes` rows. The source-derived schema stays frozen during audit; the audit-derived schema records what the auditor decided. Two distinct namespaces, two distinct enforcement gates.
+  - **Auditor immutability rule extension** — `AUDIT-LABEL-SCHEMA.md` § Auditor immutability rule gets a new paragraph carving out the writable namespace explicitly so the read-only-on-source promise remains mechanically checkable.
+  - **`scope audit history`** subcommand — read-side surface for the new table: per-edge audit timeline, per-pattern_id precision-over-time, per-labeller agreement matrix. Becomes the input for (f) (the patch suggester operates on history, not just a single audit run).
+  - **Retention policy** — committed labelled samples under `tests/fixtures/reference/<lang>/audit-samples/` accumulate. `edge_audit_history` accumulates indefinitely too, unless a future sprint adds eviction. The bytes are cheap; the longitudinal signal is the value.
+
+- **(k) Confidence re-stamping policy from accumulated audit signal.** Once (j) ships, the system *can* answer "this `(producer, pattern_id)` has consistently failed precision at the high tier over the last 30 audits". The natural next move: downgrade Scope's confidence stamp for that pattern_id. (k) is **the policy decision that gates the actuator turning on**:
+  - **Automatic downgrade** — when N consecutive audits show precision < tier-target by some margin, the next index run stamps the edge `medium` instead of `high`. Pro: closes the loop fully. Con: indirection between extractor source code and emitted confidence — the extractor stops being the single source of truth for what a stamp means.
+  - **Flag-for-review** — when the same threshold is met, the next audit report surfaces "pattern_id X is consistently sub-target; manual review recommended"; the human edits the extractor source and commits a downgrade. Pro: extractor source stays canonical. Con: human-in-the-loop on every regression; slow.
+  - **Hybrid** — automatic downgrade for tier-internal moves (`high → medium`); manual-only for cross-tier (`medium → low` is downgrade but `low → medium` is upgrade and dangerous).
+  - **Audit-trail invariant** — every automatic re-stamp is logged in `REFACTOR-STATUS.md`-equivalent log so future maintainers can trace why a given edge in the index carries a confidence stamp different from what the extractor source naively produces. The audit trail is non-optional; without it, the loop becomes opaque.
+
+  This policy is the riskiest piece in Priority 1 and ships last. Premature automation here can pollute the index with stamps that lag the actual extractor behaviour by audit-cycle epochs.
 
 ### Gate to start
 
@@ -84,6 +126,43 @@ Phase E acceptance (per "Gate" section above). Runs in parallel with Priority 1 
 ### Why this is **not** absorbed by Priority 1 (self-correction cycle)
 
 Priority 1's labelling pipeline reads `source_snippet` directly from the source file at audit time — it deliberately sidesteps `args_text` precisely because R8's design recognised the approximation issue. So Priority 1 ships safely even before Priority 2 lands. But every **other** consumer of `args_text` (resolver, framework plugins, future LSP integration, time-travel queries) is still reading a possibly-truncated string. Priority 2 plugs the leak system-wide.
+
+---
+
+## Priority 3 (immediately post-refactor) — Layering audit: thin CLI, fat library
+
+### Principle
+
+The CLI crate (`gumiho-mudang-cli`) is a **presentation layer**: clap argument parsing, dispatch into the engine, and output formatting against the R10 typed schema. Domain logic — analysis algorithms, schema-versioned wire formats, mechanical invariants (drift gates, tier targets) — belongs in a scope sub-crate where it can be unit-tested in isolation, reused by future hosts (LSP, web service, batch CI tool), and audited against the architectural-refactor R-moves without the indirection of "look inside the CLI".
+
+The split tracks the same charter discipline as the R-moves: each surface has one responsibility, the responsibility is named, and crossing the seam is mechanically detectable in review.
+
+### Known offender (Priority 3 sprint opens here)
+
+- **`gumiho-mudang-cli/src/commands/audit.rs` (~1400 LOC after sprint 0007)** — R8's entire engine lives in the CLI: `sample_stratified` + `xorshift64` PRNG (the sampling algorithm), `SampleRecord` + `PrecisionReport` + `ReportRow` + `ReportFormat` (the schema-versioned wire formats), `compute_precision_report` (the precision math), `write_report` (JSON + TSV serialisation), `check_tier_gate` + `HIGH_TIER_MIN` / `MEDIUM_TIER_MIN` (the mechanical invariant), `enforce_freshness` + `drift_error` + `read_source_snippet` (the auditor-immutability machinery). Every one of those surfaces is library-grade. The CLI's job is to parse `--emit-sample` / `--label` / `--format` and call the library; it currently does **the entire R8 implementation**. A future LSP / web-service / batch-CI host that wants to invoke R8 cannot today without pulling `gumiho-mudang-cli` as a dependency, which violates the charter §4 layering map (`gumiho-mudang-cli` depends on the engine, never the other way).
+
+### Sub-items
+
+- **(a) Cut a new sub-crate `scope-audit`** (or a module under `scope-core::audit`, decision in (b) below). Migrate from `gumiho-mudang-cli/src/commands/audit.rs` to it:
+  - The sampling engine (`sample_stratified` + `xorshift64`).
+  - The wire-format types (`SampleRecord` + `PrecisionReport` + `ReportRow` + `ReportFormat`) including their serde derives.
+  - The precision computation (`compute_precision_report`).
+  - The report writers (`write_report`).
+  - The tier gate (`check_tier_gate` + `HIGH_TIER_MIN` + `MEDIUM_TIER_MIN`).
+  - The auditor-immutability surface (`Graph::check_audit_freshness` may stay on `scope-graph` since it is graph-bound; the CLI's `enforce_freshness` + `drift_error` + `read_source_snippet` move with the audit library).
+  - The constants `SCHEMA_VERSION`, `PRECISION_ONLY_DISCLAIMER`, `SCHEMA_DOC_POINTER`, `DEFAULT_SAMPLE_SIZE`, `DEFAULT_SEED`.
+- **(b) Decide sub-crate vs. module.** A new sibling crate (`scope-audit`) matches the existing sub-crate split (R-move terminology — see `gumiho-mudang-scope/src/lib.rs` façade). A module under `scope-core::audit` is one fewer crate to compile. The trade-off is dependency direction: `scope-audit` would want `scope-graph` (`Graph`, `AuditEdgeRow`, `AuditFreshness`); a module under `scope-core` would force an upward dependency `scope-core → scope-graph` that does not exist today. Sibling sub-crate is the cleaner answer; the dispatch convenience of a module loses to the dependency-graph clarity. Confirm in the sprint plan.
+- **(c) Reduce `commands/audit.rs` to dispatch only.** The CLI module retains: the `AuditArgs` / `AuditCommands` / `ConfidenceArgs` / `ReportFormat` (the **clap surface**, which is unavoidably CLI-grade); the `run(args, project_root)` entry point; the three subcommand-flow stubs (`run_confidence` → `default_summary` / `emit_sample` / `label_pass`) that call into `scope-audit` and print results. Target post-extraction size: under 200 LOC.
+- **(d) Migrate the integration test suite.** `gumiho-mudang-cli/tests/integration/test_audit_confidence.rs` stays in the CLI (it exercises the CLI surface end-to-end), but the unit-test block currently inside `commands/audit.rs` migrates to `scope-audit` as a module test — the assertions test the engine, not the CLI.
+- **(e) Audit every other CLI command for the same offender pattern.** Each `gumiho-mudang-cli/src/commands/*.rs` whose body exceeds the dispatch + formatting envelope is queued for the same extraction. Candidates spot-checked at sprint-0007 close: `index.rs` (large indexer driver), `flow.rs` / `trace.rs` (graph traversal lives in the CLI), `setup.rs` (process spawn lives in the CLI). Triage and queue them as further Priority 3 sub-items; do not bundle all of them into one sprint.
+
+### Gate to start
+
+Phase E acceptance (per "Gate" section above). Runs in parallel with Priority 1 and Priority 2 — independent surface.
+
+### Why this is **not** absorbed by the refactor
+
+The R-moves carved up `scope-core` / `scope-graph` / `scope-index` / `scope-search` / `scope-workspace` (sprint 0000 decomposition) but did not retouch `gumiho-mudang-cli`. R8 (sprint 0007) is the first refactor R-move that grew a substantial engine; nothing in the R-move catalogue forced the engine into the CLI, the implementation simply landed there because chunks 3-8 were under sprint-clock pressure and the CLI was the most obvious place to keep momentum. The honesty principle (Priority 2) applies here too in a different shape: *the layering on the box does not match the layering in the code*. Priority 3 corrects that.
 
 ---
 
