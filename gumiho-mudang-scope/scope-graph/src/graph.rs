@@ -16,6 +16,35 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 
+/// One row from the `edges` table, in the shape the R8 audit
+/// (`scope audit confidence`) needs.
+///
+/// All fields are stored as raw strings to match the SQLite column types
+/// and to keep R8's grouping / JSONL emission free of round-trip parsing
+/// through the `EdgeKind` / `Confidence` / `Producer` enums.
+#[derive(Debug, Clone)]
+pub struct AuditEdgeRow {
+    /// `edges.edge_id` — the stable surrogate PK round-tripped verbatim
+    /// to the JSONL sample (per `docs/AUDIT-LABEL-SCHEMA.md`).
+    pub edge_id: i64,
+    pub from_id: String,
+    pub to_id: String,
+    /// `edges.kind` value — one of the 38 whitelisted strings.
+    pub kind: String,
+    /// `edges.confidence` value — `"high"` | `"medium"` | `"low"`.
+    pub confidence: String,
+    /// `edges.producer` value — language slug, `"framework:<name>"`,
+    /// `"resolution"`, or `"indexer"`.
+    pub producer: String,
+    pub pattern_id: String,
+    pub file_path: String,
+    pub line: Option<u32>,
+    /// `edges.args_text` — optional call-site or definition-site snippet.
+    /// Subject to the 2 KB truncation cap with `[truncated]` marker
+    /// (R0 mitigation).
+    pub args_text: Option<String>,
+}
+
 /// One row destined for the `file_hashes` table (R6 — sprint 0003 chunk 3a).
 ///
 /// Wraps the historical `(file_path, hash)` pair with `skipped_ranges` so
@@ -2210,6 +2239,41 @@ impl Graph {
         }
 
         Ok(false)
+    }
+
+    /// List every row in `edges` in the shape the R8 audit consumes.
+    ///
+    /// Returns rows ordered by `edge_id` ASC so the sampling engine sees
+    /// a deterministic input regardless of insert order. Cost is one
+    /// full table scan; R8 always operates on the whole edges table by
+    /// design (the audit is global, not query-driven).
+    pub fn list_edges_for_audit(&self) -> Result<Vec<AuditEdgeRow>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT edge_id, from_id, to_id, kind, confidence, producer, \
+                    pattern_id, file_path, line, args_text \
+               FROM edges \
+              ORDER BY edge_id ASC",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(AuditEdgeRow {
+                edge_id: row.get(0)?,
+                from_id: row.get(1)?,
+                to_id: row.get(2)?,
+                kind: row.get(3)?,
+                confidence: row.get(4)?,
+                producer: row.get(5)?,
+                pattern_id: row.get(6)?,
+                file_path: row.get(7)?,
+                line: row.get::<_, Option<i64>>(8)?.map(|n| n as u32),
+                args_text: row.get(9)?,
+            })
+        })?;
+
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
     }
 }
 
