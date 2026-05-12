@@ -114,19 +114,26 @@ pub struct ClassSketch<'a> {
 }
 
 /// Method / function sketch — symbol + outgoing calls + incoming callers.
+///
+/// `calls` is a list of callee names (`graph.get_outgoing_calls`
+/// returns symbol-name strings; resolver-tier symbol structs are not
+/// materialised here).
 #[derive(Debug, Clone, Serialize)]
 pub struct MethodSketch<'a> {
     pub symbol: SketchSymbol<'a>,
-    pub calls: &'a [Symbol],
+    pub calls: &'a [String],
     pub called_by: &'a [CallerInfo],
 }
 
 /// Interface sketch — symbol + methods + implementors + relationships.
+///
+/// `implementors` is a list of implementor symbol-name strings
+/// (`graph.get_implementors` shape).
 #[derive(Debug, Clone, Serialize)]
 pub struct InterfaceSketch<'a> {
     pub symbol: SketchSymbol<'a>,
     pub methods: Vec<SketchSymbol<'a>>,
-    pub implementors: &'a [Symbol],
+    pub implementors: &'a [String],
     pub relationships: &'a ClassRelationships,
 }
 
