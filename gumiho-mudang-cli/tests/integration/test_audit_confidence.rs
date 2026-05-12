@@ -400,6 +400,74 @@ fn test_audit_confidence_label_rejects_unknown_edge_id() {
 }
 
 #[test]
+fn test_audit_confidence_label_rejects_tampered_confidence_field() {
+    // Codex round-2 P2 regression: --label must NOT pass tier gate when
+    // the labeller rewrites `confidence` (or other report-key fields)
+    // while preserving a valid edge_id. Codex scenario: a buggy
+    // labeller flips `confidence: high -> low` would silently route
+    // the row into the low-tier (no minimum) and the run would pass
+    // even though the indexed edge actually belongs to the high tier
+    // (95% target).
+    let (_dir, root) = setup_indexed_fixture();
+    let sample = root.join("sample.jsonl");
+
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--emit-sample"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .success();
+
+    // Flip the first record's confidence to a different valid tier
+    // while keeping every other field intact. Whatever tier the
+    // indexer stamps for this fixture (high / medium / low — typically
+    // medium for the default builder), rewrite it to a value that
+    // *differs* from the indexed row so the tamper gate fires.
+    let raw = std::fs::read_to_string(&sample).unwrap();
+    let mut out_lines = Vec::new();
+    let mut tampered_pair: Option<(String, String)> = None;
+    for l in raw
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+    {
+        let mut line = l.replace("\"label\":null", "\"label\":true");
+        if tampered_pair.is_none() {
+            for (real, fake) in [
+                ("\"confidence\":\"high\"", "\"confidence\":\"low\""),
+                ("\"confidence\":\"medium\"", "\"confidence\":\"low\""),
+                ("\"confidence\":\"low\"", "\"confidence\":\"high\""),
+            ] {
+                if line.contains(real) {
+                    line = line.replacen(real, fake, 1);
+                    let real_tier = real.trim_start_matches("\"confidence\":\"").trim_end_matches('"');
+                    let fake_tier = fake.trim_start_matches("\"confidence\":\"").trim_end_matches('"');
+                    tampered_pair = Some((real_tier.to_string(), fake_tier.to_string()));
+                    break;
+                }
+            }
+        }
+        out_lines.push(line);
+    }
+    let (real_tier, fake_tier) = tampered_pair
+        .expect("emit-sample must produce at least one record with a valid confidence tier");
+    std::fs::write(&sample, out_lines.join("\n") + "\n").unwrap();
+
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--label"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .failure()
+        .stderr(contains("sample-file tamper check failed"))
+        .stderr(contains("confidence"))
+        .stderr(contains(format!("sample = \"{fake_tier}\"")))
+        .stderr(contains(format!("indexed = \"{real_tier}\"")))
+        .stderr(contains("re-emit the sample"));
+}
+
+#[test]
 fn test_audit_confidence_label_rejects_null_labels() {
     let (_dir, root) = setup_indexed_fixture();
     let sample = root.join("sample.jsonl");

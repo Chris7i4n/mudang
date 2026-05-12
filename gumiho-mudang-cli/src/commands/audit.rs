@@ -9,7 +9,7 @@
 use anyhow::{Context, Result};
 use clap::{Args, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
@@ -490,13 +490,105 @@ fn label_pass(
         return Err(anyhow::anyhow!(msg));
     }
 
+    // Report-key integrity gate (post-codex P2 round 2): the precision
+    // report groups rows by (kind, tier, producer, pattern_id). Those
+    // values come from the labeller-supplied JSONL fields, so a buggy
+    // or tampered labeller that rewrites `confidence: high -> low`
+    // while preserving a valid `edge_id` would pass the P1 edge-id
+    // integrity gate, then misroute the row into a tier with no
+    // minimum (low) or attribute the failure to the wrong pattern.
+    //
+    // Per the auditor-independence principle the auditor uses the
+    // extractor's stamps as **stratification axes**, but the *indexed
+    // graph* — not the labeller's copy — is the source of those axes.
+    // The labeller's job is to fill `label`; rewriting any other field
+    // is sample drift, sibling to source drift, and gets the same hard
+    // mechanical rejection treatment (no `--allow-tampering-skip`).
+    let mut indexed_by_id: HashMap<i64, &AuditEdgeRow> = HashMap::new();
+    for row in &all_rows {
+        indexed_by_id.insert(row.edge_id, row);
+    }
+    // (field-name, sample value, indexed value) — one entry per axis that diverges.
+    type FieldDiff = (&'static str, String, String);
+    let mut tampered: Vec<(usize, Vec<FieldDiff>)> = Vec::new();
+    for (line_no, record) in &records {
+        let id = record
+            .edge_id
+            .parse::<i64>()
+            .expect("edge_id parse already validated above");
+        let indexed_row = indexed_by_id
+            .get(&id)
+            .expect("edge_id presence already validated above");
+        let mut diffs: Vec<FieldDiff> = Vec::new();
+        if record.kind != indexed_row.kind {
+            diffs.push(("kind", record.kind.clone(), indexed_row.kind.clone()));
+        }
+        if record.confidence != indexed_row.confidence {
+            diffs.push((
+                "confidence",
+                record.confidence.clone(),
+                indexed_row.confidence.clone(),
+            ));
+        }
+        if record.producer != indexed_row.producer {
+            diffs.push((
+                "producer",
+                record.producer.clone(),
+                indexed_row.producer.clone(),
+            ));
+        }
+        if record.pattern_id != indexed_row.pattern_id {
+            diffs.push((
+                "pattern_id",
+                record.pattern_id.clone(),
+                indexed_row.pattern_id.clone(),
+            ));
+        }
+        if !diffs.is_empty() {
+            tampered.push((*line_no, diffs));
+        }
+    }
+    if !tampered.is_empty() {
+        use std::fmt::Write as _;
+        let mut msg = String::new();
+        let _ = writeln!(
+            msg,
+            "sample-file tamper check failed: {} record(s) carry report-key fields \
+             (kind / confidence / producer / pattern_id) that disagree with the indexed edge. \
+             The labeller may set `label` only; rewriting any other field invalidates the audit \
+             because the precision report groups rows by those fields and the tier gate enforces \
+             targets per tier.",
+            tampered.len()
+        );
+        for (line_no, diffs) in &tampered {
+            let _ = writeln!(msg, "\n  {}: line {}:", in_path.display(), line_no);
+            for (field, sample, indexed_val) in diffs {
+                let _ = writeln!(
+                    msg,
+                    "    {field}: sample = {sample:?}, indexed = {indexed_val:?}"
+                );
+            }
+        }
+        msg.push_str(
+            "\nRemediation: re-emit the sample against the current index \
+             (`scope audit confidence --emit-sample <new-path>`) and re-label, \
+             modifying only the `label` field of each record. \
+             There is no `--allow-tampering-skip` escape — silently substituting \
+             labeller-supplied report keys for indexed values would hide the drift \
+             and produce a precision report with mis-stratified rows, violating \
+             AUDIT-LABEL-SCHEMA.md § Auditor immutability rule.",
+        );
+        return Err(anyhow::anyhow!(msg));
+    }
+
     // Drift gate runs on the union of files referenced by the
-    // (now fully resolved) edge_ids. `referenced_rows` is built from
-    // the same `all_rows` snapshot that the integrity gate used so the
-    // two checks see a consistent view of the index.
+    // (now fully resolved + tamper-free) edge_ids. `referenced_rows` is
+    // built from the same `all_rows` snapshot that the integrity + tamper
+    // gates used so all three checks see a consistent view of the index.
     let referenced_rows: Vec<AuditEdgeRow> = all_rows
-        .into_iter()
+        .iter()
         .filter(|r| parsed_ids.contains(&r.edge_id))
+        .cloned()
         .collect();
     enforce_freshness(graph, project_root, &referenced_rows)?;
 
