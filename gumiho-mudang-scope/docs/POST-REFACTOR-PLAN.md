@@ -87,6 +87,43 @@ Priority 1's labelling pipeline reads `source_snippet` directly from the source 
 
 ---
 
+## Priority 3 (immediately post-refactor) — Layering audit: thin CLI, fat library
+
+### Principle
+
+The CLI crate (`gumiho-mudang-cli`) is a **presentation layer**: clap argument parsing, dispatch into the engine, and output formatting against the R10 typed schema. Domain logic — analysis algorithms, schema-versioned wire formats, mechanical invariants (drift gates, tier targets) — belongs in a scope sub-crate where it can be unit-tested in isolation, reused by future hosts (LSP, web service, batch CI tool), and audited against the architectural-refactor R-moves without the indirection of "look inside the CLI".
+
+The split tracks the same charter discipline as the R-moves: each surface has one responsibility, the responsibility is named, and crossing the seam is mechanically detectable in review.
+
+### Known offender (Priority 3 sprint opens here)
+
+- **`gumiho-mudang-cli/src/commands/audit.rs` (~1400 LOC after sprint 0007)** — R8's entire engine lives in the CLI: `sample_stratified` + `xorshift64` PRNG (the sampling algorithm), `SampleRecord` + `PrecisionReport` + `ReportRow` + `ReportFormat` (the schema-versioned wire formats), `compute_precision_report` (the precision math), `write_report` (JSON + TSV serialisation), `check_tier_gate` + `HIGH_TIER_MIN` / `MEDIUM_TIER_MIN` (the mechanical invariant), `enforce_freshness` + `drift_error` + `read_source_snippet` (the auditor-immutability machinery). Every one of those surfaces is library-grade. The CLI's job is to parse `--emit-sample` / `--label` / `--format` and call the library; it currently does **the entire R8 implementation**. A future LSP / web-service / batch-CI host that wants to invoke R8 cannot today without pulling `gumiho-mudang-cli` as a dependency, which violates the charter §4 layering map (`gumiho-mudang-cli` depends on the engine, never the other way).
+
+### Sub-items
+
+- **(a) Cut a new sub-crate `scope-audit`** (or a module under `scope-core::audit`, decision in (b) below). Migrate from `gumiho-mudang-cli/src/commands/audit.rs` to it:
+  - The sampling engine (`sample_stratified` + `xorshift64`).
+  - The wire-format types (`SampleRecord` + `PrecisionReport` + `ReportRow` + `ReportFormat`) including their serde derives.
+  - The precision computation (`compute_precision_report`).
+  - The report writers (`write_report`).
+  - The tier gate (`check_tier_gate` + `HIGH_TIER_MIN` + `MEDIUM_TIER_MIN`).
+  - The auditor-immutability surface (`Graph::check_audit_freshness` may stay on `scope-graph` since it is graph-bound; the CLI's `enforce_freshness` + `drift_error` + `read_source_snippet` move with the audit library).
+  - The constants `SCHEMA_VERSION`, `PRECISION_ONLY_DISCLAIMER`, `SCHEMA_DOC_POINTER`, `DEFAULT_SAMPLE_SIZE`, `DEFAULT_SEED`.
+- **(b) Decide sub-crate vs. module.** A new sibling crate (`scope-audit`) matches the existing sub-crate split (R-move terminology — see `gumiho-mudang-scope/src/lib.rs` façade). A module under `scope-core::audit` is one fewer crate to compile. The trade-off is dependency direction: `scope-audit` would want `scope-graph` (`Graph`, `AuditEdgeRow`, `AuditFreshness`); a module under `scope-core` would force an upward dependency `scope-core → scope-graph` that does not exist today. Sibling sub-crate is the cleaner answer; the dispatch convenience of a module loses to the dependency-graph clarity. Confirm in the sprint plan.
+- **(c) Reduce `commands/audit.rs` to dispatch only.** The CLI module retains: the `AuditArgs` / `AuditCommands` / `ConfidenceArgs` / `ReportFormat` (the **clap surface**, which is unavoidably CLI-grade); the `run(args, project_root)` entry point; the three subcommand-flow stubs (`run_confidence` → `default_summary` / `emit_sample` / `label_pass`) that call into `scope-audit` and print results. Target post-extraction size: under 200 LOC.
+- **(d) Migrate the integration test suite.** `gumiho-mudang-cli/tests/integration/test_audit_confidence.rs` stays in the CLI (it exercises the CLI surface end-to-end), but the unit-test block currently inside `commands/audit.rs` migrates to `scope-audit` as a module test — the assertions test the engine, not the CLI.
+- **(e) Audit every other CLI command for the same offender pattern.** Each `gumiho-mudang-cli/src/commands/*.rs` whose body exceeds the dispatch + formatting envelope is queued for the same extraction. Candidates spot-checked at sprint-0007 close: `index.rs` (large indexer driver), `flow.rs` / `trace.rs` (graph traversal lives in the CLI), `setup.rs` (process spawn lives in the CLI). Triage and queue them as further Priority 3 sub-items; do not bundle all of them into one sprint.
+
+### Gate to start
+
+Phase E acceptance (per "Gate" section above). Runs in parallel with Priority 1 and Priority 2 — independent surface.
+
+### Why this is **not** absorbed by the refactor
+
+The R-moves carved up `scope-core` / `scope-graph` / `scope-index` / `scope-search` / `scope-workspace` (sprint 0000 decomposition) but did not retouch `gumiho-mudang-cli`. R8 (sprint 0007) is the first refactor R-move that grew a substantial engine; nothing in the R-move catalogue forced the engine into the CLI, the implementation simply landed there because chunks 3-8 were under sprint-clock pressure and the CLI was the most obvious place to keep momentum. The honesty principle (Priority 2) applies here too in a different shape: *the layering on the box does not match the layering in the code*. Priority 3 corrects that.
+
+---
+
 ## Cross-cutting items (charter §6 soft-expansion zone, not absorbed by refactor)
 
 The refactor absorbed several soft-expansion items into its R-moves (resolution pass → R3, domain edge kinds → R0, config-file readers → R4, confidence/provenance metadata → R0, decorator/annotation argument capture → R0 + R5). The items below are the **remainder**: they sit in the soft-expansion zone but require new work after the refactor closes.
