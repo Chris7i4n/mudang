@@ -79,14 +79,11 @@ Refactor progress snapshot (live state lives in
   sprint-close) pending.
 - **Sprints 0002–0005** — shipped (Phase B atomic close on 2026-05-12
   for 0002/0003/0004; Phase C close on 2026-05-12 for 0005).
-- **Sprints 0006–0009** — Phase D + Phase E. **Sprint 0006**
-  (R10 typed output schema) in-progress on
-  `refactor/sprint-0006-typed-output-schema` (off the
-  `refactor/phase-d` integration branch). **Sprint 0007**
-  (R8 confidence audit) unstarted — cuts from `refactor/phase-d` after
-  sprint 0006 merges. **Sprint 0008** (R6 malformed-source harness)
+- **Sprints 0006–0007** — shipped (Phase D atomic close on 2026-05-12;
+  sprint 0006 = R10 typed output schema; sprint 0007 = R8 confidence
+  audit subcommand). **Sprint 0008** (R6 malformed-source harness)
   and **sprint 0009** (charter sweep + shim retirement; closes the
-  refactor) follow after Phase D atomic close.
+  refactor) are Phase E — unstarted at time of writing.
 
 Until the refactor closes, plugin authoring follows the pre-refactor
 trait shapes (see `LANGUAGE-PLAYBOOK.md` Step 5 pre-R2 vs post-R2

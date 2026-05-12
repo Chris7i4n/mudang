@@ -1,4 +1,4 @@
-# Sprint 0009 — Phase E: Malformed-source harness
+# Sprint 0008 — Phase E: Malformed-source harness
 
 > **Source of truth**: [`ARCHITECTURAL-REFACTOR.md` § R6](../ARCHITECTURAL-REFACTOR.md#r6--malformed-source-test-harness).
 > **Phase**: E. First of two Phase E sprints. Followed by [Sprint 0009 — Charter sweep and shim retirement](./0009-phase-e-charter-sweep.md), which closes the refactor.
@@ -8,18 +8,18 @@
 
 ## Goal
 
-Close the refactor by landing the malformed-source test harness — the
-gate that asserts every plugin survives broken sources, populates
-`file_hashes.skipped_ranges` honestly, and never silently drops a
-partially-malformed file.
+Land the malformed-source test harness — the gate that asserts every
+plugin survives broken sources, populates `file_hashes.skipped_ranges`
+honestly, and never silently drops a partially-malformed file.
 
-Phase E ships **last** so that every plugin is already in its final
-shape before the gate activates. Sprint 0009 lands the R6 malformed-
-source harness; [Sprint 0009](./0009-phase-e-charter-sweep.md) then
-sweeps the codebase for compat shims and closes the refactor. The
-full-refactor acceptance criteria
+Sprint 0008 lands R6. [Sprint 0009](./0009-phase-e-charter-sweep.md)
+follows immediately to sweep compat shims and close the refactor. The
+Phase E row in `REFACTOR-STATUS.md` stays `in-progress` until sprint
+0009 closes — sprint 0008 flips **only** the R6 row.
+
+The full-refactor acceptance criteria
 ([`ARCHITECTURAL-REFACTOR.md` § Acceptance for the refactor as a whole](../ARCHITECTURAL-REFACTOR.md#acceptance-for-the-refactor-as-a-whole))
-must hold at sprint 0009's close; [`POST-REFACTOR-PLAN.md`](../POST-REFACTOR-PLAN.md)
+are demonstrated at sprint 0009's close; [`POST-REFACTOR-PLAN.md`](../POST-REFACTOR-PLAN.md)
 becomes eligible immediately afterwards.
 
 ## R-moves shipped this sprint
@@ -125,10 +125,11 @@ From [`GLOSSARY.md`](../GLOSSARY.md):
 Per [`README.md` § Reporting hooks](./README.md#4-reporting-hooks) and
 [`README.md` § Branch protocol](./README.md#5-branch-protocol--linear-incremental-one-sprint-per-branch):
 
-- **Branch**: `refactor/sprint-0007-malformed-harness`, cut from `main`
+- **Branch**: `refactor/sprint-0008-malformed-harness`, cut from `main`
   after Phase D merged.
-- **Base**: `main` directly — Phase E has one R-move sprint, so no
-  phase integration branch is needed.
+- **Base**: `main` directly — Phase E has one R-move sprint (this one)
+  plus an acceptance-only sprint (0009), so no phase integration branch
+  is needed.
 - **Open**: flip R6 row in
   [`REFACTOR-STATUS.md`](../REFACTOR-STATUS.md) snapshot to
   `in-progress`. Append log entry noting branch name.
@@ -137,71 +138,43 @@ Per [`README.md` § Reporting hooks](./README.md#4-reporting-hooks) and
   [`README.md` § 9 — Role 1](./README.md#role-1--mandatory-sprint-review-checkpoint)
   with:
   - `--base main`
-  - `--title "sprint 0009 — R6"`
+  - `--title "sprint 0008 — R6"`
   - Prompt focus: R6 acceptance bullets, charter §3 invariant 5
     (tree-sitter resilience), B3 detection, malformed-fixture set per
     language, malformed-source CI gate.
-- **Codex review (full refactor scope)**: after the sprint-scope review
-  and before opening the PR, run a second canonical pass with:
-  - `--base <pre-refactor-baseline>` (the commit immediately preceding
-    sprint 0000's first commit; recorded in `REFACTOR-STATUS.md` log)
-  - `--title "Refactor close"`
-  - **`-c model_reasoning_effort="high"`** override (full-refactor
-    review crosses every R-move; the explicit medium→high override
-    authorised in
-    [`README.md` § 9 — Why these flags](./README.md#role-1--mandatory-sprint-review-checkpoint);
-    record override in the PR body).
-  - Prompt focus: whole-refactor acceptance set in
-    `ARCHITECTURAL-REFACTOR.md § Acceptance for the refactor as a whole`.
-  Both reports attach to the PR body; blockers gate the sprint close.
-- **Close**: flip R6 to `shipped`. **In the same commit**, flip the
-  **Phase E** row in the phase snapshot table to `shipped`. **Also in
-  the same commit**, add a final log entry recording that the refactor
-  as a whole is `shipped` (see Definition of done below).
-- **Merge**: squash-merge or rebase-merge to `main`. After merge, the
-  `POST-REFACTOR-PLAN.md` queue becomes eligible — but a new branch
-  for any post-refactor item follows its own naming (not `refactor/…`).
+  The full-refactor-scope codex review fires at sprint 0009 close per
+  [sprint 0009 § Reporting](./0009-phase-e-charter-sweep.md#reporting),
+  not here — sprint 0008 ships R6 only; the refactor is not yet closed.
+- **Close**: flip R6 to `shipped`. **Do NOT** flip the Phase E row —
+  sprint 0009 (charter sweep) closes Phase E + the refactor as a whole.
+  Append log entries per `README.md § 4` for the R6 transition.
+- **Merge**: squash-merge or rebase-merge to `main`. After merge, sprint
+  0009 opens immediately to sweep compat shims and close the refactor.
+  `POST-REFACTOR-PLAN.md` eligibility unlocks at sprint 0009's close, not
+  this one.
 
 ---
 
 ## Definition of done
 
-This sprint is unique: closing it closes the **entire refactor**. All
-of the following hold simultaneously, mirroring
-[`ARCHITECTURAL-REFACTOR.md` § Acceptance for the refactor as a whole](../ARCHITECTURAL-REFACTOR.md#acceptance-for-the-refactor-as-a-whole):
+Sprint 0008 ships R6 only; Phase E + refactor close at sprint 0009. All
+of the following hold simultaneously:
 
 1. Every checkbox in **Deliverables** above is checked.
 2. Three ambiguities above are resolved before code lands.
 3. The malformed-source CI gate is `active` in `CI-GATES.md` and CI.
-4. `REFACTOR-STATUS.md` shows **every** R-move (R0–R12) and **every**
-   phase (A–E) as `shipped`.
-5. Every universal rule in the inventory tables
-   ([`CHARTER.md` §5](../CHARTER.md#5-hard-limits--scope-will-never-cross-these)
-   hard limits and
-   [`LANGUAGE-PLAYBOOK.md` Step 4](../LANGUAGE-PLAYBOOK.md#step-4--the-18-universal-boundaries))
-   is in class 1, class 2, or the **explicit class-3 list of three**
-   (B1, C2, E3). No other rule is delegated to discipline.
-6. Every active language plugin's `docs/languages/<name>.md` has
-   **zero** `NEEDS REVIEW` entries.
-7. Every active framework plugin's `docs/frameworks/<name>.md` — none
-   adopted at refactor close — has, when adopted, an explicit decision
-   in every row of the 15-category walkthrough
-   ([`FRAMEWORK-PLAYBOOK.md` Step 4](../FRAMEWORK-PLAYBOOK.md#step-4--gotcha-catalogue)).
-   Framework adoption is post-refactor work; this gate is forward-looking.
-8. Full benchmark suite shows **< 10% regression** from pre-refactor
-   baseline. The baseline is the commit immediately preceding sprint
-   0001's first commit; the post-refactor measurement is taken on the
-   commit that closes sprint 0009.
-9. `scope audit confidence` runs against the reference fixture corpus
-   and produces a parseable precision report per
-   `(kind, tier, producer, pattern_id)`.
-10. CI pipeline includes the malformed-source gate (R6), the
-    typed-trait audit (R12), and the immutable-source check (R9).
+4. Snapshot tests pin the recorded reason and range per fixture (regression
+   surfaces as snapshot diff) — covered by Deliverables § R6 acceptance
+   but called out here as the mechanical lock for B3 detection.
+5. R6 row in [`REFACTOR-STATUS.md`](../REFACTOR-STATUS.md) flips
+   `in-progress → shipped`; Phase E row stays `in-progress` (closes at
+   sprint 0009).
+6. Sprint-scope codex review surfaces no P0 / P1 findings.
 
-When all of the above hold, the
-[`POST-REFACTOR-PLAN.md`](../POST-REFACTOR-PLAN.md) queue becomes
-eligible. The first post-refactor sprint is **not** part of this
-document — it is planned separately, against the closed architecture.
+Full-refactor acceptance criteria
+([`ARCHITECTURAL-REFACTOR.md` § Acceptance for the refactor as a whole](../ARCHITECTURAL-REFACTOR.md#acceptance-for-the-refactor-as-a-whole))
+live in [sprint 0009 § Acceptance](./0009-phase-e-charter-sweep.md#acceptance)
+and gate that sprint's close — not this one.
 
 ## Out of scope for this sprint
 
