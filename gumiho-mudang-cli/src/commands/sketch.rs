@@ -155,13 +155,16 @@ fn sketch_class(args: &SketchArgs, graph: &Graph, symbol: &Symbol) -> Result<()>
 
         emit_json(symbol.name.clone(), SymbolSketch::Class(sketch), truncated, total)?;
     } else {
-        formatter::print_class_sketch(
-            symbol,
-            &methods,
-            &caller_counts,
-            &relationships,
-            args.limit,
-            !args.no_docs,
+        print!(
+            "{}",
+            formatter::ClassSketchView {
+                symbol,
+                methods: &methods,
+                caller_counts: &caller_counts,
+                relationships: &relationships,
+                limit: args.limit,
+                show_docs: !args.no_docs,
+            }
         );
     }
 
@@ -181,7 +184,14 @@ fn sketch_method(args: &SketchArgs, graph: &Graph, symbol: &Symbol) -> Result<()
         };
         emit_json(symbol.name.clone(), SymbolSketch::Method(sketch), false, 1)?;
     } else {
-        formatter::print_method_sketch(symbol, &outgoing_calls, &incoming_callers);
+        print!(
+            "{}",
+            formatter::MethodSketchView {
+                symbol,
+                outgoing_calls: &outgoing_calls,
+                incoming_callers: &incoming_callers,
+            }
+        );
     }
 
     Ok(())
@@ -216,12 +226,15 @@ fn sketch_interface(args: &SketchArgs, graph: &Graph, symbol: &Symbol) -> Result
             total,
         )?;
     } else {
-        formatter::print_interface_sketch(
-            symbol,
-            &methods,
-            &implementors,
-            &relationships,
-            args.limit,
+        print!(
+            "{}",
+            formatter::InterfaceSketchView {
+                symbol,
+                methods: &methods,
+                implementors: &implementors,
+                relationships: &relationships,
+                limit: args.limit,
+            }
         );
     }
 
@@ -246,7 +259,14 @@ fn sketch_enum(args: &SketchArgs, graph: &Graph, symbol: &Symbol) -> Result<()> 
 
         emit_json(symbol.name.clone(), SymbolSketch::Enum(sketch), false, 1)?;
     } else {
-        formatter::print_enum_sketch(symbol, &variants, caller_count);
+        print!(
+            "{}",
+            formatter::EnumSketchView {
+                symbol,
+                variants: &variants,
+                caller_count,
+            }
+        );
     }
 
     Ok(())
@@ -260,7 +280,7 @@ fn sketch_generic(args: &SketchArgs, symbol: &Symbol) -> Result<()> {
         };
         emit_json(symbol.name.clone(), SymbolSketch::Generic(sketch), false, 1)?;
     } else {
-        formatter::print_generic_sketch(symbol);
+        print!("{}", formatter::GenericSketchView { symbol });
     }
 
     Ok(())
@@ -297,7 +317,14 @@ fn run_file_sketch(args: &SketchArgs, graph: &Graph) -> Result<()> {
 
         emit_json(file_path.clone(), SymbolSketch::File(sketch), false, total)?;
     } else {
-        formatter::print_file_sketch(&file_path, &symbols, &caller_counts);
+        print!(
+            "{}",
+            formatter::FileSketchView {
+                file_path: &file_path,
+                symbols: &symbols,
+                caller_counts: &caller_counts,
+            }
+        );
     }
 
     Ok(())

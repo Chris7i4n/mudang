@@ -1,4 +1,12 @@
-//! Human-readable output formatting for all Scope commands.
+//! Human-readable output rendering shared across every Scope command.
+//!
+//! After R10, plain-text output goes through `impl fmt::Display` on
+//! per-command view structs defined in this module and exposed by
+//! [`crate::output::schema`]. Callers write `print!("{view}")` instead
+//! of invoking free `print_*` functions; the `view` is constructed
+//! once and feeds both the JSON envelope (when `--json` is set) and
+//! the plain renderer. Procedural `println!` survives only inside the
+//! `fmt::Display` bodies, where it is rewritten to `writeln!(f, …)?`.
 //!
 //! Rules:
 //! - Separator line uses `─` (U+2500), never `-` or `=`
@@ -8,6 +16,7 @@
 //! - Similarity scores always 2 decimal places: `0.91`
 
 use std::collections::HashMap;
+use std::fmt;
 
 use crate::commands::entrypoints::EntrypointInfo;
 use crate::commands::flow::FlowPath;
@@ -35,15 +44,17 @@ pub fn format_line_range(start: u32, end: u32) -> String {
     }
 }
 
-/// Format the header line: `name  kind  file:line_range`
-fn print_header(symbol: &Symbol) {
+/// Write the header line `name  kind  file:line_range` followed by
+/// the separator. Shared by every symbol-scoped sketch renderer.
+fn write_header(symbol: &Symbol, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let path = normalize_path(&symbol.file_path);
     let line_range = format_line_range(symbol.line_start, symbol.line_end);
-    println!(
+    writeln!(
+        f,
         "{:<50}{}  {}:{}",
         symbol.name, symbol.kind, path, line_range
-    );
-    println!("{SEPARATOR}");
+    )?;
+    writeln!(f, "{SEPARATOR}")
 }
 
 /// Print a class sketch.
@@ -63,104 +74,112 @@ fn print_header(symbol: &Symbol) {
 /// fields:
 ///   private client: StripeClient
 /// ```
-pub fn print_class_sketch(
-    symbol: &Symbol,
-    methods: &[Symbol],
-    caller_counts: &HashMap<String, usize>,
-    relationships: &ClassRelationships,
-    limit: usize,
-    show_docs: bool,
-) {
-    print_header(symbol);
+/// Plain-text view for `scope sketch <class|struct>`.
+pub struct ClassSketchView<'a> {
+    pub symbol: &'a Symbol,
+    pub methods: &'a [Symbol],
+    pub caller_counts: &'a HashMap<String, usize>,
+    pub relationships: &'a ClassRelationships,
+    pub limit: usize,
+    pub show_docs: bool,
+}
 
-    // Dependencies line
-    if !relationships.dependencies.is_empty() {
-        println!("deps:     {}", relationships.dependencies.join(", "));
-    }
+impl fmt::Display for ClassSketchView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write_header(self.symbol, f)?;
 
-    // Extends line
-    if !relationships.extends.is_empty() {
-        println!("extends:  {}", relationships.extends.join(", "));
-    }
+        if !self.relationships.dependencies.is_empty() {
+            writeln!(
+                f,
+                "deps:     {}",
+                self.relationships.dependencies.join(", ")
+            )?;
+        }
+        if !self.relationships.extends.is_empty() {
+            writeln!(f, "extends:  {}", self.relationships.extends.join(", "))?;
+        }
+        if !self.relationships.implements.is_empty() {
+            writeln!(
+                f,
+                "implements: {}",
+                self.relationships.implements.join(", ")
+            )?;
+        }
 
-    // Implements line
-    if !relationships.implements.is_empty() {
-        println!("implements: {}", relationships.implements.join(", "));
-    }
+        let (method_syms, field_syms): (Vec<&Symbol>, Vec<&Symbol>) = self
+            .methods
+            .iter()
+            .partition(|m| m.kind == "method" || m.kind == "function");
 
-    // Separate sections: methods and fields
-    let (method_syms, field_syms): (Vec<&Symbol>, Vec<&Symbol>) = methods
-        .iter()
-        .partition(|m| m.kind == "method" || m.kind == "function");
+        if !method_syms.is_empty() {
+            writeln!(f)?;
+            writeln!(f, "methods:")?;
+            let display_methods = if method_syms.len() > self.limit {
+                &method_syms[..self.limit]
+            } else {
+                &method_syms
+            };
 
-    // Methods section
-    if !method_syms.is_empty() {
-        println!();
-        println!("methods:");
-        let display_methods = if method_syms.len() > limit {
-            &method_syms[..limit]
-        } else {
-            &method_syms
-        };
-
-        for method in display_methods {
-            // Show first line of docstring if available and docs are enabled
-            if show_docs {
-                if let Some(ref doc) = method.docstring {
-                    let first_line = doc.lines().next().unwrap_or("").trim();
-                    let clean = first_line
-                        .trim_start_matches("///")
-                        .trim_start_matches("//")
-                        .trim_start_matches("/**")
-                        .trim_start_matches("*")
-                        .trim_start_matches("*/")
-                        .trim();
-                    if !clean.is_empty() {
-                        println!("  /// {clean}");
+            for method in display_methods {
+                if self.show_docs {
+                    if let Some(ref doc) = method.docstring {
+                        let first_line = doc.lines().next().unwrap_or("").trim();
+                        let clean = first_line
+                            .trim_start_matches("///")
+                            .trim_start_matches("//")
+                            .trim_start_matches("/**")
+                            .trim_start_matches("*")
+                            .trim_start_matches("*/")
+                            .trim();
+                        if !clean.is_empty() {
+                            writeln!(f, "  /// {clean}")?;
+                        }
                     }
                 }
+
+                let sig = method_display_line(method);
+                let count = self.caller_counts.get(&method.id).copied().unwrap_or(0);
+                let count_label = if count > 0 {
+                    format!("[{count} caller{}]", if count == 1 { "" } else { "s" })
+                } else {
+                    "[internal]".to_string()
+                };
+                let padding = SEPARATOR
+                    .chars()
+                    .count()
+                    .saturating_sub(2 + sig.chars().count() + count_label.chars().count());
+                writeln!(
+                    f,
+                    "  {sig}{:>width$}",
+                    count_label,
+                    width = padding + count_label.len()
+                )?;
             }
 
-            let sig = method_display_line(method);
-            let count = caller_counts.get(&method.id).copied().unwrap_or(0);
-            let count_label = if count > 0 {
-                format!("[{count} caller{}]", if count == 1 { "" } else { "s" })
-            } else {
-                "[internal]".to_string()
-            };
-            // Right-align the caller count
-            let padding = SEPARATOR
-                .chars()
-                .count()
-                .saturating_sub(2 + sig.chars().count() + count_label.chars().count());
-            println!(
-                "  {sig}{:>width$}",
-                count_label,
-                width = padding + count_label.len()
-            );
+            if method_syms.len() > self.limit {
+                writeln!(
+                    f,
+                    "  ... {} more (use --limit to show more)",
+                    method_syms.len() - self.limit
+                )?;
+            }
         }
 
-        if method_syms.len() > limit {
-            println!(
-                "  ... {} more (use --limit to show more)",
-                method_syms.len() - limit
-            );
-        }
-    }
+        let field_syms: Vec<&Symbol> = field_syms
+            .into_iter()
+            .filter(|s| s.kind == "property")
+            .collect();
 
-    // Fields section (properties)
-    let field_syms: Vec<&Symbol> = field_syms
-        .into_iter()
-        .filter(|s| s.kind == "property")
-        .collect();
-
-    if !field_syms.is_empty() {
-        println!();
-        println!("fields:");
-        for field in &field_syms {
-            let sig = field.signature.as_deref().unwrap_or(&field.name);
-            println!("  {sig}");
+        if !field_syms.is_empty() {
+            writeln!(f)?;
+            writeln!(f, "fields:")?;
+            for field in &field_syms {
+                let sig = field.signature.as_deref().unwrap_or(&field.name);
+                writeln!(f, "  {sig}")?;
+            }
         }
+
+        Ok(())
     }
 }
 
@@ -174,48 +193,51 @@ pub fn print_class_sketch(
 /// calls:      validateCard, repo.findUser
 /// called by:  OrderController.checkout [x3]
 /// ```
-pub fn print_method_sketch(
-    symbol: &Symbol,
-    outgoing_calls: &[String],
-    incoming_callers: &[CallerInfo],
-) {
-    print_header(symbol);
+/// Plain-text view for `scope sketch <method|function>`.
+pub struct MethodSketchView<'a> {
+    pub symbol: &'a Symbol,
+    pub outgoing_calls: &'a [String],
+    pub incoming_callers: &'a [CallerInfo],
+}
 
-    // Language-specific enrichment line (annotations, decorators, receiver)
-    let enrichment = extract_enrichment_prefix(&symbol.language, &symbol.metadata);
-    if !enrichment.is_empty() {
-        println!("{enrichment}");
-    }
+impl fmt::Display for MethodSketchView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write_header(self.symbol, f)?;
 
-    // Modifiers line (only if any non-default modifiers exist)
-    let modifiers = extract_modifiers(&symbol.metadata);
-    if !modifiers.is_empty() {
-        println!("{}", modifiers.join(" "));
-    }
+        let enrichment = extract_enrichment_prefix(&self.symbol.language, &self.symbol.metadata);
+        if !enrichment.is_empty() {
+            writeln!(f, "{enrichment}")?;
+        }
 
-    // Signature line
-    if let Some(sig) = &symbol.signature {
-        println!("signature:  {sig}");
-    }
+        let modifiers = extract_modifiers(&self.symbol.metadata);
+        if !modifiers.is_empty() {
+            writeln!(f, "{}", modifiers.join(" "))?;
+        }
 
-    // Calls line
-    if !outgoing_calls.is_empty() {
-        println!("calls:      {}", outgoing_calls.join(", "));
-    }
+        if let Some(sig) = &self.symbol.signature {
+            writeln!(f, "signature:  {sig}")?;
+        }
 
-    // Called by line
-    if !incoming_callers.is_empty() {
-        let caller_parts: Vec<String> = incoming_callers
-            .iter()
-            .map(|c| {
-                if c.count > 1 {
-                    format!("{} [x{}]", c.name, c.count)
-                } else {
-                    c.name.clone()
-                }
-            })
-            .collect();
-        println!("called by:  {}", caller_parts.join(", "));
+        if !self.outgoing_calls.is_empty() {
+            writeln!(f, "calls:      {}", self.outgoing_calls.join(", "))?;
+        }
+
+        if !self.incoming_callers.is_empty() {
+            let caller_parts: Vec<String> = self
+                .incoming_callers
+                .iter()
+                .map(|c| {
+                    if c.count > 1 {
+                        format!("{} [x{}]", c.name, c.count)
+                    } else {
+                        c.name.clone()
+                    }
+                })
+                .collect();
+            writeln!(f, "called by:  {}", caller_parts.join(", "))?;
+        }
+
+        Ok(())
     }
 }
 
@@ -230,54 +252,64 @@ pub fn print_method_sketch(
 /// methods:
 ///   processPayment(amount: Decimal, userId: string) → Promise<PaymentResult>
 /// ```
-pub fn print_interface_sketch(
-    symbol: &Symbol,
-    methods: &[Symbol],
-    implementors: &[String],
-    relationships: &ClassRelationships,
-    limit: usize,
-) {
-    print_header(symbol);
+/// Plain-text view for `scope sketch <interface>`.
+pub struct InterfaceSketchView<'a> {
+    pub symbol: &'a Symbol,
+    pub methods: &'a [Symbol],
+    pub implementors: &'a [String],
+    pub relationships: &'a ClassRelationships,
+    pub limit: usize,
+}
 
-    if !relationships.dependencies.is_empty() {
-        println!("deps:     {}", relationships.dependencies.join(", "));
-    }
+impl fmt::Display for InterfaceSketchView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write_header(self.symbol, f)?;
 
-    if !relationships.extends.is_empty() {
-        println!("extends:  {}", relationships.extends.join(", "));
-    }
-
-    // Mixins via include/prepend/extend (Ruby modules) or interface inheritance.
-    if !relationships.implements.is_empty() {
-        println!("implements: {}", relationships.implements.join(", "));
-    }
-
-    // Implemented by
-    if !implementors.is_empty() {
-        println!("implemented by:  {}", implementors.join(", "));
-    }
-
-    // Methods section
-    if !methods.is_empty() {
-        println!();
-        println!("methods:");
-        let display_methods = if methods.len() > limit {
-            &methods[..limit]
-        } else {
-            methods
-        };
-
-        for method in display_methods {
-            let sig = method_display_line(method);
-            println!("  {sig}");
+        if !self.relationships.dependencies.is_empty() {
+            writeln!(
+                f,
+                "deps:     {}",
+                self.relationships.dependencies.join(", ")
+            )?;
+        }
+        if !self.relationships.extends.is_empty() {
+            writeln!(f, "extends:  {}", self.relationships.extends.join(", "))?;
+        }
+        if !self.relationships.implements.is_empty() {
+            writeln!(
+                f,
+                "implements: {}",
+                self.relationships.implements.join(", ")
+            )?;
+        }
+        if !self.implementors.is_empty() {
+            writeln!(f, "implemented by:  {}", self.implementors.join(", "))?;
         }
 
-        if methods.len() > limit {
-            println!(
-                "  ... {} more (use --limit to show more)",
-                methods.len() - limit
-            );
+        if !self.methods.is_empty() {
+            writeln!(f)?;
+            writeln!(f, "methods:")?;
+            let display_methods = if self.methods.len() > self.limit {
+                &self.methods[..self.limit]
+            } else {
+                self.methods
+            };
+
+            for method in display_methods {
+                let sig = method_display_line(method);
+                writeln!(f, "  {sig}")?;
+            }
+
+            if self.methods.len() > self.limit {
+                writeln!(
+                    f,
+                    "  ... {} more (use --limit to show more)",
+                    self.methods.len() - self.limit
+                )?;
+            }
         }
+
+        Ok(())
     }
 }
 
@@ -290,31 +322,39 @@ pub fn print_interface_sketch(
 ///   PaymentService          class     12-89    [11 callers]
 ///   processPayment          method    34-67    [11 callers]
 /// ```
-pub fn print_file_sketch(
-    file_path: &str,
-    symbols: &[Symbol],
-    caller_counts: &HashMap<String, usize>,
-) {
-    let path = normalize_path(file_path);
-    println!("{path}");
-    println!("{SEPARATOR}");
+/// Plain-text view for `scope sketch <file path>`.
+pub struct FileSketchView<'a> {
+    pub file_path: &'a str,
+    pub symbols: &'a [Symbol],
+    pub caller_counts: &'a HashMap<String, usize>,
+}
 
-    for sym in symbols {
-        let line_range = format_line_range(sym.line_start, sym.line_end);
-        let count = caller_counts.get(&sym.id).copied().unwrap_or(0);
-        let count_label = if count > 0 {
-            format!("[{count} caller{}]", if count == 1 { "" } else { "s" })
-        } else {
-            "[internal]".to_string()
-        };
-        println!(
-            "  {:<24}{:<10}{:<9}{}",
-            sym.name, sym.kind, line_range, count_label
-        );
+impl fmt::Display for FileSketchView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let path = normalize_path(self.file_path);
+        writeln!(f, "{path}")?;
+        writeln!(f, "{SEPARATOR}")?;
+
+        for sym in self.symbols {
+            let line_range = format_line_range(sym.line_start, sym.line_end);
+            let count = self.caller_counts.get(&sym.id).copied().unwrap_or(0);
+            let count_label = if count > 0 {
+                format!("[{count} caller{}]", if count == 1 { "" } else { "s" })
+            } else {
+                "[internal]".to_string()
+            };
+            writeln!(
+                f,
+                "  {:<24}{:<10}{:<9}{}",
+                sym.name, sym.kind, line_range, count_label
+            )?;
+        }
+
+        Ok(())
     }
 }
 
-/// Print an enum sketch — variants and caller count.
+/// Plain-text view for `scope sketch <enum>`.
 ///
 /// Format:
 /// ```text
@@ -327,37 +367,50 @@ pub fn print_file_sketch(
 ///
 /// [3 callers]
 /// ```
-pub fn print_enum_sketch(symbol: &Symbol, variants: &[&Symbol], caller_count: usize) {
-    print_header(symbol);
+pub struct EnumSketchView<'a> {
+    pub symbol: &'a Symbol,
+    pub variants: &'a [&'a Symbol],
+    pub caller_count: usize,
+}
 
-    if !variants.is_empty() {
-        println!("variants:");
-        for v in variants {
-            // Show signature (data shape) if available, otherwise just the name
-            let display = v.signature.as_deref().unwrap_or(&v.name);
-            println!("  {display}");
+impl fmt::Display for EnumSketchView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write_header(self.symbol, f)?;
+
+        if !self.variants.is_empty() {
+            writeln!(f, "variants:")?;
+            for v in self.variants {
+                let display = v.signature.as_deref().unwrap_or(&v.name);
+                writeln!(f, "  {display}")?;
+            }
         }
-    }
 
-    println!();
-    if caller_count > 0 {
-        println!(
-            "[{caller_count} caller{}]",
-            if caller_count == 1 { "" } else { "s" }
-        );
-    } else {
-        println!("[internal]");
+        writeln!(f)?;
+        if self.caller_count > 0 {
+            writeln!(
+                f,
+                "[{} caller{}]",
+                self.caller_count,
+                if self.caller_count == 1 { "" } else { "s" }
+            )
+        } else {
+            writeln!(f, "[internal]")
+        }
     }
 }
 
-/// Print a generic symbol sketch (const, type, struct).
-///
-/// Falls back to a simple header + signature.
-pub fn print_generic_sketch(symbol: &Symbol) {
-    print_header(symbol);
+/// Plain-text view for `scope sketch <const|type|struct>` — header + signature.
+pub struct GenericSketchView<'a> {
+    pub symbol: &'a Symbol,
+}
 
-    if let Some(sig) = &symbol.signature {
-        println!("signature:  {sig}");
+impl fmt::Display for GenericSketchView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write_header(self.symbol, f)?;
+        if let Some(sig) = &self.symbol.signature {
+            writeln!(f, "signature:  {sig}")?;
+        }
+        Ok(())
     }
 }
 
