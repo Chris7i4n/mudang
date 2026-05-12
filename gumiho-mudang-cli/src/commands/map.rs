@@ -23,8 +23,8 @@ use crate::output::formatter;
 use crate::output::json::JsonOutput;
 use crate::Context;
 use gumiho_mudang_scope::config::workspace::WorkspaceConfig;
-use gumiho_mudang_scope::core::graph::Graph;
-use gumiho_mudang_scope::core::workspace_graph::WorkspaceGraph;
+use gumiho_mudang_scope::graph::Graph;
+use gumiho_mudang_scope::workspace_graph::WorkspaceGraph;
 
 /// Show a structural overview of the entire repository.
 ///

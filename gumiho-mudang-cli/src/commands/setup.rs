@@ -75,7 +75,7 @@ fn build_preload_snippet(scope_dir: &Path) -> Result<Option<String>> {
     if !db_path.exists() {
         return Ok(None);
     }
-    let graph = gumiho_mudang_scope::core::graph::Graph::open(&db_path)?;
+    let graph = gumiho_mudang_scope::graph::Graph::open(&db_path)?;
     let stats_line = format!(
         "{} files, {} symbols, {} edges",
         graph.file_count()?,

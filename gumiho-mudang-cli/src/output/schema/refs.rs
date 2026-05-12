@@ -4,7 +4,7 @@
 //! (`calls`, `imports`, `extends`, `implements`, `instantiates`,
 //! `references`). `RefsGrouped<'a>` is the typed envelope.
 
-use gumiho_mudang_scope::core::graph::Reference;
+use gumiho_mudang_scope::graph::Reference;
 use serde::Serialize;
 
 /// One kind-grouped bucket inside `RefsGrouped`.

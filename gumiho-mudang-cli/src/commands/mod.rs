@@ -21,7 +21,7 @@ pub mod summary;
 pub mod trace;
 pub mod workspace;
 
-use gumiho_mudang_scope::core::graph::{Graph, Symbol};
+use gumiho_mudang_scope::graph::{Graph, Symbol};
 
 fn symbol_display_name(symbol: &Symbol) -> String {
     if let Some(parent_id) = &symbol.parent_id {

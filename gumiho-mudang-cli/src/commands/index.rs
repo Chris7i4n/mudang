@@ -20,10 +20,10 @@ use crate::output::schema::{
     IndexLanguageStat, IndexReindexEvent, IndexStartEvent, IndexStopEvent,
 };
 use gumiho_mudang_scope::config::ProjectConfig;
-use gumiho_mudang_scope::core::graph::Graph;
-use gumiho_mudang_scope::core::indexer::Indexer;
-use gumiho_mudang_scope::core::searcher::Searcher;
-use gumiho_mudang_scope::core::watcher::{WatchLock, Watcher};
+use gumiho_mudang_scope::graph::Graph;
+use gumiho_mudang_scope::indexer::Indexer;
+use gumiho_mudang_scope::searcher::Searcher;
+use gumiho_mudang_scope::watcher::{WatchLock, Watcher};
 
 /// Arguments for the `scope index` command.
 #[derive(Args, Debug)]

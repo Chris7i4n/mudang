@@ -14,7 +14,7 @@ use std::path::Path;
 
 use crate::output::json::JsonOutput;
 use crate::output::schema::{FileSummary, Summary, SymbolSummary};
-use gumiho_mudang_scope::core::graph::Graph;
+use gumiho_mudang_scope::graph::Graph;
 
 use super::looks_like_file_path;
 

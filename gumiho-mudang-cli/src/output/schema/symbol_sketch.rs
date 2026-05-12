@@ -18,7 +18,7 @@
 
 use std::collections::HashMap;
 
-use gumiho_mudang_scope::core::graph::{CallerInfo, ClassRelationships, Symbol};
+use gumiho_mudang_scope::graph::{CallerInfo, ClassRelationships, Symbol};
 use serde::Serialize;
 
 use super::CompactSymbol;

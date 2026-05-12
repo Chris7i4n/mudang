@@ -20,8 +20,8 @@ use crate::output::formatter;
 use crate::output::json::JsonOutput;
 use crate::Context;
 use gumiho_mudang_scope::config::workspace::WorkspaceConfig;
-use gumiho_mudang_scope::core::graph::Graph;
-use gumiho_mudang_scope::core::workspace_graph::WorkspaceGraph;
+use gumiho_mudang_scope::graph::Graph;
+use gumiho_mudang_scope::workspace_graph::WorkspaceGraph;
 
 /// List entry points — API controllers, workers, and event handlers.
 ///
@@ -77,7 +77,7 @@ pub fn classify_group(file_path: &str) -> &'static str {
 ///
 /// Returns `(groups, total_count, file_count)`.
 pub(crate) fn collapse_and_group(
-    raw_entrypoints: &[(gumiho_mudang_scope::core::graph::Symbol, usize)],
+    raw_entrypoints: &[(gumiho_mudang_scope::graph::Symbol, usize)],
     graph: &Graph,
 ) -> (Vec<(String, Vec<EntrypointInfo>)>, usize, usize) {
     let mut class_ids: std::collections::HashSet<String> = std::collections::HashSet::new();

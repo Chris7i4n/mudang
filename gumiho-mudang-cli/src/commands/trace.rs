@@ -17,7 +17,7 @@ use std::path::Path;
 use crate::commands::resolve_symbol;
 use crate::output::formatter;
 use crate::output::json::JsonOutput;
-use gumiho_mudang_scope::core::graph::Graph;
+use gumiho_mudang_scope::graph::Graph;
 
 /// Show how requests reach a symbol — entry-point-to-target call paths.
 ///

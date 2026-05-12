@@ -14,7 +14,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
-use gumiho_mudang_scope::core::graph::{AuditEdgeRow, AuditFreshness, Graph};
+use gumiho_mudang_scope::graph::{AuditEdgeRow, AuditFreshness, Graph};
 
 /// Default sample size per `(kind, confidence)` cell.
 ///

@@ -22,9 +22,9 @@ use crate::output::formatter;
 use crate::output::json::JsonOutput;
 use gumiho_mudang_scope::config::workspace::WorkspaceConfig;
 use gumiho_mudang_scope::config::ProjectConfig;
-use gumiho_mudang_scope::core::graph::Graph;
-use gumiho_mudang_scope::core::indexer::Indexer;
-use gumiho_mudang_scope::core::searcher::Searcher;
+use gumiho_mudang_scope::graph::Graph;
+use gumiho_mudang_scope::indexer::Indexer;
+use gumiho_mudang_scope::searcher::Searcher;
 
 /// Manage multi-project workspaces.
 ///

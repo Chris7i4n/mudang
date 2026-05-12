@@ -14,7 +14,7 @@ use std::path::Path;
 
 use crate::output::formatter;
 use crate::output::json::JsonOutput;
-use gumiho_mudang_scope::core::graph::Graph;
+use gumiho_mudang_scope::graph::Graph;
 
 /// Arguments for the `scope deps` command.
 #[derive(Args, Debug)]

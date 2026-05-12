@@ -18,7 +18,7 @@ use crate::output::schema::{
     ClassSketch, EnumSketch, EnumVariantView, FieldView, FileSketch, GenericSketch,
     InterfaceSketch, MethodSketch, SketchSymbol, SymbolSketch,
 };
-use gumiho_mudang_scope::core::graph::{Graph, Symbol};
+use gumiho_mudang_scope::graph::{Graph, Symbol};
 
 /// Arguments for the `scope sketch` command.
 #[derive(Args, Debug)]

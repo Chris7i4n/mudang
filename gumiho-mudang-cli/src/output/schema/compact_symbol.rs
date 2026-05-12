@@ -8,7 +8,7 @@
 //! The struct borrows from a parent `Symbol`; no allocation. The
 //! conversion is `CompactSymbol::from(&symbol)`.
 
-use gumiho_mudang_scope::core::graph::Symbol;
+use gumiho_mudang_scope::graph::Symbol;
 use serde::Serialize;
 
 /// Compact projection of a `Symbol` — six fields, all borrowed.

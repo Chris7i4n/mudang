@@ -19,18 +19,6 @@
 //!   adds LanceDB + a `Searcher` trait split.)
 //! - `scope-workspace` — federated workspace facade.
 
-// Backwards-compatible `core` module: pre-split callers reach for
-// `gumiho_mudang_scope::core::{parser, graph, indexer, searcher,
-// embedder, workspace_graph, watcher}`. Synthesise that namespace from
-// the sub-crates so existing imports continue to resolve.
-pub mod core {
-    pub use scope_core::parser;
-    pub use scope_graph::graph;
-    pub use scope_index::{indexer, watcher};
-    pub use scope_search::{embedder, searcher};
-    pub use scope_workspace::workspace_graph;
-}
-
 pub use scope_core::{config, languages, parser, types};
 pub use scope_core::{RawEdge, Symbol};
 pub use scope_graph::graph;

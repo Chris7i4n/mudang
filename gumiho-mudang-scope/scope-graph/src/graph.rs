@@ -5,11 +5,9 @@
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection, OptionalExtension};
 use sha2::{Digest, Sha256};
-// Re-export so pre-split callers reaching for `scope_graph::graph::Symbol`
-// (and via the façade, `gumiho_mudang_scope::core::graph::Symbol`) keep
-// resolving. The structs themselves live in scope-core; this preserves
-// the 1:1 public-surface promise in TODO 0006 § Sprint 0000 ambiguity
-// resolutions § 2.
+// Re-export so callers reaching for `scope_graph::graph::{Symbol,
+// RawEdge}` resolve through the storage crate's public surface. The
+// structs themselves live in scope-core.
 pub use crate::resolve::InsertableEdge;
 use scope_core::extract::SkippedRange;
 pub use scope_core::{RawEdge, Symbol};

@@ -21,10 +21,10 @@ use std::fmt;
 use crate::commands::entrypoints::EntrypointInfo;
 use crate::commands::flow::FlowPath;
 use crate::commands::map::{CoreSymbol, DirStats, MapStats};
-use gumiho_mudang_scope::core::graph::{
+use gumiho_mudang_scope::graph::{
     CallerInfo, ClassRelationships, Dependency, ImpactResult, Reference, Symbol, TraceResult,
 };
-use gumiho_mudang_scope::core::searcher::SearchResult;
+use gumiho_mudang_scope::searcher::SearchResult;
 
 /// The separator line used between header and body in all command output.
 pub const SEPARATOR: &str =
@@ -1594,7 +1594,7 @@ impl fmt::Display for WorkspaceStatusView<'_> {
 /// Plain-text view for workspace-wide `scope refs --workspace <symbol>`.
 pub struct WorkspaceRefsView<'a> {
     pub symbol_name: &'a str,
-    pub refs: &'a [gumiho_mudang_scope::core::workspace_graph::WorkspaceRef],
+    pub refs: &'a [gumiho_mudang_scope::workspace_graph::WorkspaceRef],
     pub total: usize,
 }
 

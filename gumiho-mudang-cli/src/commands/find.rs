@@ -22,7 +22,7 @@ use crate::output::json::JsonOutput;
 use crate::Context;
 use gumiho_mudang_scope::config::workspace::WorkspaceConfig;
 use gumiho_mudang_scope::config::ProjectConfig;
-use gumiho_mudang_scope::core::searcher::{SearchResult, Searcher};
+use gumiho_mudang_scope::searcher::{SearchResult, Searcher};
 
 /// Arguments for the `scope find` command.
 #[derive(Args, Debug)]

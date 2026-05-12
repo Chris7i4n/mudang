@@ -15,8 +15,8 @@ use std::path::Path;
 use crate::output::formatter;
 use crate::output::json::JsonOutput;
 use gumiho_mudang_scope::config::ProjectConfig;
-use gumiho_mudang_scope::core::graph::Graph;
-use gumiho_mudang_scope::core::searcher::Searcher;
+use gumiho_mudang_scope::graph::Graph;
+use gumiho_mudang_scope::searcher::Searcher;
 
 /// Arguments for the `scope similar` command.
 #[derive(Args, Debug)]
@@ -64,11 +64,11 @@ pub fn run(args: &SimilarArgs, project_root: &Path) -> Result<()> {
     query_parts.push(format!("{} {}", symbol.kind, symbol.name));
 
     // Split camelCase/snake_case for broader matching
-    let split = gumiho_mudang_scope::core::embedder::split_camel_case(&symbol.name);
+    let split = gumiho_mudang_scope::embedder::split_camel_case(&symbol.name);
     if split != symbol.name {
         query_parts.push(split);
     }
-    let snake = gumiho_mudang_scope::core::embedder::split_snake_case(&symbol.name);
+    let snake = gumiho_mudang_scope::embedder::split_snake_case(&symbol.name);
     if snake != symbol.name {
         query_parts.push(snake);
     }
