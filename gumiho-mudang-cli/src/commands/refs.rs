@@ -295,7 +295,14 @@ fn run_symbol_refs(args: &RefsArgs, graph: &Graph, project_root: &Path) -> Resul
             };
             println!("{}", serde_json::to_string_pretty(&output)?);
         } else {
-            formatter::print_refs_grouped(&args.symbol, &groups, total);
+            print!(
+                "{}",
+                formatter::RefsGroupedView {
+                    symbol_name: &args.symbol,
+                    groups: &groups,
+                    total,
+                }
+            );
         }
     } else {
         // Flat output for functions/methods or filtered queries
@@ -315,7 +322,14 @@ fn run_symbol_refs(args: &RefsArgs, graph: &Graph, project_root: &Path) -> Resul
             };
             println!("{}", serde_json::to_string_pretty(&output)?);
         } else {
-            formatter::print_refs(&args.symbol, &refs, total);
+            print!(
+                "{}",
+                formatter::RefsView {
+                    symbol_name: &args.symbol,
+                    refs: &refs,
+                    total,
+                }
+            );
         }
     }
 
@@ -343,7 +357,14 @@ fn run_file_refs(args: &RefsArgs, graph: &Graph, project_root: &Path) -> Result<
         };
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
-        formatter::print_file_refs(&file_path, &refs, total);
+        print!(
+            "{}",
+            formatter::FileRefsView {
+                file_path: &file_path,
+                refs: &refs,
+                total,
+            }
+        );
     }
 
     Ok(())
@@ -397,7 +418,14 @@ fn run_workspace(args: &RefsArgs, workspace_root: &Path, config: &WorkspaceConfi
         };
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
-        formatter::print_workspace_refs(&args.symbol, &ws_refs, total);
+        print!(
+            "{}",
+            formatter::WorkspaceRefsView {
+                symbol_name: &args.symbol,
+                refs: &ws_refs,
+                total,
+            }
+        );
     }
 
     Ok(())

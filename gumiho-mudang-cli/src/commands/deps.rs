@@ -75,7 +75,14 @@ fn run_symbol_deps(args: &DepsArgs, graph: &Graph) -> Result<()> {
         };
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
-        formatter::print_deps(&args.symbol, &deps, args.depth);
+        print!(
+            "{}",
+            formatter::DepsView {
+                symbol_name: &args.symbol,
+                deps: &deps,
+                max_depth: args.depth,
+            }
+        );
     }
 
     Ok(())
@@ -96,7 +103,14 @@ fn run_file_deps(args: &DepsArgs, graph: &Graph) -> Result<()> {
         };
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
-        formatter::print_file_deps(&file_path, &deps, args.depth);
+        print!(
+            "{}",
+            formatter::FileDepsView {
+                file_path: &file_path,
+                deps: &deps,
+                max_depth: args.depth,
+            }
+        );
     }
 
     Ok(())

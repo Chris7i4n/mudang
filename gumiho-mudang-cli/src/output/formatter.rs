@@ -600,34 +600,48 @@ fn extract_modifiers(metadata_json: &str) -> Vec<String> {
 /// src/controllers/order.ts:134      OrderController.retryPayment
 /// ... 8 more (use --limit to show more)
 /// ```
-pub fn print_refs(symbol_name: &str, refs: &[Reference], total: usize) {
-    println!(
-        "{} \u{2014} {} reference{}",
-        symbol_name,
-        total,
-        if total == 1 { "" } else { "s" }
-    );
-    println!("{SEPARATOR}");
+/// Plain-text view for a flat `scope refs <symbol>` listing.
+pub struct RefsView<'a> {
+    pub symbol_name: &'a str,
+    pub refs: &'a [Reference],
+    pub total: usize,
+}
 
-    for r in refs {
-        let path = normalize_path(&r.file_path);
-        let location = if let Some(line) = r.line {
-            format!("{path}:{line}")
-        } else {
-            path
-        };
-        let display_text = r.snippet_line.as_deref().unwrap_or(&r.context);
-        let truncated_text = truncate_str(display_text.trim(), 80);
-        println!("{:<40}{}", location, truncated_text);
+impl fmt::Display for RefsView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(
+            f,
+            "{} \u{2014} {} reference{}",
+            self.symbol_name,
+            self.total,
+            if self.total == 1 { "" } else { "s" }
+        )?;
+        writeln!(f, "{SEPARATOR}")?;
 
-        // Show multi-line context if available
-        if let Some(ref snippet) = r.snippet {
-            print_snippet_context(snippet, r.line);
+        for r in self.refs {
+            let path = normalize_path(&r.file_path);
+            let location = if let Some(line) = r.line {
+                format!("{path}:{line}")
+            } else {
+                path
+            };
+            let display_text = r.snippet_line.as_deref().unwrap_or(&r.context);
+            let truncated_text = truncate_str(display_text.trim(), 80);
+            writeln!(f, "{:<40}{}", location, truncated_text)?;
+
+            if let Some(ref snippet) = r.snippet {
+                write_snippet_context(snippet, r.line, f)?;
+            }
         }
-    }
 
-    if refs.len() < total {
-        println!("... {} more (use --limit to show more)", total - refs.len());
+        if self.refs.len() < self.total {
+            writeln!(
+                f,
+                "... {} more (use --limit to show more)",
+                self.total - self.refs.len()
+            )?;
+        }
+        Ok(())
     }
 }
 
@@ -644,76 +658,104 @@ pub fn print_refs(symbol_name: &str, refs: &[Reference], total: usize) {
 /// extended (1):
 ///   src/payments/stripe-service.ts:4  class StripeService extends PaymentService
 /// ```
-pub fn print_refs_grouped(symbol_name: &str, groups: &[(String, Vec<Reference>)], total: usize) {
-    println!(
-        "{} \u{2014} {} reference{}",
-        symbol_name,
-        total,
-        if total == 1 { "" } else { "s" }
-    );
-    println!("{SEPARATOR}");
+/// Plain-text view for `scope refs <class>` with kind-grouped buckets.
+pub struct RefsGroupedView<'a> {
+    pub symbol_name: &'a str,
+    pub groups: &'a [(String, Vec<Reference>)],
+    pub total: usize,
+}
 
-    let mut shown = 0;
-    for (kind, refs) in groups {
-        let kind_label = humanize_edge_kind(kind);
-        println!("{kind_label} ({}):", refs.len());
-        for r in refs {
-            let path = normalize_path(&r.file_path);
-            let location = if let Some(line) = r.line {
-                format!("{path}:{line}")
-            } else {
-                path
-            };
-            let display_text = r.snippet_line.as_deref().unwrap_or(&r.context);
-            let truncated_text = truncate_str(display_text.trim(), 80);
-            println!("  {:<38}{}", location, truncated_text);
+impl fmt::Display for RefsGroupedView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(
+            f,
+            "{} \u{2014} {} reference{}",
+            self.symbol_name,
+            self.total,
+            if self.total == 1 { "" } else { "s" }
+        )?;
+        writeln!(f, "{SEPARATOR}")?;
 
-            // Show multi-line context if available
-            if let Some(ref snippet) = r.snippet {
-                print_snippet_context(snippet, r.line);
+        let mut shown = 0;
+        for (kind, refs) in self.groups {
+            let kind_label = humanize_edge_kind(kind);
+            writeln!(f, "{kind_label} ({}):", refs.len())?;
+            for r in refs {
+                let path = normalize_path(&r.file_path);
+                let location = if let Some(line) = r.line {
+                    format!("{path}:{line}")
+                } else {
+                    path
+                };
+                let display_text = r.snippet_line.as_deref().unwrap_or(&r.context);
+                let truncated_text = truncate_str(display_text.trim(), 80);
+                writeln!(f, "  {:<38}{}", location, truncated_text)?;
+
+                if let Some(ref snippet) = r.snippet {
+                    write_snippet_context(snippet, r.line, f)?;
+                }
             }
+            shown += refs.len();
+            writeln!(f)?;
         }
-        shown += refs.len();
-        println!();
-    }
 
-    if shown < total {
-        println!("... {} more (use --limit to show more)", total - shown);
+        if shown < self.total {
+            writeln!(
+                f,
+                "... {} more (use --limit to show more)",
+                self.total - shown
+            )?;
+        }
+        Ok(())
     }
 }
 
 /// Print file-level references.
 ///
 /// Same as `print_refs` but with the file path as header.
-pub fn print_file_refs(file_path: &str, refs: &[Reference], total: usize) {
-    let path = normalize_path(file_path);
-    println!(
-        "{} \u{2014} {} reference{}",
-        path,
-        total,
-        if total == 1 { "" } else { "s" }
-    );
-    println!("{SEPARATOR}");
+/// Plain-text view for `scope refs <file path>`.
+pub struct FileRefsView<'a> {
+    pub file_path: &'a str,
+    pub refs: &'a [Reference],
+    pub total: usize,
+}
 
-    for r in refs {
-        let rpath = normalize_path(&r.file_path);
-        let location = if let Some(line) = r.line {
-            format!("{rpath}:{line}")
-        } else {
-            rpath
-        };
-        let display_text = r.snippet_line.as_deref().unwrap_or(&r.context);
-        let truncated_text = truncate_str(display_text.trim(), 80);
-        println!("{:<40}{}", location, truncated_text);
+impl fmt::Display for FileRefsView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let path = normalize_path(self.file_path);
+        writeln!(
+            f,
+            "{} \u{2014} {} reference{}",
+            path,
+            self.total,
+            if self.total == 1 { "" } else { "s" }
+        )?;
+        writeln!(f, "{SEPARATOR}")?;
 
-        // Show multi-line context if available
-        if let Some(ref snippet) = r.snippet {
-            print_snippet_context(snippet, r.line);
+        for r in self.refs {
+            let rpath = normalize_path(&r.file_path);
+            let location = if let Some(line) = r.line {
+                format!("{rpath}:{line}")
+            } else {
+                rpath
+            };
+            let display_text = r.snippet_line.as_deref().unwrap_or(&r.context);
+            let truncated_text = truncate_str(display_text.trim(), 80);
+            writeln!(f, "{:<40}{}", location, truncated_text)?;
+
+            if let Some(ref snippet) = r.snippet {
+                write_snippet_context(snippet, r.line, f)?;
+            }
         }
-    }
 
-    if refs.len() < total {
-        println!("... {} more (use --limit to show more)", total - refs.len());
+        if self.refs.len() < self.total {
+            writeln!(
+                f,
+                "... {} more (use --limit to show more)",
+                self.total - self.refs.len()
+            )?;
+        }
+        Ok(())
     }
 }
 
@@ -730,22 +772,28 @@ pub fn print_file_refs(file_path: &str, refs: &[Reference], total: usize) {
 /// calls:
 ///   stripe.charges.create   (external)
 /// ```
-pub fn print_deps(symbol_name: &str, deps: &[Dependency], max_depth: usize) {
+/// Shared body for the symbol- and file-scoped dep renderers — emits
+/// the header line, separator, and kind-grouped dep listing.
+fn write_deps_body(
+    header_lhs: &str,
+    deps: &[Dependency],
+    max_depth: usize,
+    f: &mut fmt::Formatter<'_>,
+) -> fmt::Result {
     let depth_label = if max_depth <= 1 {
         "direct dependencies".to_string()
     } else {
         format!("transitive dependencies (depth {max_depth})")
     };
 
-    println!("{} \u{2014} {}", symbol_name, depth_label);
-    println!("{SEPARATOR}");
+    writeln!(f, "{} \u{2014} {}", header_lhs, depth_label)?;
+    writeln!(f, "{SEPARATOR}")?;
 
     if deps.is_empty() {
-        println!("(no dependencies found)");
-        return;
+        writeln!(f, "(no dependencies found)")?;
+        return Ok(());
     }
 
-    // Group by kind
     let mut groups: Vec<(String, Vec<&Dependency>)> = Vec::new();
     for dep in deps {
         if let Some(group) = groups.iter_mut().find(|(k, _)| *k == dep.kind) {
@@ -757,79 +805,54 @@ pub fn print_deps(symbol_name: &str, deps: &[Dependency], max_depth: usize) {
     }
 
     for (kind, group_deps) in &groups {
-        // Check if all deps in this group are external
         let all_external = group_deps.iter().all(|d| d.is_external);
         let kind_label = if all_external {
             format!("{kind} (external):")
         } else {
             format!("{kind}:")
         };
-        println!("{kind_label}");
+        writeln!(f, "{kind_label}")?;
 
         for dep in group_deps {
             if dep.is_external {
-                println!("  {:<24}(external)", dep.name);
+                writeln!(f, "  {:<24}(external)", dep.name)?;
             } else if let Some(fp) = &dep.file_path {
                 let path = normalize_path(fp);
-                println!("  {:<24}{}", dep.name, path);
+                writeln!(f, "  {:<24}{}", dep.name, path)?;
             } else {
-                println!("  {}", dep.name);
+                writeln!(f, "  {}", dep.name)?;
             }
         }
 
-        println!();
+        writeln!(f)?;
+    }
+    Ok(())
+}
+
+/// Plain-text view for `scope deps <symbol>`.
+pub struct DepsView<'a> {
+    pub symbol_name: &'a str,
+    pub deps: &'a [Dependency],
+    pub max_depth: usize,
+}
+
+impl fmt::Display for DepsView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write_deps_body(self.symbol_name, self.deps, self.max_depth, f)
     }
 }
 
-/// Print file-level dependencies.
-pub fn print_file_deps(file_path: &str, deps: &[Dependency], max_depth: usize) {
-    let path = normalize_path(file_path);
-    let depth_label = if max_depth <= 1 {
-        "direct dependencies".to_string()
-    } else {
-        format!("transitive dependencies (depth {max_depth})")
-    };
+/// Plain-text view for `scope deps <file path>`.
+pub struct FileDepsView<'a> {
+    pub file_path: &'a str,
+    pub deps: &'a [Dependency],
+    pub max_depth: usize,
+}
 
-    println!("{} \u{2014} {}", path, depth_label);
-    println!("{SEPARATOR}");
-
-    if deps.is_empty() {
-        println!("(no dependencies found)");
-        return;
-    }
-
-    // Group by kind
-    let mut groups: Vec<(String, Vec<&Dependency>)> = Vec::new();
-    for dep in deps {
-        if let Some(group) = groups.iter_mut().find(|(k, _)| *k == dep.kind) {
-            group.1.push(dep);
-        } else {
-            let kind = dep.kind.clone();
-            groups.push((kind, vec![dep]));
-        }
-    }
-
-    for (kind, group_deps) in &groups {
-        let all_external = group_deps.iter().all(|d| d.is_external);
-        let kind_label = if all_external {
-            format!("{kind} (external):")
-        } else {
-            format!("{kind}:")
-        };
-        println!("{kind_label}");
-
-        for dep in group_deps {
-            if dep.is_external {
-                println!("  {:<24}(external)", dep.name);
-            } else if let Some(fp) = &dep.file_path {
-                let fpath = normalize_path(fp);
-                println!("  {:<24}{}", dep.name, fpath);
-            } else {
-                println!("  {}", dep.name);
-            }
-        }
-
-        println!();
+impl fmt::Display for FileDepsView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let path = normalize_path(self.file_path);
+        write_deps_body(&path, self.deps, self.max_depth, f)
     }
 }
 
@@ -1335,15 +1358,18 @@ fn truncate_str(s: &str, max_chars: usize) -> String {
     }
 }
 
-/// Print multi-line snippet context with line numbers.
+/// Write multi-line snippet context with line numbers.
 ///
 /// Marks the reference line with `>` and other lines with a space.
-fn print_snippet_context(snippet: &[String], ref_line: Option<i64>) {
-    // We need to figure out what line number the first snippet line corresponds to.
-    // The snippet is centered around ref_line, so first line = ref_line - (snippet.len()-1)/2 approx.
-    // But we need the actual start line. We can compute it from ref_line and snippet length.
-    let Some(line_num) = ref_line else { return };
-    let ref_idx_in_snippet = snippet.len() / 2; // approximate center
+fn write_snippet_context(
+    snippet: &[String],
+    ref_line: Option<i64>,
+    f: &mut fmt::Formatter<'_>,
+) -> fmt::Result {
+    let Some(line_num) = ref_line else {
+        return Ok(());
+    };
+    let ref_idx_in_snippet = snippet.len() / 2;
     let start_line = (line_num as usize).saturating_sub(ref_idx_in_snippet);
 
     for (i, code) in snippet.iter().enumerate() {
@@ -1353,8 +1379,9 @@ fn print_snippet_context(snippet: &[String], ref_line: Option<i64>) {
         } else {
             " "
         };
-        println!("  {marker} {current_line:>4} | {code}");
+        writeln!(f, "  {marker} {current_line:>4} | {code}")?;
     }
+    Ok(())
 }
 
 /// Print workspace member list in human-readable format.
@@ -1479,30 +1506,41 @@ pub fn print_workspace_status(
 }
 
 /// Print workspace refs: references tagged with project names.
-pub fn print_workspace_refs(
-    symbol_name: &str,
-    refs: &[gumiho_mudang_scope::core::workspace_graph::WorkspaceRef],
-    total: usize,
-) {
-    println!(
-        "{} \u{2014} {} reference{} (workspace)",
-        symbol_name,
-        total,
-        if total == 1 { "" } else { "s" }
-    );
-    println!("{SEPARATOR}");
+/// Plain-text view for workspace-wide `scope refs --workspace <symbol>`.
+pub struct WorkspaceRefsView<'a> {
+    pub symbol_name: &'a str,
+    pub refs: &'a [gumiho_mudang_scope::core::workspace_graph::WorkspaceRef],
+    pub total: usize,
+}
 
-    for wr in refs {
-        let r = &wr.reference;
-        let path = normalize_path(&r.file_path);
-        let location = if let Some(line) = r.line {
-            format!("{path}:{line}")
-        } else {
-            path
-        };
-        let display_text = r.snippet_line.as_deref().unwrap_or(&r.context);
-        let truncated_text = truncate_str(display_text.trim(), 70);
-        println!("[{:<12}] {:<36}{}", wr.project, location, truncated_text);
+impl fmt::Display for WorkspaceRefsView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(
+            f,
+            "{} \u{2014} {} reference{} (workspace)",
+            self.symbol_name,
+            self.total,
+            if self.total == 1 { "" } else { "s" }
+        )?;
+        writeln!(f, "{SEPARATOR}")?;
+
+        for wr in self.refs {
+            let r = &wr.reference;
+            let path = normalize_path(&r.file_path);
+            let location = if let Some(line) = r.line {
+                format!("{path}:{line}")
+            } else {
+                path
+            };
+            let display_text = r.snippet_line.as_deref().unwrap_or(&r.context);
+            let truncated_text = truncate_str(display_text.trim(), 70);
+            writeln!(
+                f,
+                "[{:<12}] {:<36}{}",
+                wr.project, location, truncated_text
+            )?;
+        }
+        Ok(())
     }
 }
 
