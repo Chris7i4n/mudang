@@ -575,8 +575,54 @@ fn test_audit_confidence_label_rejects_records_missing_label_field() {
         .current_dir(&root)
         .assert()
         .failure()
-        .stderr(contains("required field `label` is missing"))
-        .stderr(contains("missing field is not the same as an explicit null"));
+        .stderr(contains("required field(s) `label`"))
+        .stderr(contains("missing key is not the same as an explicit `null`"));
+}
+
+#[test]
+fn test_audit_confidence_label_rejects_records_missing_lang_version_field() {
+    // Codex round-8 P3: same shape as round 6 but for the other
+    // Option-typed required field. A labeller that drops nulls
+    // would omit `lang_version` (always null on emit in sprint 0007)
+    // and produce JSONL that violates the schema_version "1"
+    // required-fields contract.
+    let (_dir, root) = setup_indexed_fixture();
+    let sample = root.join("sample.jsonl");
+
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--emit-sample"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .success();
+
+    let raw = std::fs::read_to_string(&sample).unwrap();
+    let mut out_lines = Vec::new();
+    let mut stripped = false;
+    for l in raw
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+    {
+        let mut line = l.replace("\"label\":null", "\"label\":true");
+        if !stripped {
+            line = line.replacen(",\"lang_version\":null", "", 1);
+            stripped = true;
+        }
+        out_lines.push(line);
+    }
+    assert!(stripped);
+    std::fs::write(&sample, out_lines.join("\n") + "\n").unwrap();
+
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--label"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .failure()
+        .stderr(contains("required field(s) `lang_version`"))
+        .stderr(contains("missing key is not the same as an explicit `null`"));
 }
 
 #[test]

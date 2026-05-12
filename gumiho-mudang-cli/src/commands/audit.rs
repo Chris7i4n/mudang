@@ -449,15 +449,32 @@ fn label_pass(
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
         }
-        // Pre-typed key-presence check (post-codex P2 round 6):
-        // `SampleRecord.label` is `Option<bool>`, which serde
-        // deserializes identically for an explicit `"label":null`
-        // and for a record that *omits* `label` entirely. Per
-        // `docs/AUDIT-LABEL-SCHEMA.md` the field is required (with
-        // value `null`, `true`, or `false`) — a missing field is a
-        // malformed sample, not a "skip me" signal. Parse to
-        // `serde_json::Value` first to verify the key is present,
-        // then continue to the typed record.
+        // Pre-typed key-presence check (post-codex P2 round 6, generalised
+        // to every required field in round 8). Per
+        // `docs/AUDIT-LABEL-SCHEMA.md` every field on a `schema_version:
+        // "1"` record is required-with-value (null is a valid value for
+        // `lang_version` and `label`, but the *key* must still be present).
+        // Serde silently treats a missing `Option<T>` field as `None`,
+        // which would otherwise let a labeller-side serializer that
+        // drops nulls produce records that violate the round-trip
+        // contract without any audit-side error. The non-`Option`
+        // String fields would already fail typed deserialisation when
+        // absent, but listing every required field here is the single
+        // source-of-truth for the schema contract — the typed parse
+        // handles values, this pre-check handles presence.
+        const REQUIRED_FIELDS: &[&str] = &[
+            "schema_version",
+            "edge_id",
+            "kind",
+            "confidence",
+            "producer",
+            "pattern_id",
+            "from",
+            "to",
+            "source_snippet",
+            "lang_version",
+            "label",
+        ];
         let raw: serde_json::Value = serde_json::from_str(trimmed).with_context(|| {
             format!(
                 "{}: line {}: invalid JSON record (schema: docs/AUDIT-LABEL-SCHEMA.md)",
@@ -472,14 +489,20 @@ fn label_pass(
                 idx + 1
             )
         })?;
-        if !raw_obj.contains_key("label") {
+        let missing: Vec<&&str> = REQUIRED_FIELDS
+            .iter()
+            .filter(|k| !raw_obj.contains_key(**k))
+            .collect();
+        if !missing.is_empty() {
+            let names: Vec<String> = missing.iter().map(|k| format!("`{k}`")).collect();
             anyhow::bail!(
-                "{}: line {}: required field `label` is missing; per docs/AUDIT-LABEL-SCHEMA.md \
-                 every record must carry an explicit `label` set to `null` (undecided), \
-                 `true` (correct), or `false` (incorrect). A missing field is not the same as \
-                 an explicit null and is rejected to surface labeller-side serializer bugs.",
+                "{}: line {}: required field(s) {} missing; per docs/AUDIT-LABEL-SCHEMA.md every \
+                 schema_version \"1\" record must carry every field explicitly (with `null` where \
+                 applicable for `lang_version` and `label`). A missing key is not the same as an \
+                 explicit `null` value and is rejected to surface labeller-side serializer bugs.",
                 in_path.display(),
-                idx + 1
+                idx + 1,
+                names.join(", ")
             );
         }
         let record: SampleRecord = serde_json::from_value(raw).with_context(|| {
