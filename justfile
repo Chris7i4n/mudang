@@ -66,7 +66,7 @@ gate: fmt-check clippy test
 # this recipe. See sprint 0001 DOD #3.
 
 # Run every active refactor gate.
-gate-refactor: ci-edge-sealed test-builder test-typestate ci-context-shape ci-no-fs ci-dispatch ci-trait-shape ci-no-spawn ci-no-network ci-immutable ci-no-framework-scm ci-patterns
+gate-refactor: ci-edge-sealed test-builder test-typestate ci-context-shape ci-no-fs ci-dispatch ci-trait-shape ci-no-spawn ci-no-network ci-immutable ci-no-framework-scm ci-patterns ci-output-schema
 
 ci-edge-sealed:
     ./scripts/grep_edge_sealed.sh
@@ -103,6 +103,9 @@ ci-no-framework-scm:
 
 ci-patterns:
     ./scripts/audit_patterns.sh
+
+ci-output-schema:
+    ./scripts/audit_output_schema.sh
 
 # --- Install ---
 
