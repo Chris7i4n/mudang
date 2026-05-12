@@ -167,7 +167,7 @@ Per-language category index (filled in as chunk 2 lands fixtures):
 |---|---|---|
 | C# | `truncated-mid-method`, `unbalanced-brace`, `eof-in-string`, `eof-in-verbatim-string`, `eof-in-attribute-list` | Brace-balanced grammar; verbatim string exercises C#-specific multi-line `@"..."` recovery, attribute list exercises bracketed-call recovery in attribute position. |
 | Go | `truncated-mid-function`, `unbalanced-brace`, `eof-in-raw-string`, `missing-closing-paren-on-call`, `eof-in-import-block` | Brace-balanced; raw-string variant covers backtick recovery, import-block variant covers grouped-import recovery, paren-on-call covers Sprintf-style multi-argument recovery. |
-| Java | _TBD chunk 2_ | Brace-balanced; truncated, unbalanced, eof-in-string, eof-in-annotation, eof-in-generics-angle are natural. |
+| Java | `truncated-mid-method`, `unbalanced-brace`, `eof-in-string`, `eof-in-annotation`, `eof-in-generics-angle` | Brace-balanced; annotation variant covers `@Route(...)` element-value-pair recovery, generics variant covers the LL(1)-ambiguous `<` `>` recovery stress point. |
 | Python | _TBD chunk 2_ | No braces. Truncated, mixed-indent-collapse, eof-in-triple-string, eof-in-bracketed-call, eof-in-decorator are natural. |
 | Ruby | _TBD chunk 2_ | `end`-balanced; truncated, unbalanced-`end`, eof-in-heredoc, eof-in-regex, eof-in-string-interpolation are natural. |
 | Rust | _TBD chunk 2_ | Brace-balanced; truncated, unbalanced, eof-in-raw-string, eof-in-macro-body, eof-in-generics-angle are natural. |
