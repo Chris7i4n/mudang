@@ -644,6 +644,43 @@ fn label_pass(
                 indexed_row.pattern_id.clone(),
             ));
         }
+        // Endpoint fields (codex round 4 P2): the labeller READS `from`
+        // and `to` to decide whether the edge is correct. If either was
+        // rewritten between emit and label, the labeller judged a
+        // DIFFERENT edge from the one the precision report will credit
+        // — inflated/misleading precision. Same auditor-immutability
+        // semantics as report-key fields above.
+        if record.from != indexed_row.from_id {
+            diffs.push((
+                "from",
+                record.from.clone(),
+                indexed_row.from_id.clone(),
+            ));
+        }
+        if record.to != indexed_row.to_id {
+            diffs.push((
+                "to",
+                record.to.clone(),
+                indexed_row.to_id.clone(),
+            ));
+        }
+        // Source-snippet field (codex round 4 P2): the labeller READS
+        // `source_snippet` to see the actual call/definition site. If
+        // rewritten, the labeller saw text the indexer never emitted
+        // and the verdict applies to a fake context. Re-derive the
+        // snippet from the on-disk file (file content drift is caught
+        // later by `enforce_freshness`; here we only verify the sample
+        // record has not been hand-edited).
+        let expected_snippet =
+            read_source_snippet(project_root, &indexed_row.file_path, indexed_row.line)
+                .unwrap_or_default();
+        if record.source_snippet != expected_snippet {
+            diffs.push((
+                "source_snippet",
+                record.source_snippet.clone(),
+                expected_snippet,
+            ));
+        }
         if !diffs.is_empty() {
             tampered.push((*line_no, diffs));
         }
@@ -653,11 +690,11 @@ fn label_pass(
         let mut msg = String::new();
         let _ = writeln!(
             msg,
-            "sample-file tamper check failed: {} record(s) carry report-key fields \
-             (kind / confidence / producer / pattern_id) that disagree with the indexed edge. \
-             The labeller may set `label` only; rewriting any other field invalidates the audit \
-             because the precision report groups rows by those fields and the tier gate enforces \
-             targets per tier.",
+            "sample-file tamper check failed: {} record(s) carry non-`label` fields \
+             (kind / confidence / producer / pattern_id / from / to / source_snippet) that \
+             disagree with the indexed edge. The labeller may set `label` only; rewriting any \
+             other field invalidates the audit because the labeller's verdict then applies to a \
+             different edge / context than the one the precision report will credit.",
             tampered.len()
         );
         for (line_no, diffs) in &tampered {

@@ -475,6 +475,156 @@ fn test_audit_confidence_label_rejects_tampered_confidence_field() {
 }
 
 #[test]
+fn test_audit_confidence_label_rejects_tampered_from_field() {
+    // Codex round-4 P2: labeller alters `from` while keeping a valid
+    // edge_id. The labeller then judged a different edge but report
+    // credits the indexed one.
+    let (_dir, root) = setup_indexed_fixture();
+    let sample = root.join("sample.jsonl");
+
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--emit-sample"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .success();
+
+    let raw = std::fs::read_to_string(&sample).unwrap();
+    let mut out_lines = Vec::new();
+    let mut tampered = false;
+    for l in raw
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+    {
+        let mut line = l.replace("\"label\":null", "\"label\":true");
+        if !tampered {
+            // Replace the first record's `from` value with a fake one.
+            let v: serde_json::Value = serde_json::from_str(&line).unwrap();
+            let original = v["from"].as_str().unwrap().to_string();
+            line = line.replace(
+                &format!("\"from\":\"{original}\""),
+                "\"from\":\"fake::origin\"",
+            );
+            tampered = true;
+        }
+        out_lines.push(line);
+    }
+    assert!(tampered);
+    std::fs::write(&sample, out_lines.join("\n") + "\n").unwrap();
+
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--label"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .failure()
+        .stderr(contains("sample-file tamper check failed"))
+        .stderr(contains("from"))
+        .stderr(contains("fake::origin"));
+}
+
+#[test]
+fn test_audit_confidence_label_rejects_tampered_to_field() {
+    // Codex round-4 P2 (second axis): labeller alters `to`.
+    let (_dir, root) = setup_indexed_fixture();
+    let sample = root.join("sample.jsonl");
+
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--emit-sample"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .success();
+
+    let raw = std::fs::read_to_string(&sample).unwrap();
+    let mut out_lines = Vec::new();
+    let mut tampered = false;
+    for l in raw
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+    {
+        let mut line = l.replace("\"label\":null", "\"label\":true");
+        if !tampered {
+            let v: serde_json::Value = serde_json::from_str(&line).unwrap();
+            let original = v["to"].as_str().unwrap().to_string();
+            line = line.replace(
+                &format!("\"to\":\"{original}\""),
+                "\"to\":\"fake::target\"",
+            );
+            tampered = true;
+        }
+        out_lines.push(line);
+    }
+    std::fs::write(&sample, out_lines.join("\n") + "\n").unwrap();
+
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--label"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .failure()
+        .stderr(contains("sample-file tamper check failed"))
+        .stderr(contains("to: sample = "))
+        .stderr(contains("fake::target"));
+}
+
+#[test]
+fn test_audit_confidence_label_rejects_tampered_source_snippet() {
+    // Codex round-4 P2 (third axis): labeller alters `source_snippet`.
+    // The labeller saw text the indexer never emitted; verdict applies
+    // to a fake context.
+    let (_dir, root) = setup_indexed_fixture();
+    let sample = root.join("sample.jsonl");
+
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--emit-sample"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .success();
+
+    let raw = std::fs::read_to_string(&sample).unwrap();
+    let mut out_lines = Vec::new();
+    let mut tampered = false;
+    for l in raw
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+    {
+        let mut line = l.replace("\"label\":null", "\"label\":true");
+        if !tampered {
+            let v: serde_json::Value = serde_json::from_str(&line).unwrap();
+            let original = v["source_snippet"].as_str().unwrap().to_string();
+            // Rewrite snippet to something that definitely won't match.
+            // Use a JSON-encoded literal so the line stays valid JSON.
+            let original_json = serde_json::to_string(&original).unwrap();
+            line = line.replace(
+                &format!("\"source_snippet\":{original_json}"),
+                "\"source_snippet\":\"// FAKE CONTEXT THE INDEXER NEVER SAW\"",
+            );
+            tampered = true;
+        }
+        out_lines.push(line);
+    }
+    std::fs::write(&sample, out_lines.join("\n") + "\n").unwrap();
+
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--label"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .failure()
+        .stderr(contains("sample-file tamper check failed"))
+        .stderr(contains("source_snippet"))
+        .stderr(contains("FAKE CONTEXT"));
+}
+
+#[test]
 fn test_audit_confidence_label_rejects_all_null_labels() {
     // Codex round-3 P2-2 resolution: --label *tolerates* partial coverage
     // per the schema doc, but a sample where no record at all has been
