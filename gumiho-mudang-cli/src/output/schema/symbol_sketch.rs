@@ -61,8 +61,8 @@ impl<'a> SketchSymbol<'a> {
 pub struct FieldView<'a> {
     /// Field name.
     pub name: &'a str,
-    /// Type signature where available.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Type signature where available. Serialises as JSON `null` when
+    /// absent (pre-R10 wire-shape compat; codex P1, sprint 0006).
     pub signature: Option<&'a str>,
     /// First line of the field declaration.
     pub line_start: u32,
@@ -84,7 +84,8 @@ pub struct EnumVariantView<'a> {
     /// Variant name.
     pub name: &'a str,
     /// Variant signature (parameters, payload) where available.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Serialises as JSON `null` when absent (pre-R10 wire-shape compat;
+    /// codex P1, sprint 0006).
     pub signature: Option<&'a str>,
     /// First line of the variant.
     pub line_start: u32,

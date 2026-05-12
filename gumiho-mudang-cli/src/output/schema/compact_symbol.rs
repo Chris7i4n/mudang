@@ -18,8 +18,10 @@ pub struct CompactSymbol<'a> {
     pub name: &'a str,
     /// Symbol kind ("class", "method", etc.).
     pub kind: &'a str,
-    /// Type signature where available.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Type signature where available. Serialises as JSON `null` when
+    /// the symbol has no signature — the pre-R10 `serde_json::json!()`
+    /// output always emitted the key, so the typed shape preserves the
+    /// same wire contract (codex P1, sprint 0006).
     pub signature: Option<&'a str>,
     /// File path, forward-slash normalized.
     pub file_path: &'a str,

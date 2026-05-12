@@ -28,7 +28,8 @@ pub struct SymbolSummary<'a> {
     pub file_path: &'a str,
     pub line_start: u32,
     pub line_end: u32,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Type signature where available. Serialises as JSON `null` when
+    /// absent (pre-R10 wire-shape compat; codex P1, sprint 0006).
     pub signature: Option<&'a str>,
     pub callers: usize,
     pub outgoing_calls: usize,
