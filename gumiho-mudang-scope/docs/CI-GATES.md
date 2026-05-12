@@ -14,10 +14,10 @@ When a gate is active, the script or test path listed below is the **authoritati
 | Builder requires fields | R1 | compile-fail test `scope-core/tests/compile_fail/builder/missing_*.rs` | `EdgeBuilder::build()` succeeds without `confidence` / `producer` / `pattern_id` | `just test-builder` | active (sprint 0001 — 2026-05-11) |
 | Builder forbids status | R1 | compile-fail test `scope-core/tests/compile_fail/builder/no_status_method.rs` | `EdgeBuilder::status(...)` compiles | `just test-builder` | active (sprint 0001 — 2026-05-11) |
 | Insertable typestate | R3 | compile-fail test | `Graph::insert(RawEdge)` compiles; `InsertableEdge` constructor reachable outside resolver | `just test-typestate` | planned (Phase B) |
-| Trait-shape audit | R12 | `scripts/audit_trait_shape.sh` | `LanguagePlugin` / `Extractor` has method named `infer_*`, `evaluate_*`, `solve_*`, `narrow_*`, `resolve_overload_*`, `expand_*` | `just ci-trait-shape` | planned (Phase B) |
-| Process-spawn denylist | R12 | `scripts/audit_no_spawn.sh` | `Command::new(`, `process::Command`, `std::process::Command` appears in `src/languages/`, `src/frameworks/`, `src/core/parser.rs`, `src/core/extract*.rs`, `src/core/resolve*.rs` (excluding allowlist-tagged sites) | `just ci-no-spawn` | planned (Phase B) |
-| Network denylist | R12 | `scripts/audit_no_network.sh` | `std::net::*`, `reqwest`, `hyper`, `tokio::net`, `ureq` linked into plugin / extractor / query paths | `just ci-no-network` | planned (Phase B) |
-| Immutable source | R9 | `scripts/audit_immutable.sh` | `&mut` on source-related types (`&mut str`, `&mut Tree`, `&mut Source*`) at plugin trait surface | `just ci-immutable` | planned (Phase B) |
+| Trait-shape audit | R12 | `scripts/audit_trait_shape.sh` (grep gate over `gumiho-mudang-scope/scope-core/src/languages/plugin.rs` + `scope-core/src/extract/mod.rs`) | trait method or extractor fn named `infer_*`, `evaluate_*`, `solve_*`, `narrow_*`, `resolve_overload_*`, `expand_*` | `just ci-trait-shape` | planned (Phase B) |
+| Process-spawn denylist | R12 | `scripts/audit_no_spawn.sh` (grep gate, source-text scan) | `Command::new(` / `process::Command` / `std::process::Command` literal in `gumiho-mudang-scope/scope-core/src/languages/`, `gumiho-mudang-scope/scope-core/src/frameworks/` (when introduced in sprint 0005), `gumiho-mudang-scope/scope-core/src/parser.rs`, `gumiho-mudang-scope/scope-core/src/extract/`, `gumiho-mudang-scope/scope-graph/src/resolve/` (excluding allowlist-tagged sites) | `just ci-no-spawn` | planned (Phase B) |
+| Network denylist | R12 | `scripts/audit_no_network.sh` (grep gate, source-text scan; `cargo-deny` is **not** wired as a refactor gate — dep-tree hygiene is tooling, not the R12 contract) | `std::net::*` / `tokio::net::*` / `reqwest::` / `hyper::` / `ureq::` symbol references in the path-filtered set used by the process-spawn gate (plugin, extractor, resolver, query) excluding allowlist-tagged sites | `just ci-no-network` | planned (Phase B) |
+| Immutable source | R9 | `scripts/audit_immutable.sh` (grep gate, source-text scan) | `&mut str` / `&mut tree_sitter::Tree` / `&mut Source*` token in `gumiho-mudang-scope/scope-core/src/languages/plugin.rs` + `scope-core/src/extract/mod.rs` + every per-language plugin module under `scope-core/src/languages/` | `just ci-immutable` | planned (Phase B) |
 | WorkspaceContext shape | R4 | `scripts/audit_context_shape.sh` | `LanguageWorkspaceContext` exposes `edition`, `target`, `python_requires`, `go_directive`, `tsconfig_target`, `framework_versions` | `just ci-context-shape` | planned (Phase B) |
 | No filesystem in plugin | R4 | grep gate | `std::fs::*`, `std::path::PathBuf::from`, `File::open` constructors in plugin code | `just ci-no-fs` | planned (Phase B) |
 | Indexer-only dispatch | R7 | grep gate | plugin code reads file content for self-activation (no `read_to_string` etc. in plugin trait impls) | `just ci-dispatch` | planned (Phase B) |
@@ -112,11 +112,13 @@ If `justfile` is later replaced by a `scripts/ci.sh` or removed entirely, the in
 
 ## Allowlist convention (R12 spawn / network / fs gates)
 
-When a legitimate exception exists (e.g., `Command::new("scope")` self-invocation in `src/commands/setup.rs:39` for the `scope setup` flow), the call site carries:
+The path filter on each R12 source-text gate scans only plugin / extractor / resolver / query paths (per the "Fails on" column of each row). Call sites **outside** those paths — for example `gumiho-mudang-cli/src/commands/setup.rs:39` where the `scope setup` subcommand spawns a `scope` subprocess — are out of audit scope by **path exclusion**, not by allowlist tag. The tag mechanism exists for the rare case where a denylisted construct must legitimately live **inside** an audited path.
+
+When such an in-scope exception exists, the call site carries:
 
 ```rust
-// scope:audit-allow process-spawn — self-invocation for `scope setup`
-Command::new("scope")
+// scope:audit-allow process-spawn — <one-line rationale>
+Command::new("…")
 ```
 
 Allowlist tags:
@@ -125,9 +127,13 @@ Allowlist tags:
 - `scope:audit-allow network`
 - `scope:audit-allow filesystem`
 
-The audit script greps for the exact tag immediately preceding the call. Removing or renaming a tag fails the gate. Adding a new tag requires charter-amendment-grade rationale in the commit body — process-spawn / network / filesystem are the closest things in the codebase to charter hard limits.
+Tag-placement rule:
 
-The current allowlist is enumerated in each script's header comment. The doc does not enumerate sites — sites move; tags are the contract.
+- The tag goes on the line **immediately preceding the denylisted construct itself** (the `Command::new(…)` / `std::net::…` / `std::fs::…` line that the audit grep would otherwise flag). The audit greps lines in scanned paths; the tag is matched lexically on the preceding line.
+- **Wrapping a denylisted construct in a helper to evade the gate is forbidden.** If a helper inside an audited path internally calls a denylisted construct, the tag goes on the inner call (the construct itself), never on the helper's signature or its call sites. Hiding `Command::new(...)` behind `fn run_scope(args: &[&str])` and tagging `run_scope` is process-failure-grade: it silently widens the exception surface and breaks the audit's source-text contract. There is no "transitive call audit" by design — the gate operates lexically, and the tag follows the same locality.
+- A construct in an audited path that lacks a tag fails the gate. Removing or renaming a tag fails the gate. Adding a new tag site requires charter-amendment-grade rationale in the commit body — process-spawn / network / filesystem are the closest things in the codebase to charter hard limits.
+
+The current allowlist is enumerated in each script's header comment. The doc does not enumerate sites — sites move; tags are the contract. As of sprint 0004, the audited paths contain **zero** allowlist entries; the only in-tree `Command::new("scope")` self-invocation lives in `gumiho-mudang-cli/src/commands/setup.rs` (out of audit scope by path).
 
 ---
 
