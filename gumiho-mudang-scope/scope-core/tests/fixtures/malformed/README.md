@@ -170,7 +170,7 @@ Per-language category index (filled in as chunk 2 lands fixtures):
 | Java | `truncated-mid-method`, `unbalanced-brace`, `eof-in-string`, `eof-in-annotation`, `eof-in-generics-angle` | Brace-balanced; annotation variant covers `@Route(...)` element-value-pair recovery, generics variant covers the LL(1)-ambiguous `<` `>` recovery stress point. |
 | Python | `truncated-mid-function`, `mixed-indent-collapse`, `eof-in-triple-string`, `eof-in-bracketed-call`, `eof-in-decorator` | No braces — indentation is the structural delimiter. Mixed-indent fills the "unbalanced delimiters" slot; bracketed-call + decorator variants exercise the implicit-line-continuation recovery surface. |
 | Ruby | `truncated-mid-method`, `unbalanced-end`, `eof-in-heredoc`, `eof-in-regex`, `eof-in-string-interpolation` | `end`-balanced; heredoc variant covers `<<~HTML ... HTML` recovery, regex variant covers `/.../` delimiter ambiguity recovery, interpolation variant covers cascading `"#{...}"` recovery. |
-| Rust | _TBD chunk 2_ | Brace-balanced; truncated, unbalanced, eof-in-raw-string, eof-in-macro-body, eof-in-generics-angle are natural. |
+| Rust | `truncated-mid-function`, `unbalanced-brace`, `eof-in-raw-string`, `eof-in-macro-body`, `eof-in-generics-angle` | Brace-balanced; raw-string variant covers `r#"..."#` recovery, macro-body variant covers permissive token-tree recovery, generics variant covers the LL(1)-ambiguous `<`/`>` recovery stress point. |
 | TypeScript | _TBD chunk 2_ | Brace-balanced + JSX. Truncated, unbalanced, eof-in-template-literal, missing-close-tag-jsx, eof-in-type-annotation are natural. |
 
 The table is editorial; chunk 2 finalises the picks and rewrites the
