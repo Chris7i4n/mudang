@@ -1441,10 +1441,12 @@ name = "scope-graph"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "hex",
  "rusqlite",
  "scope-core",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "thiserror",
  "tracing",

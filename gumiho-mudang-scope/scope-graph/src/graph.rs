@@ -4,6 +4,7 @@
 //! for refs, deps, rdeps, and impact analysis.
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection, OptionalExtension};
+use sha2::{Digest, Sha256};
 // Re-export so pre-split callers reaching for `scope_graph::graph::Symbol`
 // (and via the façade, `gumiho_mudang_scope::core::graph::Symbol`) keep
 // resolving. The structs themselves live in scope-core; this preserves
@@ -61,6 +62,38 @@ pub struct FileHashRow {
     /// forward both in source order; the storage layer serialises the
     /// slice verbatim.
     pub skipped_ranges: Vec<SkippedRange>,
+}
+
+/// Outcome of [`Graph::check_audit_freshness`] — categorises any drift
+/// between the indexed snapshot and the on-disk source files referenced
+/// by an audit sample.
+///
+/// The audit (R8 / sprint 0007) refuses to operate when the working tree
+/// has diverged from what the extractor saw at index time, per
+/// `docs/AUDIT-LABEL-SCHEMA.md` § Auditor immutability rule. This struct
+/// is the report the CLI surfaces in the resulting hard error.
+///
+/// Three categories, intentionally distinct so the remediation message
+/// can be specific:
+/// - `missing` — file was in `file_hashes` at index time but is gone from
+///   disk now (rename / delete since index).
+/// - `modified` — file exists, contents hash differs from the stored
+///   digest (edit since index).
+/// - `unknown` — the audit sample referenced a file that has no row in
+///   `file_hashes`. This should not happen for indexer-produced graphs;
+///   if it does, the index is corrupt or hand-edited and the only safe
+///   answer is the same as drift: re-index.
+#[derive(Debug, Default)]
+pub struct AuditFreshness {
+    pub missing: Vec<String>,
+    pub modified: Vec<String>,
+    pub unknown: Vec<String>,
+}
+
+impl AuditFreshness {
+    pub fn is_clean(&self) -> bool {
+        self.missing.is_empty() && self.modified.is_empty() && self.unknown.is_empty()
+    }
 }
 
 /// The dependency graph backed by SQLite.
@@ -2274,6 +2307,79 @@ impl Graph {
             out.push(r?);
         }
         Ok(out)
+    }
+
+    /// Verify that every file in `file_paths` has the same content now as
+    /// when the indexer recorded its `file_hashes.hash` digest.
+    ///
+    /// This is the mechanical enforcement behind the auditor immutability
+    /// rule (see `docs/AUDIT-LABEL-SCHEMA.md` § Auditor immutability rule).
+    /// R8's `--emit-sample` and `--label` flows both call this against the
+    /// distinct set of files referenced by the sampled / labelled edges,
+    /// and refuse to proceed on any drift. There is no `--allow-drift`
+    /// escape: the only remediation is `scope index` + re-run.
+    ///
+    /// Re-hashing matches the indexer byte-for-byte by going through
+    /// `read_to_string` + `sha2::Sha256` (`scope-index::indexer::compute_hash`).
+    /// Files whose content is unchanged but whose mtime has moved (cross-
+    /// machine copy, `git checkout` that touches mtime without changing
+    /// content) hash identically and are reported as clean — this is the
+    /// "looks like drift but isn't" case that motivates content-hash
+    /// enforcement over mtime comparison.
+    ///
+    /// Cost: one `stat` + `read_to_string` + SHA-256 per distinct file in
+    /// the sample. A typical N=30 sample touches ~10–30 files, well under
+    /// the labelling step's runtime.
+    pub fn check_audit_freshness(
+        &self,
+        project_root: &Path,
+        file_paths: &[&str],
+    ) -> Result<AuditFreshness> {
+        let mut stored: HashMap<String, String> = HashMap::new();
+        {
+            let mut stmt = self
+                .conn
+                .prepare("SELECT file_path, hash FROM file_hashes")?;
+            let rows = stmt.query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?;
+            for row in rows {
+                let (path, hash) = row?;
+                stored.insert(path, hash);
+            }
+        }
+
+        let mut report = AuditFreshness::default();
+        for rel_path in file_paths {
+            let stored_hash = match stored.get(*rel_path) {
+                Some(h) => h,
+                None => {
+                    report.unknown.push((*rel_path).to_string());
+                    continue;
+                }
+            };
+
+            let abs_path = project_root.join(rel_path);
+            let source = match std::fs::read_to_string(&abs_path) {
+                Ok(s) => s,
+                Err(_) => {
+                    report.missing.push((*rel_path).to_string());
+                    continue;
+                }
+            };
+            let mut hasher = Sha256::new();
+            hasher.update(source.as_bytes());
+            let current_hash = hex::encode(hasher.finalize());
+
+            if &current_hash != stored_hash {
+                report.modified.push((*rel_path).to_string());
+            }
+        }
+
+        report.missing.sort();
+        report.modified.sort();
+        report.unknown.sort();
+        Ok(report)
     }
 }
 
