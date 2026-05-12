@@ -730,6 +730,21 @@ fn label_pass(
                 expected_snippet,
             ));
         }
+        // `lang_version` field (codex round 7 P2): the schema's
+        // reserved per-project lang_version slot. Sprint 0007 always
+        // emits `null` (the seven per-language detectors land
+        // atomically post-refactor — Priority 1 sub-item (d)). The
+        // labeller fills `label` only; rewriting `lang_version` is
+        // sample tamper on the same auditor-immutability rule. With
+        // the emit-time value pinned at `None`, any non-`None` value
+        // in the labelled JSONL is a rewrite.
+        if record.lang_version.is_some() {
+            diffs.push((
+                "lang_version",
+                format!("{:?}", record.lang_version),
+                "null".to_string(),
+            ));
+        }
         if !diffs.is_empty() {
             tampered.push((*line_no, diffs));
         }
@@ -740,8 +755,8 @@ fn label_pass(
         let _ = writeln!(
             msg,
             "sample-file tamper check failed: {} record(s) carry non-`label` fields \
-             (kind / confidence / producer / pattern_id / from / to / source_snippet) that \
-             disagree with the indexed edge. The labeller may set `label` only; rewriting any \
+             (kind / confidence / producer / pattern_id / from / to / source_snippet / lang_version) \
+             that disagree with the indexed edge. The labeller may set `label` only; rewriting any \
              other field invalidates the audit because the labeller's verdict then applies to a \
              different edge / context than the one the precision report will credit.",
             tampered.len()
