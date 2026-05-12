@@ -35,5 +35,5 @@ Until then, `--json` is read as untyped JSON by current consumers; the typed Rus
 ## See also
 
 - [`gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` § R10](../../gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md#r10--typed-output-schema) — refactor move that lands the typed structs.
-- [`gumiho-mudang-scope/docs/sprints/0006-phase-d-output-and-audit.md`](../../gumiho-mudang-scope/docs/sprints/0006-phase-d-output-and-audit.md) — the sprint shipping R10.
+- [`gumiho-mudang-scope/docs/sprints/0006-phase-d-typed-output-schema.md`](../../gumiho-mudang-scope/docs/sprints/0006-phase-d-typed-output-schema.md) — the sprint shipping R10.
 - [`gumiho-mudang-scope/docs/SCOPE-LSP-COMPOSITION.md`](../../gumiho-mudang-scope/docs/SCOPE-LSP-COMPOSITION.md) § 5.4 — composition layer design that consumes Scope output + LSP enrichments.
