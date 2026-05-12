@@ -196,11 +196,14 @@ fn run_incremental_index(
         };
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
-        formatter::print_incremental_result(
-            &stats.modified,
-            &stats.added,
-            &stats.deleted,
-            stats.duration.as_secs_f64(),
+        eprint!(
+            "{}",
+            formatter::IncrementalResultView {
+                modified: &stats.modified,
+                added: &stats.added,
+                deleted: &stats.deleted,
+                duration_secs: stats.duration.as_secs_f64(),
+            }
         );
     }
 

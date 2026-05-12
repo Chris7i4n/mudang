@@ -110,7 +110,14 @@ pub fn run(args: &SimilarArgs, project_root: &Path) -> Result<()> {
         };
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
-        formatter::print_find_results(&format!("similar to {}", args.symbol), &results);
+        let title = format!("similar to {}", args.symbol);
+        print!(
+            "{}",
+            formatter::FindResultsView {
+                query: &title,
+                results: &results,
+            }
+        );
     }
 
     Ok(())

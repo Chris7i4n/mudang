@@ -387,7 +387,13 @@ fn run_list(args: &WorkspaceListArgs, project_root: &Path) -> Result<()> {
         };
         println!("{}", serde_json::to_string_pretty(&output)?);
     } else {
-        formatter::print_workspace_list(&config.workspace.name, &member_statuses);
+        print!(
+            "{}",
+            formatter::WorkspaceListView {
+                workspace_name: &config.workspace.name,
+                members: &member_statuses,
+            }
+        );
     }
 
     Ok(())

@@ -1295,30 +1295,38 @@ fn impact_depth_label(depth: usize) -> &'static str {
 ///   Added:    src/payments/refund.ts
 /// Updated in 0.3s.
 /// ```
-pub fn print_incremental_result(
-    modified: &[String],
-    added: &[String],
-    deleted: &[String],
-    duration_secs: f64,
-) {
-    let total = modified.len() + added.len() + deleted.len();
-    eprintln!(
-        "{} file{} changed. Re-indexing...",
-        total,
-        if total == 1 { "" } else { "s" }
-    );
+/// Plain-text view for the incremental-index summary. The caller
+/// writes this view to **stderr** via `eprint!("{view}")` (it is a
+/// progress message, not output data).
+pub struct IncrementalResultView<'a> {
+    pub modified: &'a [String],
+    pub added: &'a [String],
+    pub deleted: &'a [String],
+    pub duration_secs: f64,
+}
 
-    for path in modified {
-        eprintln!("  Modified: {}", normalize_path(path));
-    }
-    for path in added {
-        eprintln!("  Added:    {}", normalize_path(path));
-    }
-    for path in deleted {
-        eprintln!("  Deleted:  {}", normalize_path(path));
-    }
+impl fmt::Display for IncrementalResultView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let total = self.modified.len() + self.added.len() + self.deleted.len();
+        writeln!(
+            f,
+            "{} file{} changed. Re-indexing...",
+            total,
+            if total == 1 { "" } else { "s" }
+        )?;
 
-    eprintln!("Updated in {duration_secs:.1}s.");
+        for path in self.modified {
+            writeln!(f, "  Modified: {}", normalize_path(path))?;
+        }
+        for path in self.added {
+            writeln!(f, "  Added:    {}", normalize_path(path))?;
+        }
+        for path in self.deleted {
+            writeln!(f, "  Deleted:  {}", normalize_path(path))?;
+        }
+
+        writeln!(f, "Updated in {:.1}s.", self.duration_secs)
+    }
 }
 
 /// Print search results from `scope find`.
@@ -1331,22 +1339,32 @@ pub fn print_incremental_result(
 /// 0.88  errorHandler (auth branch)           src/api/middleware/errors.ts:67  function
 /// 0.85  TokenValidator.onExpired             src/auth/token.ts:112          method
 /// ```
-pub fn print_find_results(query: &str, results: &[SearchResult]) {
-    println!("Results for: \"{query}\"");
-    println!("{SEPARATOR}");
+/// Plain-text view for `scope find <query>`.
+pub struct FindResultsView<'a> {
+    pub query: &'a str,
+    pub results: &'a [SearchResult],
+}
 
-    if results.is_empty() {
-        println!("(no results found)");
-        return;
-    }
+impl fmt::Display for FindResultsView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Results for: \"{}\"", self.query)?;
+        writeln!(f, "{SEPARATOR}")?;
 
-    for result in results {
-        let path = normalize_path(&result.file_path);
-        let location = format!("{path}:{}", result.line_start);
-        println!(
-            "{:.2}  {:<40}{:<36}  {}",
-            result.score, result.name, location, result.kind
-        );
+        if self.results.is_empty() {
+            writeln!(f, "(no results found)")?;
+            return Ok(());
+        }
+
+        for result in self.results {
+            let path = normalize_path(&result.file_path);
+            let location = format!("{path}:{}", result.line_start);
+            writeln!(
+                f,
+                "{:.2}  {:<40}{:<36}  {}",
+                result.score, result.name, location, result.kind
+            )?;
+        }
+        Ok(())
     }
 }
 
@@ -1360,21 +1378,25 @@ pub fn print_find_results(query: &str, results: &[SearchResult]) {
 ///   Edges:      12,340
 ///   Last index: 2 minutes ago
 /// ```
-pub fn print_status(
-    status_label: &str,
-    symbol_count: usize,
-    file_count: usize,
-    edge_count: usize,
-    last_indexed: Option<&str>,
-) {
-    println!("Index status: {status_label}");
-    println!("  Symbols:    {}", format_number(symbol_count));
-    println!("  Files:      {}", format_number(file_count));
-    println!("  Edges:      {}", format_number(edge_count));
-    if let Some(relative) = last_indexed {
-        println!("  Last index: {relative}");
-    } else {
-        println!("  Last index: never");
+/// Plain-text view for `scope status`.
+pub struct StatusView<'a> {
+    pub status_label: &'a str,
+    pub symbol_count: usize,
+    pub file_count: usize,
+    pub edge_count: usize,
+    pub last_indexed: Option<&'a str>,
+}
+
+impl fmt::Display for StatusView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Index status: {}", self.status_label)?;
+        writeln!(f, "  Symbols:    {}", format_number(self.symbol_count))?;
+        writeln!(f, "  Files:      {}", format_number(self.file_count))?;
+        writeln!(f, "  Edges:      {}", format_number(self.edge_count))?;
+        match self.last_indexed {
+            Some(relative) => writeln!(f, "  Last index: {relative}"),
+            None => writeln!(f, "  Last index: never"),
+        }
     }
 }
 
@@ -1436,63 +1458,71 @@ fn write_snippet_context(
 /// Print workspace member list in human-readable format.
 ///
 /// Shows each member's name, path, index status, file count, and symbol count.
-pub fn print_workspace_list(
-    workspace_name: &str,
-    members: &[crate::commands::workspace::MemberStatus],
-) {
-    println!("Workspace: {workspace_name}");
-    println!("{SEPARATOR}");
+/// Plain-text view for `scope workspace list`.
+pub struct WorkspaceListView<'a> {
+    pub workspace_name: &'a str,
+    pub members: &'a [crate::commands::workspace::MemberStatus],
+}
 
-    if members.is_empty() {
-        println!("  (no members)");
-        return;
-    }
+impl fmt::Display for WorkspaceListView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Workspace: {}", self.workspace_name)?;
+        writeln!(f, "{SEPARATOR}")?;
 
-    // Find column widths
-    let max_name = members
-        .iter()
-        .map(|m| m.name.len())
-        .max()
-        .unwrap_or(4)
-        .max(4);
-    let max_path = members
-        .iter()
-        .map(|m| m.path.len())
-        .max()
-        .unwrap_or(4)
-        .max(4);
+        if self.members.is_empty() {
+            writeln!(f, "  (no members)")?;
+            return Ok(());
+        }
 
-    // Header
-    println!(
-        "  {:<name_w$}  {:<path_w$}  {:<15}  {:>5}  {:>7}",
-        "Name",
-        "Path",
-        "Status",
-        "Files",
-        "Symbols",
-        name_w = max_name,
-        path_w = max_path,
-    );
+        let max_name = self
+            .members
+            .iter()
+            .map(|m| m.name.len())
+            .max()
+            .unwrap_or(4)
+            .max(4);
+        let max_path = self
+            .members
+            .iter()
+            .map(|m| m.path.len())
+            .max()
+            .unwrap_or(4)
+            .max(4);
 
-    for member in members {
-        println!(
+        writeln!(
+            f,
             "  {:<name_w$}  {:<path_w$}  {:<15}  {:>5}  {:>7}",
-            member.name,
-            normalize_path(&member.path),
-            member.status,
-            if member.file_count > 0 {
-                format_number(member.file_count)
-            } else {
-                "─".to_string()
-            },
-            if member.symbol_count > 0 {
-                format_number(member.symbol_count)
-            } else {
-                "─".to_string()
-            },
+            "Name",
+            "Path",
+            "Status",
+            "Files",
+            "Symbols",
             name_w = max_name,
             path_w = max_path,
-        );
+        )?;
+
+        for member in self.members {
+            writeln!(
+                f,
+                "  {:<name_w$}  {:<path_w$}  {:<15}  {:>5}  {:>7}",
+                member.name,
+                normalize_path(&member.path),
+                member.status,
+                if member.file_count > 0 {
+                    format_number(member.file_count)
+                } else {
+                    "─".to_string()
+                },
+                if member.symbol_count > 0 {
+                    format_number(member.symbol_count)
+                } else {
+                    "─".to_string()
+                },
+                name_w = max_name,
+                path_w = max_path,
+            )?;
+        }
+        Ok(())
     }
 }
 
@@ -1511,47 +1541,54 @@ fn humanize_edge_kind(kind: &str) -> &str {
 }
 
 /// Print workspace status showing per-member status and aggregate totals.
-pub fn print_workspace_status(
-    workspace_name: &str,
-    members: &[crate::commands::status::MemberStatusData],
-    total_symbols: usize,
-    total_files: usize,
-    total_edges: usize,
-) {
-    println!("Workspace: {workspace_name}");
-    println!("{SEPARATOR}");
+/// Plain-text view for `scope status --workspace`.
+pub struct WorkspaceStatusView<'a> {
+    pub workspace_name: &'a str,
+    pub members: &'a [crate::commands::status::MemberStatusData],
+    pub total_symbols: usize,
+    pub total_files: usize,
+    pub total_edges: usize,
+}
 
-    for m in members {
-        let status_label = if m.status.index_exists {
-            if m.status.symbol_count == 0 {
-                "empty"
+impl fmt::Display for WorkspaceStatusView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Workspace: {}", self.workspace_name)?;
+        writeln!(f, "{SEPARATOR}")?;
+
+        for m in self.members {
+            let status_label = if m.status.index_exists {
+                if m.status.symbol_count == 0 {
+                    "empty"
+                } else {
+                    "indexed"
+                }
             } else {
-                "indexed"
-            }
-        } else {
-            "not indexed"
-        };
-        let last = m.status.last_indexed_relative.as_deref().unwrap_or("never");
-        println!(
-            "  {:<16}{:<14}{:>6} files  {:>7} symbols  {:>7} edges  {}",
-            m.name,
-            status_label,
-            format_number(m.status.file_count),
-            format_number(m.status.symbol_count),
-            format_number(m.status.edge_count),
-            last,
-        );
-    }
+                "not indexed"
+            };
+            let last = m.status.last_indexed_relative.as_deref().unwrap_or("never");
+            writeln!(
+                f,
+                "  {:<16}{:<14}{:>6} files  {:>7} symbols  {:>7} edges  {}",
+                m.name,
+                status_label,
+                format_number(m.status.file_count),
+                format_number(m.status.symbol_count),
+                format_number(m.status.edge_count),
+                last,
+            )?;
+        }
 
-    println!("{SEPARATOR}");
-    println!(
-        "  {:<16}{:<14}{:>6} files  {:>7} symbols  {:>7} edges",
-        "Total",
-        "",
-        format_number(total_files),
-        format_number(total_symbols),
-        format_number(total_edges),
-    );
+        writeln!(f, "{SEPARATOR}")?;
+        writeln!(
+            f,
+            "  {:<16}{:<14}{:>6} files  {:>7} symbols  {:>7} edges",
+            "Total",
+            "",
+            format_number(self.total_files),
+            format_number(self.total_symbols),
+            format_number(self.total_edges),
+        )
+    }
 }
 
 /// Print workspace refs: references tagged with project names.
@@ -1594,24 +1631,32 @@ impl fmt::Display for WorkspaceRefsView<'_> {
 }
 
 /// Print workspace find results with project labels.
-pub fn print_workspace_find_results(
-    query: &str,
-    results: &[crate::commands::find::WorkspaceSearchResult],
-) {
-    println!(
-        "find \"{}\" \u{2014} {} result{}",
-        query,
-        results.len(),
-        if results.len() == 1 { "" } else { "s" }
-    );
-    println!("{SEPARATOR}");
+/// Plain-text view for workspace-wide `scope find --workspace <query>`.
+pub struct WorkspaceFindResultsView<'a> {
+    pub query: &'a str,
+    pub results: &'a [crate::commands::find::WorkspaceSearchResult],
+}
 
-    for r in results {
-        let path = normalize_path(&r.result.file_path);
-        let line_range = format_line_range(r.result.line_start, r.result.line_end);
-        println!(
-            "[{:<12}] {:<32}{:<8}  {path}:{line_range}  ({:.2})",
-            r.project, r.result.name, r.result.kind, r.result.score
-        );
+impl fmt::Display for WorkspaceFindResultsView<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(
+            f,
+            "find \"{}\" \u{2014} {} result{}",
+            self.query,
+            self.results.len(),
+            if self.results.len() == 1 { "" } else { "s" }
+        )?;
+        writeln!(f, "{SEPARATOR}")?;
+
+        for r in self.results {
+            let path = normalize_path(&r.result.file_path);
+            let line_range = format_line_range(r.result.line_start, r.result.line_end);
+            writeln!(
+                f,
+                "[{:<12}] {:<32}{:<8}  {path}:{line_range}  ({:.2})",
+                r.project, r.result.name, r.result.kind, r.result.score
+            )?;
+        }
+        Ok(())
     }
 }
