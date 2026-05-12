@@ -302,45 +302,9 @@ impl Graph {
     }
 
     /// Create the schema tables and indexes if they do not exist.
-    ///
-    /// R0 has no in-place migration (pre-1.0 wipe policy). When a
-    /// pre-R0 index database is opened, the `edges` table exists but
-    /// has the legacy 5-column shape — the new CREATE INDEX statements
-    /// would then fail with a cryptic `no such column: confidence`.
-    /// Detect that case first and surface the wipe instruction to the
-    /// user before any DDL runs.
     fn ensure_schema(conn: &Connection) -> Result<()> {
-        if Self::has_legacy_edges_table(conn)? {
-            anyhow::bail!(
-                "scope index database has a pre-R0 schema (`edges` table lacks \
-                 the `confidence` column). R0 ships no in-place migration; \
-                 wipe the index and rebuild:\n    rm -rf .scope/ && scope index\n\
-                 See ARCHITECTURAL-REFACTOR.md § R0 → Migration."
-            );
-        }
         conn.execute_batch(include_str!("sql/schema.sql"))?;
         Ok(())
-    }
-
-    /// Returns true when an `edges` table exists but lacks the R0
-    /// `confidence` column — i.e., a pre-R0 schema is on disk.
-    fn has_legacy_edges_table(conn: &Connection) -> Result<bool> {
-        let table_exists: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='edges'",
-            [],
-            |row| row.get(0),
-        )?;
-        if table_exists == 0 {
-            return Ok(false);
-        }
-        // PRAGMA table_info returns a row per column; we look for a
-        // `confidence` row.
-        let mut stmt = conn.prepare("PRAGMA table_info(edges)")?;
-        let has_confidence = stmt
-            .query_map([], |row| row.get::<_, String>(1))?
-            .filter_map(|r| r.ok())
-            .any(|col| col == "confidence");
-        Ok(!has_confidence)
     }
 
     /// Find a symbol by exact name match, or by qualified name (Class.method).
