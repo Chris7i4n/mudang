@@ -475,6 +475,102 @@ fn test_audit_confidence_label_rejects_tampered_confidence_field() {
 }
 
 #[test]
+fn test_audit_confidence_default_no_flags_succeeds_with_usage_hint() {
+    // Codex round-5 P3: the documented `scope audit confidence`
+    // no-flag invocation must succeed and surface usage instructions,
+    // not bail with a stale chunk-plan pointer.
+    let (_dir, root) = setup_indexed_fixture();
+
+    let out = Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence"])
+        .current_dir(&root)
+        .assert()
+        .success();
+    let stdout = String::from_utf8_lossy(&out.get_output().stdout).to_string();
+    assert!(stdout.contains("precision report"), "missing disclaimer");
+    assert!(
+        stdout.contains("docs/AUDIT-LABEL-SCHEMA.md"),
+        "missing schema doc pointer"
+    );
+    assert!(
+        stdout.contains("--emit-sample"),
+        "missing usage hint for --emit-sample"
+    );
+    assert!(
+        stdout.contains("--label"),
+        "missing usage hint for --label"
+    );
+    assert!(
+        stdout.contains("high >= 95%") && stdout.contains("medium >= 70%"),
+        "missing tier-target summary"
+    );
+    assert!(
+        !stdout.contains("chunks 5-6") && !stdout.contains("land in sprint 0007"),
+        "stale chunk-plan pointer must be gone: {stdout}"
+    );
+}
+
+#[test]
+fn test_audit_confidence_source_drift_surfaces_drift_error_not_tamper() {
+    // Codex round-5 P2: when a source file changes between emit and
+    // label, the diagnosis must be source drift with `scope index`
+    // remediation, NOT sample tamper with re-emit remediation. The
+    // bug was that the tamper gate ran before the drift gate and
+    // re-derived the snippet from the changed file, attributing the
+    // diff to sample tamper instead of source drift.
+    let (_dir, root) = setup_indexed_fixture();
+    let sample = root.join("sample.jsonl");
+
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--emit-sample"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .success();
+
+    // Label every record true (a clean labelling).
+    let raw = std::fs::read_to_string(&sample).unwrap();
+    let labelled: String = raw
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+        .map(|l| l.replace("\"label\":null", "\"label\":true"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    std::fs::write(&sample, format!("{labelled}\n")).unwrap();
+
+    // Edit a source file in the working tree (NOT the sample file).
+    // This is exactly the case codex flagged: source drift between
+    // emit and label.
+    let service = root.join("src/payments/service.ts");
+    let original = std::fs::read_to_string(&service).unwrap();
+    std::fs::write(&service, format!("{original}\n// drifted after emit\n")).unwrap();
+
+    let out = Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--label"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .failure();
+    let stderr = String::from_utf8_lossy(&out.get_output().stderr).to_string();
+
+    assert!(
+        stderr.contains("source drift detected"),
+        "expected source-drift error; got: {stderr}"
+    );
+    assert!(
+        stderr.contains("scope index"),
+        "expected re-index remediation; got: {stderr}"
+    );
+    assert!(
+        !stderr.contains("sample-file tamper check failed"),
+        "drift must NOT be misdiagnosed as tamper; got: {stderr}"
+    );
+}
+
+#[test]
 fn test_audit_confidence_label_rejects_tampered_from_field() {
     // Codex round-4 P2: labeller alters `from` while keeping a valid
     // edge_id. The labeller then judged a different edge but report

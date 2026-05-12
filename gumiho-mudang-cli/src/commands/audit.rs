@@ -315,10 +315,12 @@ fn run_confidence(args: &ConfidenceArgs, project_root: &Path) -> Result<()> {
     }
 }
 
-/// Default surface (no `--emit-sample`, no `--label`): print sampling
-/// summary then bail with a chunk-plan pointer. The JSON/TSV writers
-/// (chunk 5) and tier gate (chunk 6) land before this path becomes
-/// useful on its own.
+/// Default surface (no `--emit-sample`, no `--label`): the operator-
+/// exploration mode. Prints a summary of what a full audit would
+/// sample against the current index, plus a usage hint pointing at
+/// the two-phase flow that produces the actual precision report.
+/// Exits success — the no-flag invocation is a documented `--help`
+/// example and must work as an introspection surface.
 fn default_summary(graph: &Graph, args: &ConfidenceArgs) -> Result<()> {
     let rows = graph.list_edges_for_audit()?;
     let total = rows.len();
@@ -328,6 +330,7 @@ fn default_summary(graph: &Graph, args: &ConfidenceArgs) -> Result<()> {
     println!("# scope audit confidence");
     println!("# {PRECISION_ONLY_DISCLAIMER}");
     println!("# {SCHEMA_DOC_POINTER}");
+    println!("# {COVERAGE_LIMITATION_NOTE}");
     println!(
         "# sampled {} edge(s) across {} (kind, confidence) cell(s)",
         sample.len(),
@@ -338,12 +341,16 @@ fn default_summary(graph: &Graph, args: &ConfidenceArgs) -> Result<()> {
         args.sample_size, args.seed
     );
     println!();
-    anyhow::bail!(
-        "audit confidence: sampling engine + two-phase labelling wired \
-         (chunks 3-4). Use `--emit-sample <path>` then `--label <path>`. \
-         JSON/TSV writers and tier gate land in sprint 0007 chunks 5-6. \
-         See `docs/sprints/0007-phase-d-confidence-audit.md`."
-    )
+    println!("# This is the introspection surface — no precision report is produced");
+    println!("# without a labelled sample. To produce one:");
+    println!("#");
+    println!("#   1. emit:  scope audit confidence --emit-sample <path>");
+    println!("#   2. label: external labeller fills `label` per record");
+    println!("#             (see docs/AUDIT-LABEL-SCHEMA.md § External labeller examples)");
+    println!("#   3. read:  scope audit confidence --label <path> [--format tsv]");
+    println!("#");
+    println!("# The report then enforces high >= 95% / medium >= 70% / low any precision.");
+    Ok(())
 }
 
 /// `--emit-sample <PATH>`: sample, drift-check, then write JSONL.
@@ -590,20 +597,39 @@ fn label_pass(
         return Err(anyhow::anyhow!(msg));
     }
 
-    // Report-key integrity gate (post-codex P2 round 2): the precision
-    // report groups rows by (kind, tier, producer, pattern_id). Those
-    // values come from the labeller-supplied JSONL fields, so a buggy
-    // or tampered labeller that rewrites `confidence: high -> low`
-    // while preserving a valid `edge_id` would pass the P1 edge-id
-    // integrity gate, then misroute the row into a tier with no
-    // minimum (low) or attribute the failure to the wrong pattern.
+    // Source-drift gate runs BEFORE the tamper gate (post-codex P2
+    // round 5): if a source file changed or was deleted between
+    // `--emit-sample` and `--label`, the tamper gate would re-derive
+    // the source_snippet from the now-different file and report a
+    // sample-tamper error with re-emit remediation, when the *correct*
+    // diagnosis is source drift with `scope index` remediation. Order
+    // matters: drift gate first surfaces the right error class, then
+    // the tamper gate (which reads source_snippet from disk) runs
+    // against files whose content is byte-identical to what the
+    // indexer saw at index time.
+    let referenced_rows: Vec<AuditEdgeRow> = all_rows
+        .iter()
+        .filter(|r| parsed_ids.contains(&r.edge_id))
+        .cloned()
+        .collect();
+    enforce_freshness(graph, project_root, &referenced_rows)?;
+
+    // Report-key + endpoint + snippet tamper gate (post-codex P2 round 2,
+    // extended in round 4 to cover `from` / `to` / `source_snippet`).
+    // The precision report groups rows by (kind, tier, producer,
+    // pattern_id); the labeller READS `from` / `to` / `source_snippet`
+    // to make a verdict. Any of those rewritten in the JSONL = the
+    // labeller judged a different edge / context than the one the
+    // report will credit. Per the auditor-independence principle the
+    // labeller fills `label` only; rewriting any other non-`label`
+    // field is sample drift (sibling to source drift, already cleared
+    // above) and gets the same hard mechanical rejection treatment.
     //
-    // Per the auditor-independence principle the auditor uses the
-    // extractor's stamps as **stratification axes**, but the *indexed
-    // graph* — not the labeller's copy — is the source of those axes.
-    // The labeller's job is to fill `label`; rewriting any other field
-    // is sample drift, sibling to source drift, and gets the same hard
-    // mechanical rejection treatment (no `--allow-tampering-skip`).
+    // With the drift gate ahead of this, file reads inside the loop
+    // are guaranteed to succeed (file content matches the indexer's
+    // hash); we propagate any unexpected read failure (race with rm,
+    // permission flip mid-audit) instead of masking it as a snippet
+    // diff.
     let mut indexed_by_id: HashMap<i64, &AuditEdgeRow> = HashMap::new();
     for row in &all_rows {
         indexed_by_id.insert(row.edge_id, row);
@@ -644,12 +670,6 @@ fn label_pass(
                 indexed_row.pattern_id.clone(),
             ));
         }
-        // Endpoint fields (codex round 4 P2): the labeller READS `from`
-        // and `to` to decide whether the edge is correct. If either was
-        // rewritten between emit and label, the labeller judged a
-        // DIFFERENT edge from the one the precision report will credit
-        // — inflated/misleading precision. Same auditor-immutability
-        // semantics as report-key fields above.
         if record.from != indexed_row.from_id {
             diffs.push((
                 "from",
@@ -664,16 +684,12 @@ fn label_pass(
                 indexed_row.to_id.clone(),
             ));
         }
-        // Source-snippet field (codex round 4 P2): the labeller READS
-        // `source_snippet` to see the actual call/definition site. If
-        // rewritten, the labeller saw text the indexer never emitted
-        // and the verdict applies to a fake context. Re-derive the
-        // snippet from the on-disk file (file content drift is caught
-        // later by `enforce_freshness`; here we only verify the sample
-        // record has not been hand-edited).
+        // Drift gate already verified file content == indexer's hash;
+        // read errors here are unexpected (concurrent rm / permission
+        // race) and propagate rather than silently degrading to an
+        // empty-string snippet diff.
         let expected_snippet =
-            read_source_snippet(project_root, &indexed_row.file_path, indexed_row.line)
-                .unwrap_or_default();
+            read_source_snippet(project_root, &indexed_row.file_path, indexed_row.line)?;
         if record.source_snippet != expected_snippet {
             diffs.push((
                 "source_snippet",
@@ -717,17 +733,6 @@ fn label_pass(
         );
         return Err(anyhow::anyhow!(msg));
     }
-
-    // Drift gate runs on the union of files referenced by the
-    // (now fully resolved + tamper-free) edge_ids. `referenced_rows` is
-    // built from the same `all_rows` snapshot that the integrity + tamper
-    // gates used so all three checks see a consistent view of the index.
-    let referenced_rows: Vec<AuditEdgeRow> = all_rows
-        .iter()
-        .filter(|r| parsed_ids.contains(&r.edge_id))
-        .cloned()
-        .collect();
-    enforce_freshness(graph, project_root, &referenced_rows)?;
 
     let records_only: Vec<SampleRecord> = records.into_iter().map(|(_, r)| r).collect();
     let report = compute_precision_report(&records_only);
