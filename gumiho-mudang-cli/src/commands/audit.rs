@@ -40,7 +40,7 @@ pub const PRECISION_ONLY_DISCLAIMER: &str =
 /// Pointer printed alongside the disclaimer so external labeller authors
 /// discover the JSONL contract from the CLI itself.
 pub const SCHEMA_DOC_POINTER: &str =
-    "Sample-file schema: docs/AUDIT-LABEL-SCHEMA.md (schema_version \"1\").";
+    "Sample-file schema: docs/AUDIT-LABEL-SCHEMA.md (schema_version \"2\"; \"1\" also accepted on read).";
 
 /// Limitation disclosed in every precision report so the operator never
 /// reads a precision number out of context.
@@ -70,12 +70,22 @@ pub const SCHEMA_DOC_POINTER: &str =
 pub const COVERAGE_LIMITATION_NOTE: &str =
     "report schema_version \"1\" surfaces precision over labelled records only; per-group coverage, richer verdict types (target/kind/confidence_proposed, evidence, reasoning_text), and multi-labeller aggregation land in schema_version \"2\" — see BACKLOG.md § Priority 1 — Self-correction cycle.";
 
-/// Wire-format schema version emitted by `--emit-sample` and accepted by
-/// `--label`. Locked at `"1"` per the contract in
-/// `docs/AUDIT-LABEL-SCHEMA.md`. Bumping this is charter-grade and lands
-/// via the BACKLOG.md § Priority 2 audit (which bundles the
-/// `producer_captured_args` field addition with the `args_text` cap drop).
-pub const SCHEMA_VERSION: &str = "1";
+/// Wire-format schema version emitted by `--emit-sample`. The current
+/// emission version is `"2"` per `docs/AUDIT-LABEL-SCHEMA.md`
+/// § Record schema (sprint 0004 bump).
+pub const SAMPLE_SCHEMA_VERSION: &str = "2";
+
+/// Schema versions `--label` accepts on read. v1 records have the seven
+/// v2-only fields (`evidence`, `target_proposed`, `kind_proposed`,
+/// `confidence_proposed`, `reasoning_text`, `lang_version_evidence`,
+/// `labeller_id`) treated as `null`. See
+/// `docs/AUDIT-LABEL-SCHEMA.md` § Migration: "1" → "2".
+pub const ACCEPTED_SAMPLE_SCHEMA_VERSIONS: &[&str] = &["1", "2"];
+
+/// Report-side schema version (distinct from the sample-side contract;
+/// see `docs/AUDIT-LABEL-SCHEMA.md`). Stays at `"1"` until sprint 0004
+/// CP3 adds per-group coverage fields and `coverage_summary`.
+pub const REPORT_SCHEMA_VERSION: &str = "1";
 
 /// Minimum precision the **high** tier must hit, per R8 acceptance
 /// (`docs/ENFORCEMENT-MAP.md` § R8). The CI gate enforces this:
@@ -90,14 +100,21 @@ pub const HIGH_TIER_MIN: f64 = 0.95;
 /// fixes the pattern.
 pub const MEDIUM_TIER_MIN: f64 = 0.70;
 
-/// JSONL record per `docs/AUDIT-LABEL-SCHEMA.md` (schema_version "1").
+/// JSONL record per `docs/AUDIT-LABEL-SCHEMA.md` (schema_version "2";
+/// `--label` also accepts "1", treating the seven v2-only fields as `null`).
 ///
 /// Field order in this struct matches the order declared in the schema
 /// table so `serde_json::to_string` emits a deterministic key order in
 /// the JSONL output. `edge_id` is round-tripped as a string (per the
 /// schema doc) even though the DB column is `i64`; the conversion
 /// happens at the (de)serialisation boundary.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+///
+/// All v2 fields are `Option<T>` so `--label` can deserialise both v1
+/// and v2 input with one type: serde maps absent keys to `None`. The
+/// presence check in `label_pass` enforces the "every required key must
+/// be physically present" rule per version (v1 records carry only the
+/// v1 key set; v2 records carry the full v2 key set).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SampleRecord {
     pub schema_version: String,
     pub edge_id: String,
@@ -110,6 +127,24 @@ pub struct SampleRecord {
     pub source_snippet: String,
     pub lang_version: Option<String>,
     pub label: Option<bool>,
+    // v2 fields. Default `None` on v1-record deserialisation so the
+    // v1 → v2 read path is lossless: a v1 record reads as if every v2
+    // field were explicitly `null`. `#[serde(default)]` is what lets
+    // serde accept v1 records that physically omit these keys.
+    #[serde(default)]
+    pub evidence: Option<serde_json::Value>,
+    #[serde(default)]
+    pub target_proposed: Option<String>,
+    #[serde(default)]
+    pub kind_proposed: Option<String>,
+    #[serde(default)]
+    pub confidence_proposed: Option<String>,
+    #[serde(default)]
+    pub reasoning_text: Option<String>,
+    #[serde(default)]
+    pub lang_version_evidence: Option<String>,
+    #[serde(default)]
+    pub labeller_id: Option<String>,
 }
 
 impl SampleRecord {
@@ -121,14 +156,15 @@ impl SampleRecord {
     /// `None` only when no manifest could be resolved for the file's
     /// language (e.g. snippet from outside the project root, or
     /// unsupported extension). `label` is `null` on emit; the
-    /// external labeller fills it.
+    /// external labeller fills it. All v2 fields emit `null`; capable
+    /// labellers populate them.
     pub fn from_row(
         row: &AuditEdgeRow,
         source_snippet: String,
         lang_version: Option<String>,
     ) -> Self {
         Self {
-            schema_version: SCHEMA_VERSION.to_string(),
+            schema_version: SAMPLE_SCHEMA_VERSION.to_string(),
             edge_id: row.edge_id.to_string(),
             kind: row.kind.clone(),
             confidence: row.confidence.clone(),
@@ -139,6 +175,13 @@ impl SampleRecord {
             source_snippet,
             lang_version,
             label: None,
+            evidence: None,
+            target_proposed: None,
+            kind_proposed: None,
+            confidence_proposed: None,
+            reasoning_text: None,
+            lang_version_evidence: None,
+            labeller_id: None,
         }
     }
 }
@@ -455,20 +498,23 @@ fn label_pass(
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
         }
-        // Pre-typed key-presence check (generalised
-        // to every required field in round 8). Per
-        // `docs/AUDIT-LABEL-SCHEMA.md` every field on a `schema_version:
-        // "1"` record is required-with-value (null is a valid value for
-        // `lang_version` and `label`, but the *key* must still be present).
-        // Serde silently treats a missing `Option<T>` field as `None`,
-        // which would otherwise let a labeller-side serializer that
-        // drops nulls produce records that violate the round-trip
-        // contract without any audit-side error. The non-`Option`
-        // String fields would already fail typed deserialisation when
-        // absent, but listing every required field here is the single
-        // source-of-truth for the schema contract — the typed parse
-        // handles values, this pre-check handles presence.
-        const REQUIRED_FIELDS: &[&str] = &[
+        // Pre-typed key-presence check. Per
+        // `docs/AUDIT-LABEL-SCHEMA.md` every field declared in the
+        // record's `schema_version` is required-with-value (null is a
+        // valid value for the nullable fields, but the *key* must still
+        // be present). Serde silently treats an absent `Option<T>` field
+        // as `None`, which would otherwise let a labeller-side
+        // serializer that drops nulls produce records that violate the
+        // round-trip contract without any audit-side error. The typed
+        // parse handles values; this pre-check handles presence.
+        //
+        // v1 records carry only the v1 key set (11 keys). v2 records
+        // carry the full v2 key set (18 keys = 11 v1 + 7 v2). The
+        // `#[serde(default)]` on each v2 field is what lets the same
+        // SampleRecord type deserialise both shapes; the version-aware
+        // presence check below preserves the "no implicit nulls" rule
+        // per-version.
+        const REQUIRED_FIELDS_V1: &[&str] = &[
             "schema_version",
             "edge_id",
             "kind",
@@ -480,6 +526,26 @@ fn label_pass(
             "source_snippet",
             "lang_version",
             "label",
+        ];
+        const REQUIRED_FIELDS_V2: &[&str] = &[
+            "schema_version",
+            "edge_id",
+            "kind",
+            "confidence",
+            "producer",
+            "pattern_id",
+            "from",
+            "to",
+            "source_snippet",
+            "lang_version",
+            "label",
+            "evidence",
+            "target_proposed",
+            "kind_proposed",
+            "confidence_proposed",
+            "reasoning_text",
+            "lang_version_evidence",
+            "labeller_id",
         ];
         let raw: serde_json::Value = serde_json::from_str(trimmed).with_context(|| {
             format!(
@@ -495,7 +561,24 @@ fn label_pass(
                 idx + 1
             )
         })?;
-        let missing: Vec<&&str> = REQUIRED_FIELDS
+        // Read schema_version first so the presence check + the
+        // unknown-version reject share one source of truth. Missing /
+        // non-string handled uniformly via the typed parse below; here
+        // we only need a best-effort peek to pick the required-field
+        // set.
+        let declared_version = raw_obj
+            .get("schema_version")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let required = match declared_version {
+            "1" => REQUIRED_FIELDS_V1,
+            "2" => REQUIRED_FIELDS_V2,
+            // Unknown / missing: fall back to v2 so the presence
+            // check produces a coherent diagnostic; the
+            // version-rejection below still fires.
+            _ => REQUIRED_FIELDS_V2,
+        };
+        let missing: Vec<&&str> = required
             .iter()
             .filter(|k| !raw_obj.contains_key(**k))
             .collect();
@@ -503,12 +586,13 @@ fn label_pass(
             let names: Vec<String> = missing.iter().map(|k| format!("`{k}`")).collect();
             anyhow::bail!(
                 "{}: line {}: required field(s) {} missing; per docs/AUDIT-LABEL-SCHEMA.md every \
-                 schema_version \"1\" record must carry every field explicitly (with `null` where \
-                 applicable for `lang_version` and `label`). A missing key is not the same as an \
-                 explicit `null` value and is rejected to surface labeller-side serializer bugs.",
+                 schema_version {:?} record must carry every field explicitly (with `null` where \
+                 applicable). A missing key is not the same as an explicit `null` value and is \
+                 rejected to surface labeller-side serializer bugs.",
                 in_path.display(),
                 idx + 1,
-                names.join(", ")
+                names.join(", "),
+                declared_version
             );
         }
         let record: SampleRecord = serde_json::from_value(raw).with_context(|| {
@@ -518,14 +602,14 @@ fn label_pass(
                 idx + 1
             )
         })?;
-        if record.schema_version != SCHEMA_VERSION {
+        if !ACCEPTED_SAMPLE_SCHEMA_VERSIONS.contains(&record.schema_version.as_str()) {
             anyhow::bail!(
                 "{}: line {}: unknown schema_version {:?}; this scope build understands {:?} only. \
                  Re-emit the sample with `scope audit confidence --emit-sample <new-path>` against the current index.",
                 in_path.display(),
                 idx + 1,
                 record.schema_version,
-                SCHEMA_VERSION
+                ACCEPTED_SAMPLE_SCHEMA_VERSIONS
             );
         }
         records.push((idx + 1, record));
@@ -956,7 +1040,7 @@ pub fn compute_precision_report(records: &[SampleRecord]) -> PrecisionReport {
         .collect();
 
     PrecisionReport {
-        schema_version: SCHEMA_VERSION.to_string(),
+        schema_version: REPORT_SCHEMA_VERSION.to_string(),
         disclaimer: PRECISION_ONLY_DISCLAIMER.to_string(),
         sample_schema_doc: SCHEMA_DOC_POINTER.to_string(),
         coverage_limitation_note: COVERAGE_LIMITATION_NOTE.to_string(),
@@ -1286,16 +1370,24 @@ mod tests {
     // -- Chunk 4: JSONL record + schema versioning --
 
     #[test]
-    fn sample_record_serialises_with_schema_v1() {
+    fn sample_record_serialises_with_schema_v2() {
         let row = mk_row(42, "calls", "high");
         let rec = SampleRecord::from_row(&row, "format_name(&user.name)".to_string(), None);
         let json = serde_json::to_string(&rec).unwrap();
-        // schema_version locked at "1"; edge_id stringified; lang_version/label null on emit.
-        assert!(json.contains("\"schema_version\":\"1\""));
+        // schema_version "2"; edge_id stringified; nullable fields null on emit.
+        assert!(json.contains("\"schema_version\":\"2\""));
         assert!(json.contains("\"edge_id\":\"42\""));
         assert!(json.contains("\"source_snippet\":\"format_name(&user.name)\""));
         assert!(json.contains("\"lang_version\":null"));
         assert!(json.contains("\"label\":null"));
+        // v2 fields all null on emit.
+        assert!(json.contains("\"evidence\":null"));
+        assert!(json.contains("\"target_proposed\":null"));
+        assert!(json.contains("\"kind_proposed\":null"));
+        assert!(json.contains("\"confidence_proposed\":null"));
+        assert!(json.contains("\"reasoning_text\":null"));
+        assert!(json.contains("\"lang_version_evidence\":null"));
+        assert!(json.contains("\"labeller_id\":null"));
     }
 
     #[test]
@@ -1326,6 +1418,13 @@ mod tests {
             "\"source_snippet\"",
             "\"lang_version\"",
             "\"label\"",
+            "\"evidence\"",
+            "\"target_proposed\"",
+            "\"kind_proposed\"",
+            "\"confidence_proposed\"",
+            "\"reasoning_text\"",
+            "\"lang_version_evidence\"",
+            "\"labeller_id\"",
         ];
         let mut last_pos = 0usize;
         for key in expected_order {
@@ -1354,11 +1453,21 @@ mod tests {
     }
 
     #[test]
-    fn schema_version_constant_locked_at_one() {
+    fn sample_schema_version_constant_at_two() {
         // The schema is contract-grade per docs/AUDIT-LABEL-SCHEMA.md.
-        // Bumping is charter-grade and must land via BACKLOG
-        // § Priority 2; this assertion is the canary against drive-by edits.
-        assert_eq!(SCHEMA_VERSION, "1");
+        // Bumping is charter-grade and must land via the BACKLOG
+        // sprint that owns the bundled bump (sprint 0004 for v1 → v2);
+        // this assertion is the canary against drive-by edits.
+        assert_eq!(SAMPLE_SCHEMA_VERSION, "2");
+        assert_eq!(ACCEPTED_SAMPLE_SCHEMA_VERSIONS, &["1", "2"]);
+    }
+
+    #[test]
+    fn report_schema_version_constant_at_one() {
+        // CP3 (sprint 0004 sub-item (h)) bumps to "2" together with
+        // the per-group coverage surface; until then the report shape
+        // is unchanged and the version stays "1".
+        assert_eq!(REPORT_SCHEMA_VERSION, "1");
     }
 
     // -- Chunk 5: precision report + JSON / TSV writers --
@@ -1372,7 +1481,7 @@ mod tests {
         label: bool,
     ) -> SampleRecord {
         SampleRecord {
-            schema_version: SCHEMA_VERSION.to_string(),
+            schema_version: SAMPLE_SCHEMA_VERSION.to_string(),
             edge_id: edge_id.to_string(),
             kind: kind.to_string(),
             confidence: confidence.to_string(),
@@ -1383,6 +1492,13 @@ mod tests {
             source_snippet: String::new(),
             lang_version: None,
             label: Some(label),
+            evidence: None,
+            target_proposed: None,
+            kind_proposed: None,
+            confidence_proposed: None,
+            reasoning_text: None,
+            lang_version_evidence: None,
+            labeller_id: None,
         }
     }
 

@@ -107,7 +107,7 @@ fn test_audit_confidence_emit_sample_writes_jsonl() {
     let content = std::fs::read_to_string(&sample).unwrap();
     assert!(!content.is_empty(), "sample file should not be empty");
 
-    // Every line must be a valid JSON record with schema_version "1"
+    // Every line must be a valid JSON record with schema_version "2"
     // and the contract-mandated fields per docs/AUDIT-LABEL-SCHEMA.md.
     for (i, line) in content.lines().enumerate() {
         if line.trim().is_empty() || line.starts_with('#') {
@@ -115,7 +115,7 @@ fn test_audit_confidence_emit_sample_writes_jsonl() {
         }
         let v: serde_json::Value = serde_json::from_str(line)
             .unwrap_or_else(|e| panic!("line {} not valid JSON: {e}\n{line}", i + 1));
-        assert_eq!(v["schema_version"], "1");
+        assert_eq!(v["schema_version"], "2");
         for field in [
             "edge_id",
             "kind",
@@ -127,6 +127,13 @@ fn test_audit_confidence_emit_sample_writes_jsonl() {
             "source_snippet",
             "lang_version",
             "label",
+            "evidence",
+            "target_proposed",
+            "kind_proposed",
+            "confidence_proposed",
+            "reasoning_text",
+            "lang_version_evidence",
+            "labeller_id",
         ] {
             assert!(
                 v.get(field).is_some(),
@@ -644,7 +651,7 @@ fn test_audit_confidence_label_rejects_records_missing_lang_version_field() {
     // Same shape as the previous tamper test but for the other
     // Option-typed required field. A labeller that drops nulls would
     // omit `lang_version` (always null on emit) and produce JSONL
-    // that violates the schema_version "1" required-fields contract.
+    // that violates the schema_version "2" required-fields contract.
     let (_dir, root) = setup_indexed_fixture();
     let sample = root.join("sample.jsonl");
 
@@ -1125,7 +1132,7 @@ fn test_audit_confidence_label_rejects_unknown_schema_version() {
 
     // Mutate the first record's schema_version to a future value.
     let raw = std::fs::read_to_string(&sample).unwrap();
-    let bumped = raw.replacen("\"schema_version\":\"1\"", "\"schema_version\":\"99\"", 1);
+    let bumped = raw.replacen("\"schema_version\":\"2\"", "\"schema_version\":\"99\"", 1);
     std::fs::write(&sample, bumped).unwrap();
 
     Command::cargo_bin("mudang")
@@ -1137,6 +1144,76 @@ fn test_audit_confidence_label_rejects_unknown_schema_version() {
         .failure()
         .stderr(contains("unknown schema_version"))
         .stderr(contains("Re-emit"));
+}
+
+#[test]
+fn test_audit_confidence_label_accepts_v1_records_backward_compatible() {
+    // Sprint 0004 CP2: `--label` accepts both schema_version "1" and
+    // "2". A v1 record carries only the v1 key set (11 keys) and has
+    // the seven v2-only fields treated as `null` on read. This is the
+    // sole post-bump backward-compat path; there is no dual-write or
+    // auto-upgrade. See docs/AUDIT-LABEL-SCHEMA.md § Migration "1" → "2".
+    let (_dir, root) = setup_indexed_fixture();
+    let sample = root.join("sample.jsonl");
+
+    // Emit (v2), then downgrade each record to v1: bump version to "1",
+    // strip the seven v2 keys, label every record `true`.
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--emit-sample"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .success();
+
+    let raw = std::fs::read_to_string(&sample).unwrap();
+    let mut out_lines = Vec::new();
+    for l in raw
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+    {
+        let mut v: serde_json::Value = serde_json::from_str(l).unwrap();
+        let obj = v.as_object_mut().unwrap();
+        obj.insert(
+            "schema_version".to_string(),
+            serde_json::Value::String("1".to_string()),
+        );
+        for k in [
+            "evidence",
+            "target_proposed",
+            "kind_proposed",
+            "confidence_proposed",
+            "reasoning_text",
+            "lang_version_evidence",
+            "labeller_id",
+        ] {
+            obj.remove(k);
+        }
+        obj.insert("label".to_string(), serde_json::Value::Bool(true));
+        out_lines.push(serde_json::to_string(&v).unwrap());
+    }
+    std::fs::write(&sample, format!("{}\n", out_lines.join("\n"))).unwrap();
+
+    let out = Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--label"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .success();
+    let stdout = String::from_utf8_lossy(&out.get_output().stdout).to_string();
+    let report: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    // Report shape is identical to the v2 path: every label=true,
+    // so every row's precision is 1.0.
+    let rows = report["report"].as_array().unwrap();
+    assert!(!rows.is_empty(), "v1 records produced an empty report");
+    for r in rows {
+        assert_eq!(
+            r["precision"].as_f64().unwrap(),
+            1.0,
+            "v1 record path produced non-1.0 precision: {r}"
+        );
+    }
 }
 
 #[test]
@@ -1218,11 +1295,11 @@ fn test_audit_confidence_lang_version_coverage_all_seven_languages() {
             if line.trim().is_empty() || line.starts_with('#') {
                 continue;
             }
-            let v: serde_json::Value = serde_json::from_str(line).unwrap_or_else(|e| {
-                panic!("[{lang}] line {} not valid JSON: {e}\n{line}", i + 1)
-            });
+            let v: serde_json::Value = serde_json::from_str(line)
+                .unwrap_or_else(|e| panic!("[{lang}] line {} not valid JSON: {e}\n{line}", i + 1));
             assert_eq!(
-                v["lang_version"], expected,
+                v["lang_version"],
+                expected,
                 "[{lang}] line {} expected lang_version={expected:?} (from fixture manifest); \
                  got {:?}",
                 i + 1,
