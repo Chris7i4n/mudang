@@ -24,6 +24,7 @@ pub mod cargo_toml;
 pub mod csproj;
 pub mod gemfile_lock;
 pub mod go_mod;
+pub mod lang_version;
 pub mod package_json;
 pub mod pom_xml;
 pub mod pyproject_toml;

@@ -25,6 +25,51 @@ fn copy_dir_all(src: &Path, dest: &Path) {
     }
 }
 
+/// Rewrite the `"lang_version":...` value in a single JSONL line to
+/// `new_value` (which must include surrounding quotes / be the literal
+/// `null`). Returns `None` when the line carries no `lang_version`
+/// field. Handles both `null` and string-quoted values.
+fn rewrite_lang_version(line: &str, new_value: &str) -> Option<String> {
+    let key = "\"lang_version\":";
+    let key_pos = line.find(key)?;
+    let value_start = key_pos + key.len();
+    let rest = &line[value_start..];
+    let value_end = if rest.starts_with("null") {
+        4
+    } else if rest.starts_with('"') {
+        // Find closing quote (no JSON-escape handling needed — lang_version
+        // values come from manifests and never contain `"` or `\`).
+        rest[1..].find('"').map(|i| i + 2)?
+    } else {
+        return None;
+    };
+    let mut out = String::with_capacity(line.len() + new_value.len());
+    out.push_str(&line[..value_start]);
+    out.push_str(new_value);
+    out.push_str(&rest[value_end..]);
+    Some(out)
+}
+
+/// Remove the entire `,"lang_version":...` field (including the
+/// leading comma) from a JSONL line.
+fn strip_lang_version_field(line: &str) -> Option<String> {
+    let key = ",\"lang_version\":";
+    let key_pos = line.find(key)?;
+    let value_start = key_pos + key.len();
+    let rest = &line[value_start..];
+    let value_end = if rest.starts_with("null") {
+        4
+    } else if rest.starts_with('"') {
+        rest[1..].find('"').map(|i| i + 2)?
+    } else {
+        return None;
+    };
+    let mut out = String::with_capacity(line.len());
+    out.push_str(&line[..key_pos]);
+    out.push_str(&rest[value_end..]);
+    Some(out)
+}
+
 fn setup_indexed_fixture() -> (TempDir, PathBuf) {
     let dir = TempDir::new().unwrap();
     copy_dir_all(Path::new(TS_FIXTURE), dir.path());
@@ -90,6 +135,18 @@ fn test_audit_confidence_emit_sample_writes_jsonl() {
             );
         }
         assert!(v["label"].is_null(), "emitted label must be null");
+        // Sprint 0003 (BACKLOG.md § Priority 1 sub-item (d)) — the
+        // indexer-side detector matrix populates `lang_version` on
+        // emit; the typescript-simple fixture carries a tsconfig.json
+        // with `target: "ES2020"` so every record sampled from it
+        // must surface that value. A `null` here would be a
+        // detector regression on the wiring path.
+        assert_eq!(
+            v["lang_version"],
+            "ES2020",
+            "line {} expected lang_version=ES2020 (from fixture tsconfig.json): {line}",
+            i + 1
+        );
     }
 }
 
@@ -150,10 +207,7 @@ fn test_audit_confidence_label_emits_json_report_by_default() {
             "correct_count",
             "precision",
         ] {
-            assert!(
-                row.get(field).is_some(),
-                "row missing field {field}: {row}"
-            );
+            assert!(row.get(field).is_some(), "row missing field {field}: {row}");
         }
         // Labeller said true everywhere => precision must be 1.0.
         assert_eq!(row["precision"].as_f64().unwrap(), 1.0);
@@ -447,8 +501,12 @@ fn test_audit_confidence_label_rejects_tampered_confidence_field() {
             ] {
                 if line.contains(real) {
                     line = line.replacen(real, fake, 1);
-                    let real_tier = real.trim_start_matches("\"confidence\":\"").trim_end_matches('"');
-                    let fake_tier = fake.trim_start_matches("\"confidence\":\"").trim_end_matches('"');
+                    let real_tier = real
+                        .trim_start_matches("\"confidence\":\"")
+                        .trim_end_matches('"');
+                    let fake_tier = fake
+                        .trim_start_matches("\"confidence\":\"")
+                        .trim_end_matches('"');
                     tampered_pair = Some((real_tier.to_string(), fake_tier.to_string()));
                     break;
                 }
@@ -477,9 +535,10 @@ fn test_audit_confidence_label_rejects_tampered_confidence_field() {
 #[test]
 fn test_audit_confidence_label_rejects_tampered_lang_version() {
     // `lang_version` is the last non-`label` field the tamper gate
-    // checks. Always emitted as `null` today (the seven per-language
-    // detectors land atomically per `BACKLOG.md` § Priority 1 sub-item
-    // (d)). A labeller rewriting it to any other value is sample
+    // checks. The indexer-side detector matrix (per `BACKLOG.md`
+    // § Priority 1 sub-item (d)) populates it on emit; the labelled
+    // pass recomputes it via the same detector and compares. A
+    // labeller rewriting `lang_version` to any other value is sample
     // tamper.
     let (_dir, root) = setup_indexed_fixture();
     let sample = root.join("sample.jsonl");
@@ -492,8 +551,9 @@ fn test_audit_confidence_label_rejects_tampered_lang_version() {
         .assert()
         .success();
 
-    // Replace `"lang_version":null` with a non-null value on the
-    // first record while keeping every other field intact.
+    // Rewrite the first record's `lang_version` to a value that does
+    // not match what the detector recomputes for this fixture
+    // (typescript-simple's tsconfig target is `ES2020`).
     let raw = std::fs::read_to_string(&sample).unwrap();
     let mut out_lines = Vec::new();
     let mut tampered = false;
@@ -503,12 +563,10 @@ fn test_audit_confidence_label_rejects_tampered_lang_version() {
     {
         let mut line = l.replace("\"label\":null", "\"label\":true");
         if !tampered {
-            line = line.replacen(
-                "\"lang_version\":null",
-                "\"lang_version\":\"fake-1.0\"",
-                1,
-            );
-            tampered = true;
+            if let Some(new_line) = rewrite_lang_version(&line, "\"fake-1.0\"") {
+                line = new_line;
+                tampered = true;
+            }
         }
         out_lines.push(line);
     }
@@ -576,7 +634,9 @@ fn test_audit_confidence_label_rejects_records_missing_label_field() {
         .assert()
         .failure()
         .stderr(contains("required field(s) `label`"))
-        .stderr(contains("missing key is not the same as an explicit `null`"));
+        .stderr(contains(
+            "missing key is not the same as an explicit `null`",
+        ));
 }
 
 #[test]
@@ -605,8 +665,10 @@ fn test_audit_confidence_label_rejects_records_missing_lang_version_field() {
     {
         let mut line = l.replace("\"label\":null", "\"label\":true");
         if !stripped {
-            line = line.replacen(",\"lang_version\":null", "", 1);
-            stripped = true;
+            if let Some(new_line) = strip_lang_version_field(&line) {
+                line = new_line;
+                stripped = true;
+            }
         }
         out_lines.push(line);
     }
@@ -621,7 +683,9 @@ fn test_audit_confidence_label_rejects_records_missing_lang_version_field() {
         .assert()
         .failure()
         .stderr(contains("required field(s) `lang_version`"))
-        .stderr(contains("missing key is not the same as an explicit `null`"));
+        .stderr(contains(
+            "missing key is not the same as an explicit `null`",
+        ));
 }
 
 #[test]
@@ -647,10 +711,7 @@ fn test_audit_confidence_default_no_flags_succeeds_with_usage_hint() {
         stdout.contains("--emit-sample"),
         "missing usage hint for --emit-sample"
     );
-    assert!(
-        stdout.contains("--label"),
-        "missing usage hint for --label"
-    );
+    assert!(stdout.contains("--label"), "missing usage hint for --label");
     assert!(
         stdout.contains("high >= 95%") && stdout.contains("medium >= 70%"),
         "missing tier-target summary"
@@ -796,10 +857,7 @@ fn test_audit_confidence_label_rejects_tampered_to_field() {
         if !tampered {
             let v: serde_json::Value = serde_json::from_str(&line).unwrap();
             let original = v["to"].as_str().unwrap().to_string();
-            line = line.replace(
-                &format!("\"to\":\"{original}\""),
-                "\"to\":\"fake::target\"",
-            );
+            line = line.replace(&format!("\"to\":\"{original}\""), "\"to\":\"fake::target\"");
             tampered = true;
         }
         out_lines.push(line);

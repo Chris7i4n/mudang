@@ -18,7 +18,7 @@
 //! - `scope-search` — FTS5 search, embedding text builder.
 //! - `scope-workspace` — federated workspace facade.
 
-pub use scope_core::{config, languages, parser, types};
+pub use scope_core::{config, languages, parser, types, workspace};
 pub use scope_core::{RawEdge, Symbol};
 pub use scope_graph::graph;
 pub use scope_index::{indexer, watcher};

@@ -15,6 +15,7 @@ use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 use gumiho_mudang_scope::graph::{AuditEdgeRow, AuditFreshness, Graph};
+use gumiho_mudang_scope::workspace::lang_version::detect_lang_version;
 
 /// Default sample size per `(kind, confidence)` cell.
 ///
@@ -113,11 +114,19 @@ pub struct SampleRecord {
 
 impl SampleRecord {
     /// Build a record from a sampled edge row plus the snippet read
-    /// from disk. `lang_version` is currently always `null` (populated
-    /// when the seven per-language detectors land atomically — see
-    /// `docs/AUDIT-LABEL-SCHEMA.md`). `label` is `null` on emit; the
+    /// from disk and the per-file `lang_version` produced by the
+    /// indexer-side detector matrix (see
+    /// `scope_core::workspace::lang_version::detect_lang_version` and
+    /// `BACKLOG.md` § Priority 1 sub-item (d)). `lang_version` is
+    /// `None` only when no manifest could be resolved for the file's
+    /// language (e.g. snippet from outside the project root, or
+    /// unsupported extension). `label` is `null` on emit; the
     /// external labeller fills it.
-    pub fn from_row(row: &AuditEdgeRow, source_snippet: String) -> Self {
+    pub fn from_row(
+        row: &AuditEdgeRow,
+        source_snippet: String,
+        lang_version: Option<String>,
+    ) -> Self {
         Self {
             schema_version: SCHEMA_VERSION.to_string(),
             edge_id: row.edge_id.to_string(),
@@ -128,7 +137,7 @@ impl SampleRecord {
             from: row.from_id.clone(),
             to: row.to_id.clone(),
             source_snippet,
-            lang_version: None,
+            lang_version,
             label: None,
         }
     }
@@ -306,9 +315,9 @@ fn run_confidence(args: &ConfidenceArgs, project_root: &Path) -> Result<()> {
         (None, Some(in_path)) => label_pass(&graph, args, project_root, in_path),
         (None, None) => default_summary(&graph, args),
         // Unreachable because clap's `conflicts_with` prevents both being set.
-        (Some(_), Some(_)) => unreachable!(
-            "clap conflicts_with should prevent --emit-sample and --label together"
-        ),
+        (Some(_), Some(_)) => {
+            unreachable!("clap conflicts_with should prevent --emit-sample and --label together")
+        }
     }
 }
 
@@ -398,7 +407,8 @@ fn emit_sample(
     let mut writer = BufWriter::new(file);
     for row in &sample {
         let snippet = read_source_snippet(project_root, &row.file_path, row.line)?;
-        let record = SampleRecord::from_row(row, snippet);
+        let lang_version = detect_lang_version(project_root, &project_root.join(&row.file_path));
+        let record = SampleRecord::from_row(row, snippet, lang_version);
         let line = serde_json::to_string(&record)
             .with_context(|| format!("serialise edge_id={}", record.edge_id))?;
         writeln!(writer, "{line}")?;
@@ -440,8 +450,7 @@ fn label_pass(
 
     let mut records: Vec<(usize, SampleRecord)> = Vec::new();
     for (idx, line) in reader.lines().enumerate() {
-        let line =
-            line.with_context(|| format!("{}: read line {}", in_path.display(), idx + 1))?;
+        let line = line.with_context(|| format!("{}: read line {}", in_path.display(), idx + 1))?;
         let trimmed = line.trim();
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
@@ -608,7 +617,13 @@ fn label_pass(
                 unparseable.len()
             );
             for (line_no, raw) in &unparseable {
-                let _ = writeln!(msg, "    {}: line {}: edge_id = {:?}", in_path.display(), line_no, raw);
+                let _ = writeln!(
+                    msg,
+                    "    {}: line {}: edge_id = {:?}",
+                    in_path.display(),
+                    line_no,
+                    raw
+                );
             }
         }
         if !unknown.is_empty() {
@@ -618,7 +633,13 @@ fn label_pass(
                 unknown.len()
             );
             for (line_no, id) in &unknown {
-                let _ = writeln!(msg, "    {}: line {}: edge_id = {}", in_path.display(), line_no, id);
+                let _ = writeln!(
+                    msg,
+                    "    {}: line {}: edge_id = {}",
+                    in_path.display(),
+                    line_no,
+                    id
+                );
             }
         }
         if !duplicates.is_empty() {
@@ -723,18 +744,10 @@ fn label_pass(
             ));
         }
         if record.from != indexed_row.from_id {
-            diffs.push((
-                "from",
-                record.from.clone(),
-                indexed_row.from_id.clone(),
-            ));
+            diffs.push(("from", record.from.clone(), indexed_row.from_id.clone()));
         }
         if record.to != indexed_row.to_id {
-            diffs.push((
-                "to",
-                record.to.clone(),
-                indexed_row.to_id.clone(),
-            ));
+            diffs.push(("to", record.to.clone(), indexed_row.to_id.clone()));
         }
         // Drift gate already verified file content == indexer's hash;
         // read errors here are unexpected (concurrent rm / permission
@@ -749,19 +762,20 @@ fn label_pass(
                 expected_snippet,
             ));
         }
-        // `lang_version` field : the schema's reserved per-project
-        // lang_version slot. Today the emitter writes `null` (the
-        // seven per-language detectors land atomically — BACKLOG.md
-        // § Priority 1 sub-item (d)). The labeller fills `label`
-        // only; rewriting `lang_version` is sample tamper on the
-        // same auditor-immutability rule. With the emit-time value
-        // pinned at `None`, any non-`None` value in the labelled
-        // JSONL is a rewrite.
-        if record.lang_version.is_some() {
+        // `lang_version` field — the schema's reserved per-project
+        // lang_version slot, populated by the indexer-side detector
+        // matrix (BACKLOG.md § Priority 1 sub-item (d)). The labeller
+        // fills `label` only; rewriting `lang_version` is sample
+        // tamper on the auditor-immutability rule. Recompute via the
+        // same detector entry point used on emit and compare; any
+        // mismatch is a rewrite.
+        let expected_lang_version =
+            detect_lang_version(project_root, &project_root.join(&indexed_row.file_path));
+        if record.lang_version != expected_lang_version {
             diffs.push((
                 "lang_version",
                 format!("{:?}", record.lang_version),
-                "null".to_string(),
+                format!("{:?}", expected_lang_version),
             ));
         }
         if !diffs.is_empty() {
@@ -899,8 +913,7 @@ pub fn check_tier_gate(report: &PrecisionReport) -> Result<()> {
 ///
 /// `precision = correct_count as f64 / sample_size as f64`.
 pub fn compute_precision_report(records: &[SampleRecord]) -> PrecisionReport {
-    let mut groups: BTreeMap<(String, String, String, String), (usize, usize)> =
-        BTreeMap::new();
+    let mut groups: BTreeMap<(String, String, String, String), (usize, usize)> = BTreeMap::new();
     for r in records {
         let label = match r.label {
             Some(b) => b,
@@ -1030,11 +1043,7 @@ fn enforce_freshness(graph: &Graph, project_root: &Path, rows: &[AuditEdgeRow]) 
 /// `scope-core/src/parser.rs`). An absent line (e.g. resolution edges
 /// without a site) yields the empty string — schema allows empty but
 /// not null for this field.
-fn read_source_snippet(
-    project_root: &Path,
-    file_path: &str,
-    line: Option<u32>,
-) -> Result<String> {
+fn read_source_snippet(project_root: &Path, file_path: &str, line: Option<u32>) -> Result<String> {
     let Some(line) = line else {
         return Ok(String::new());
     };
@@ -1117,7 +1126,11 @@ pub fn sample_stratified(
             .push(r);
     }
 
-    let mut state = if seed == 0 { 0x9E37_79B9_7F4A_7C15 } else { seed };
+    let mut state = if seed == 0 {
+        0x9E37_79B9_7F4A_7C15
+    } else {
+        seed
+    };
     let mut out = Vec::new();
     for (_cell_key, mut cell_rows) in by_cell {
         let take = sample_size.min(cell_rows.len());
@@ -1253,11 +1266,7 @@ mod tests {
             .collect();
         assert_eq!(
             keys,
-            vec![
-                ("calls", "high"),
-                ("extends", "medium"),
-                ("imports", "low"),
-            ]
+            vec![("calls", "high"), ("extends", "medium"), ("imports", "low"),]
         );
     }
 
@@ -1273,7 +1282,7 @@ mod tests {
     #[test]
     fn sample_record_serialises_with_schema_v1() {
         let row = mk_row(42, "calls", "high");
-        let rec = SampleRecord::from_row(&row, "format_name(&user.name)".to_string());
+        let rec = SampleRecord::from_row(&row, "format_name(&user.name)".to_string(), None);
         let json = serde_json::to_string(&rec).unwrap();
         // schema_version locked at "1"; edge_id stringified; lang_version/label null on emit.
         assert!(json.contains("\"schema_version\":\"1\""));
@@ -1286,7 +1295,7 @@ mod tests {
     #[test]
     fn sample_record_round_trips_through_jsonl() {
         let row = mk_row(7, "imports", "medium");
-        let original = SampleRecord::from_row(&row, "use std::fs;".to_string());
+        let original = SampleRecord::from_row(&row, "use std::fs;".to_string(), None);
         let json = serde_json::to_string(&original).unwrap();
         let parsed: SampleRecord = serde_json::from_str(&json).unwrap();
         assert_eq!(original, parsed);
@@ -1295,7 +1304,7 @@ mod tests {
     #[test]
     fn sample_record_keeps_field_order_for_deterministic_jsonl() {
         let row = mk_row(1, "calls", "high");
-        let rec = SampleRecord::from_row(&row, "x".to_string());
+        let rec = SampleRecord::from_row(&row, "x".to_string(), None);
         let json = serde_json::to_string(&rec).unwrap();
         // serde_derive emits struct fields in declaration order; assert the schema's
         // documented order so a future field reorder fails this test.
@@ -1315,10 +1324,7 @@ mod tests {
         let mut last_pos = 0usize;
         for key in expected_order {
             let pos = json.find(key).unwrap_or_else(|| panic!("missing {key}"));
-            assert!(
-                pos > last_pos,
-                "field {key} out of order in {json}"
-            );
+            assert!(pos > last_pos, "field {key} out of order in {json}");
             last_pos = pos;
         }
     }
@@ -1332,7 +1338,7 @@ mod tests {
         ];
         for (substr, expected) in cases {
             let row = mk_row(99, "calls", "high");
-            let mut rec = SampleRecord::from_row(&row, String::new());
+            let mut rec = SampleRecord::from_row(&row, String::new(), None);
             rec.label = expected;
             let json = serde_json::to_string(&rec).unwrap();
             assert!(json.contains(substr), "expected {substr} in {json}");
@@ -1583,12 +1589,8 @@ mod tests {
     fn precision_report_carries_coverage_limitation_note() {
         let report = compute_precision_report(&[]);
         assert_eq!(report.coverage_limitation_note, COVERAGE_LIMITATION_NOTE);
-        assert!(report
-            .coverage_limitation_note
-            .contains("schema_version"));
-        assert!(report
-            .coverage_limitation_note
-            .contains("BACKLOG.md"));
+        assert!(report.coverage_limitation_note.contains("schema_version"));
+        assert!(report.coverage_limitation_note.contains("BACKLOG.md"));
     }
 
     #[test]
@@ -1626,9 +1628,9 @@ mod tests {
     #[test]
     fn tier_gate_passes_when_every_row_meets_target() {
         let report = report_with_rows(vec![
-            row("calls", "high", "p1", 20, 19),   // 0.95 — exactly at boundary
+            row("calls", "high", "p1", 20, 19), // 0.95 — exactly at boundary
             row("imports", "medium", "p2", 10, 7), // 0.70 — exactly at boundary
-            row("extends", "low", "p3", 5, 0),    // low: no minimum
+            row("extends", "low", "p3", 5, 0),  // low: no minimum
         ]);
         check_tier_gate(&report).expect("gate should pass at exact boundaries");
     }
