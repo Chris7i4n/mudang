@@ -15,7 +15,7 @@ Initiative prefix: `selfcorrect/`. Merge mode: rebase-merge (sprint → `main`; 
 | Priority 1 (a) — Loop architecture document | 0001 | shipped | `selfcorrect/sprint-0001-loop-architecture` | `c06a23d` | 2026-05-13 |
 | Priority 1 (b) — Reference labeller crates | 0005 | unstarted | — | — | — |
 | Priority 1 (c) — Continuous re-audit in CI | 0007 | unstarted | — | — | — |
-| Priority 1 (d) — `lang_version` detector matrix | 0003 | in-progress | `selfcorrect/sprint-0003-lang-version-detector-matrix` | — | — |
+| Priority 1 (d) — `lang_version` detector matrix | 0003 | shipped | `selfcorrect/sprint-0003-lang-version-detector-matrix` | `cc61a5b` | 2026-05-13 |
 | Priority 1 (e) — Labelled corpus accumulation policy | 0002 | shipped | `selfcorrect/sprint-0002-corpus-accumulation-policy` | `467c356` | 2026-05-13 |
 | Priority 1 (f) — ML-driven patch suggester | 0008 | unstarted | — | — | corpus-size-gated (≥1000 samples × ≥4 langs) |
 | Priority 1 (g) — Richer auditor verdict types | 0004 | unstarted | — | — | bundled with (h) + (j) |
@@ -29,7 +29,7 @@ Initiative prefix: `selfcorrect/`. Merge mode: rebase-merge (sprint → `main`; 
 |---|---|---|---|
 | 0001 — loop architecture + doc-sync gate | shipped | `selfcorrect/sprint-0001-loop-architecture` | `c06a23d` |
 | 0002 — corpus accumulation policy | shipped | `selfcorrect/sprint-0002-corpus-accumulation-policy` | `467c356` |
-| 0003 — `lang_version` detector matrix | in-progress | `selfcorrect/sprint-0003-lang-version-detector-matrix` | — |
+| 0003 — `lang_version` detector matrix | shipped | `selfcorrect/sprint-0003-lang-version-detector-matrix` | `cc61a5b` |
 | 0004 — schema-v2 bundle (g+h+j) | unstarted | — | — |
 | 0005 — reference labeller crates | unstarted | — | — |
 | 0006 — multi-labeller aggregation | unstarted | — | — |
@@ -53,3 +53,5 @@ Append-only. Newest entry at the bottom.
 - 2026-05-13 | Priority 1 (e) | in-progress → shipped | commit `467c356` | notes: sprint 0002 closed; `AUDIT-LABEL-SCHEMA.md § Corpus accumulation policy` landed; per-`<db_slug>/audit-samples/MANIFEST.md` provenance scaffold; doc-sync gate extended with `check_audit_samples_layout`; general-purpose subagent review converged after one fix-round (3 findings addressed in the same commit; codex paused this sprint)
 - 2026-05-13 | sprint 0002 | in-progress → shipped | commit `467c356` | notes: branch ready for FF merge to main
 - 2026-05-13 | Priority 1 (d) | unstarted → in-progress | branch `selfcorrect/sprint-0003-lang-version-detector-matrix` | notes: sprint 0003 opened; user authorised checkpoint-style execution (one branch, multi-commit; review per checkpoint) given conceptual surface touched (C2 boundary clarification before code work)
+- 2026-05-13 | Priority 1 (d) | in-progress → shipped | commit `cc61a5b` | notes: sprint 0003 closed; 9 workspace readers (4 extended + 5 new) expose version-extraction free functions under the R4 indexer-side carveout; `lang_version.rs` dispatcher walks file → manifest with per-lang priority chains; R8 audit emit (`SampleRecord.from_row`) populates `lang_version` from the detector and `label_pass` drift check recomputes-and-compares; doc-sync gate `check_lang_version_detector_modules` added (bidirectional: variant ↔ CHARTER §7 subsection); 7 per-language docs gained a `lang_version` gotcha entry; **lang_version coverage gate active** — `test_audit_confidence_lang_version_coverage_all_seven_languages` runs full `mudang init + index + audit emit` against one canonical fixture per supported language, asserts every emitted record carries the manifest-declared `lang_version` (closes sprint plan acceptance bullet "R8 audit emit writes a non-`null` `lang_version` for every supported language under realistic fixtures" and DoD "R8 emit on the reference fixture corpus shows zero `null` `lang_version`"); independent reviewer subagent verdict MERGE-READY WITH NON-BLOCKERS, all 6 non-blockers addressed in one fix-round; gates green (`gate-doc-sync` 6 checks, `gate-charter`, `ci-context-shape`, `audit-confidence` 24 integration tests, 173 per-language tests unchanged); codex paused this sprint
+- 2026-05-13 | sprint 0003 | in-progress → shipped | commit `cc61a5b` | notes: branch ready for FF merge to main
