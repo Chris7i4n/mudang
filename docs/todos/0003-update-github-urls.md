@@ -21,7 +21,7 @@ purely cosmetic.
   commands (2 URLs).
 - `~/.claude/CLAUDE.md` (user's private global config) — Scope CLI
   installed reference (1 URL).
-- Any future install scripts, README badges, or release notes.
+- Any future install scripts or README badges.
 
 ## Action
 

@@ -13,7 +13,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 ///
 /// Runs coding tasks with and without Scope enabled, measures token consumption,
 /// task correctness, and navigation efficiency. Results are written as JSON or
-/// Markdown for inclusion in release notes.
+/// Markdown.
 #[derive(Parser, Debug)]
 #[command(
     name = "benchmark",

@@ -89,7 +89,7 @@ When a term collides with a Rust crate name (`semver`, `tree-sitter`), the entry
 | `file_hashes.skipped_ranges` | JSON column with `[{start_line, end_line, reason}]` | R0 + R6 |
 | Surrogate PK | `edges.edge_id INTEGER PRIMARY KEY AUTOINCREMENT`; replaces composite `(from_id, to_id, kind)` | R0 |
 | `edges.args_text` | Optional TEXT NULL column carrying call-site / declaration-site argument literal capped at 2 KB. Mitigation 1: resolver skips fully-qualified targets. Mitigation 2: truncated literals end in `[truncated]`. Consumed by framework predicates and downstream cross-language stitching | R0 |
-| Schema bumps | No in-place migration. Scope is pre-1.0 single-user; old `.scope/` indexes are wiped (`rm -rf .scope/ && scope index`). Revisit when first external user files a trigger | R0 |
+| Schema bumps | No in-place migration. Single-operator posture (`CHARTER.md` §2): old `.scope/` indexes are wiped (`rm -rf .scope/ && scope index`). Revisit only if external operation is ever entertained per CHARTER §2 | R0 |
 
 ---
 

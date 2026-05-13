@@ -101,7 +101,7 @@ This principle has been implicit throughout every refactor sprint (Charter, R-mo
 
 ### Known offender (Priority 2 sprint opens here)
 
-- **R0 `edges.args_text` 2 KB cap** — see [`ENFORCEMENT-MAP.md` § R0 → Mitigation 2](ENFORCEMENT-MAP.md#r0--schema-closures) and the const `ARGS_TEXT_CAP_BYTES = 2048` in [`scope-core/src/edge.rs`](../scope-core/src/edge.rs). Truncating call-site / declaration-site argument literals at 2 KB plus a `[truncated]` marker is an approximation justified by *"common case fits"* — **not** by any hard runtime constraint. SQLite TEXT holds up to ~1 GB; long literals make Scope slower on pathological codebases but cannot panic, OOM, or fail to run. The fix is to drop the cap and the truncation marker; the pre-1.0 wipe-and-reindex policy (CHARTER §2) absorbs the schema impact for existing local DBs.
+- **R0 `edges.args_text` 2 KB cap** — see [`ENFORCEMENT-MAP.md` § R0 → Mitigation 2](ENFORCEMENT-MAP.md#r0--schema-closures) and the const `ARGS_TEXT_CAP_BYTES = 2048` in [`scope-core/src/edge.rs`](../scope-core/src/edge.rs). Truncating call-site / declaration-site argument literals at 2 KB plus a `[truncated]` marker is an approximation justified by *"common case fits"* — **not** by any hard runtime constraint. SQLite TEXT holds up to ~1 GB; long literals make Scope slower on pathological codebases but cannot panic, OOM, or fail to run. The fix is to drop the cap and the truncation marker; the single-operator wipe-and-reindex policy (CHARTER §2) absorbs the schema impact for existing local DBs.
 
 ### Sub-items (sequenced — (a) and (b) feed (c) and (d))
 
@@ -111,7 +111,7 @@ This principle has been implicit throughout every refactor sprint (Charter, R-mo
   - Delete `ARGS_TEXT_CAP_BYTES`, `TRUNCATION_MARKER`, and the truncation logic in `scope-core/src/edge.rs`.
   - Delete the matching unit test (currently asserts the truncation byte length).
   - Update the schema comment in `scope-graph/src/sql/schema.sql` (drop "capped at 2 KB / truncation marker" text).
-  - Update [`ENFORCEMENT-MAP.md` § R0 → Mitigation 2](ENFORCEMENT-MAP.md#r0--schema-closures) (replace with a note recording the original cap was dropped by Priority 2; honesty over performance; pre-1.0 wipe policy stands).
+  - Update [`ENFORCEMENT-MAP.md` § R0 → Mitigation 2](ENFORCEMENT-MAP.md#r0--schema-closures) (replace with a note recording the original cap was dropped by Priority 2; honesty over performance; wipe policy stands).
   - Bump `schema_version` from `"1"` to `"2"` in [`AUDIT-LABEL-SCHEMA.md`](AUDIT-LABEL-SCHEMA.md), add the `producer_captured_args: string | null` record field with the auditor-comparison rationale, add a migration note. Update `--label` rejection logic so old `schema_version: "1"` samples error with a re-emit instruction.
   - Log entry in the priority-2 sprint's PR body documenting the amendment (paper-trail discipline).
 - **(d) Fix any further offenders found by (a) + (b).** Each fix lands as its own charter-grade amendment with paper trail.
@@ -254,7 +254,7 @@ Cross-references so a future reader does not duplicate work:
 
 Recorded so they are not lost; their triggers are insufficient today.
 
-- **Self-indexing of Scope's own source** — `scope` is not run on the Scope repository during development. Until a stable release ships, dogfooding hides bugs from the developer (the same buggy binary builds the index that the developer queries to debug the bug, so symptoms and tooling fail together). Re-enable when stable. In the meantime, the `bench-self` justfile recipe is removed; benchmarks run against external sandboxes (`bench-rails`) only. References to "dogfooding" in user-facing copy (README "Done" list) are removed; CHANGELOG entries are historical and stay.
+- **Self-indexing of Scope's own source** — `scope` is not run on the Scope repository during development. Self-indexing produces a feedback loop where the same buggy binary builds the index that the developer queries to debug the bug — symptoms and tooling fail together. The `bench-self` justfile recipe is removed; benchmarks run against external sandboxes (`bench-rails`) only. Dogfooding references in README "Done" list are removed.
 - **Per-sub-root version detection** for npm/Python multi-package monorepos (`FRAMEWORK-PLAYBOOK.md` Step 3 known limitation; promoted when frequency justifies).
 - **Module isolation** for stronger A1–A3 + B2 mechanical enforcement (`ENFORCEMENT-MAP.md` § "Why detectable, not mechanical"; charter-amendment-grade follow-up).
 - **Byte-level lossy file reading** for invalid UTF-8 (`ENFORCEMENT-MAP.md` R6 known limitation; separate initiative with its own trigger).
