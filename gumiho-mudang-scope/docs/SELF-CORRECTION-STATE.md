@@ -12,7 +12,7 @@ Initiative prefix: `selfcorrect/`. Merge mode: rebase-merge (sprint → `main`; 
 
 | Sub-item | Owning sprint | Status | Branch | Commit | Notes |
 |---|---|---|---|---|---|
-| Priority 1 (a) — Loop architecture document | 0001 | unstarted | — | — | — |
+| Priority 1 (a) — Loop architecture document | 0001 | in-progress | `selfcorrect/sprint-0001-loop-architecture` | — | — |
 | Priority 1 (b) — Reference labeller crates | 0005 | unstarted | — | — | — |
 | Priority 1 (c) — Continuous re-audit in CI | 0007 | unstarted | — | — | — |
 | Priority 1 (d) — `lang_version` detector matrix | 0003 | unstarted | — | — | — |
@@ -23,11 +23,11 @@ Initiative prefix: `selfcorrect/`. Merge mode: rebase-merge (sprint → `main`; 
 | Priority 1 (i) — Multi-labeller verdict aggregation | 0006 | unstarted | — | — | — |
 | Priority 1 (j) — Audit-history DB persistence | 0004 | unstarted | — | — | bundled with (g) + (h) |
 | Priority 1 (k) — Confidence re-stamping policy | 0009 | unstarted | — | — | ships last; riskiest |
-| Doc-sync gate scaffolding (cross-cutting) | 0001 | unstarted | — | — | new R-entry R13 |
+| Doc-sync gate scaffolding (cross-cutting) | 0001 | in-progress | `selfcorrect/sprint-0001-loop-architecture` | — | new R-entry R13 |
 
 | Sprint | Status | Branch | Merged-on commit |
 |---|---|---|---|
-| 0001 — loop architecture + doc-sync gate | unstarted | — | — |
+| 0001 — loop architecture + doc-sync gate | in-progress | `selfcorrect/sprint-0001-loop-architecture` | — |
 | 0002 — corpus accumulation policy | unstarted | — | — |
 | 0003 — `lang_version` detector matrix | unstarted | — | — |
 | 0004 — schema-v2 bundle (g+h+j) | unstarted | — | — |
@@ -44,3 +44,5 @@ Initiative prefix: `selfcorrect/`. Merge mode: rebase-merge (sprint → `main`; 
 Append-only. Newest entry at the bottom.
 
 - 2026-05-13 | initiative open | — | commit pending | notes: state-tracking doc created on `main` ahead of sprint 0001 open
+- 2026-05-13 | Priority 1 (a) | unstarted → in-progress | branch `selfcorrect/sprint-0001-loop-architecture` | notes: sprint 0001 opened
+- 2026-05-13 | Doc-sync gate | unstarted → in-progress | branch `selfcorrect/sprint-0001-loop-architecture` | notes: sprint 0001 ships scaffolding
