@@ -117,7 +117,18 @@ check_enforcement_map_paths() {
 check_ci_gates_recipes() {
     local gates="$SCOPE_DOCS/CI-GATES.md"
     local just="justfile"
-    [[ -f "$gates" && -f "$just" ]] || return 0
+    # If CI-GATES.md is absent there is nothing to check — bail early.
+    [[ -f "$gates" ]] || return 0
+    # If CI-GATES.md exists but justfile is missing/renamed, every
+    # "Local invocation" cell in the active rows is unrunnable. That
+    # IS the drift the gate must catch — fail loud, do not silently
+    # skip.
+    if [[ ! -f "$just" ]]; then
+        fail_block "ci-gates-recipes" \
+                   "CI-GATES.md is present but root justfile is missing — every active row's \`just <recipe>\` is unrunnable" \
+                   "expected: justfile (repo root)"
+        return
+    fi
     local missing=""
     # Pull every "Local invocation" cell that contains `just <name>`
     # AND whose row ends with `| active |`.
