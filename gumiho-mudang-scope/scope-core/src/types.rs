@@ -36,4 +36,3 @@ pub struct Symbol {
     /// JSON blob with modifiers, parameters, return type, etc.
     pub metadata: String,
 }
-
