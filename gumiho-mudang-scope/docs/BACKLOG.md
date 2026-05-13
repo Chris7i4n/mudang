@@ -40,7 +40,7 @@ This priority-1 work ships the **actuator** — the closed loop that converts R8
   - **`kind_proposed: string | null`** — labeller's correction for `kind`. *"Scope said `references_type`; this is actually `calls` (the call expression is parenthesised after the identifier)."*
   - **`confidence_proposed: string | null`** — labeller's correction for `confidence`. *"Scope said `high`; I see overload ambiguity here, this should be `medium`."* Distinct from a binary "wrong" verdict: the labeller may agree the edge is correct but say the confidence stamp is overstated.
   - **`reasoning_text: string | null`** — free-text human (or LLM) explanation. The post-hoc audit trail when a `false` verdict is reviewed months later.
-  - **`lang_version_evidence: string | null`** — for distinguishing detected vs declared version (already named in [`AUDIT-LABEL-SCHEMA.md` § Reserved-for-future fields](AUDIT-LABEL-SCHEMA.md#reserved-for-future-fields)).
+  - **`lang_version_evidence: string | null`** — for distinguishing detected vs declared version (ships in v2 per [`AUDIT-LABEL-SCHEMA.md` § Record schema (`schema_version: "2"`)](AUDIT-LABEL-SCHEMA.md#record-schema-schema_version-2)).
 
   The bump lands together with sub-item (h) (coverage surfacing on the report side) and sub-item (j) (DB storage shape), because all three are entry points for the same qualitative-signal surface. `schema_version: "1"` labellers continue to work — `--label` accepts both versions, treating the new fields as `null` when absent. Removing or repurposing existing `"1"` fields is still charter-grade.
 

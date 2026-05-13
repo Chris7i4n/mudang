@@ -68,7 +68,7 @@ Bump the audit-sample JSONL `schema_version` from `"1"` to `"2"` across three co
 ## Ambiguities resolved before this sprint opens
 
 - **Single namespace name** — `edge_audit_history` per BACKLOG (j) ("or analogous"). If a clash with an existing schema name emerges, halt and choose on `main` first.
-- **`scope audit history` flag surface** — confirmed before sprint open. Subcommand-per-view layout chosen over flat flags (extensibility for view-specific `--since`, `--limit`, `--json`; mutually-exclusive flags would force ad-hoc validation otherwise). Three views ship in sprint 0004 (default dashboard + `edge <id>` + `pattern <id>`); two views (`labeller <id>` + `agreement-matrix`) defer to sprint 0006 (i) under single-operator-posture reasoning. Decision logged in [`BACKLOG.md` § Priority 1 (j)](../BACKLOG.md#priority-1--self-correction-cycle) and [`BACKLOG.md` § Priority 1 (i)](../BACKLOG.md#priority-1--self-correction-cycle); commit `<docs-amend-hash>` on `main`.
+- **`scope audit history` flag surface** — confirmed before sprint open. Subcommand-per-view layout chosen over flat flags (extensibility for view-specific `--since`, `--limit`, `--json`; mutually-exclusive flags would force ad-hoc validation otherwise). Three views ship in sprint 0004 (default dashboard + `edge <id>` + `pattern <id>`); two views (`labeller <id>` + `agreement-matrix`) defer to sprint 0006 (i) under single-operator-posture reasoning. Decision logged in [`BACKLOG.md` § Priority 1 (j)](../BACKLOG.md#priority-1--self-correction-cycle) and [`BACKLOG.md` § Priority 1 (i)](../BACKLOG.md#priority-1--self-correction-cycle); commit `db4c3ac` on `main`.
 - **Retention policy** — BACKLOG (j) says "accumulates indefinitely; eviction is a future sprint". No eviction this sprint.
 
 ---
