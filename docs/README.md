@@ -173,10 +173,11 @@ architecture discussion. See `todos/README.md` for the index.
 ## Related docs outside this directory
 
 - `gumiho-mudang-scope/docs/CHARTER.md` — scope's read-only invariants.
-- `gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` — scope's
-  internal R-moves (R0–R12) executed during phase A.
-- `gumiho-mudang-scope/docs/POST-REFACTOR-PLAN.md` — what scope ships
-  after R-moves complete.
+- `gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` — closure record
+  of scope's internal R-moves (R0–R12) shipped during phase A
+  (2026-05-12).
+- `gumiho-mudang-scope/docs/POST-REFACTOR-PLAN.md` — scope's work queue
+  against the closed architecture.
 
 ---
 
@@ -184,8 +185,8 @@ architecture discussion. See `todos/README.md` for the index.
 
 - **"I want the whole picture"**: `ROADMAP.md` → `ARCHITECTURE.md` →
   `SCOPE-LSP-COMPOSITION.md` §1–§4 → `SUBSTRATE-PRIMARY.md` §1–§3.
-- **"I want to implement phase A or B"**: scope's own docs +
-  `ARCHITECTURE.md` §2.2 + `docs/todos/0006`–`0008`.
+- **"I want to implement phase B"** (phase A shipped 2026-05-12):
+  scope's own docs + `ARCHITECTURE.md` §2.2 + `docs/todos/0007`–`0008`.
 - **"I want to implement phase C"**: `ARCHITECTURE.md` §3 + §4,
   `SCOPE-LSP-COMPOSITION.md` §17 (decision tree), `NOTIFY-API.md`,
   `CROSS-LANG-STITCHING.md`, `docs/todos/0005`, `0007`.

@@ -1,22 +1,20 @@
 # Post-Refactor Plan
 
-Work queued to start **after** `ARCHITECTURAL-REFACTOR.md` closes (Phase E acceptance). No item below ships before then. Each item additionally respects its own gate — language depth follows `LANGUAGE-PLAYBOOK.md` adoption flow; framework adoption follows `FRAMEWORK-PLAYBOOK.md` triggers.
-
-This document is the answer to "what comes next?" Until Phase E acceptance is met, this is a queue, not a backlog being worked.
+Work eligible against the closed architecture. The architectural refactor closed on **2026-05-12** ([`ARCHITECTURAL-REFACTOR.md`](ARCHITECTURAL-REFACTOR.md) is now the closure record). The items below are queued for delivery in priority order. Each item additionally respects its own gate — language depth follows `LANGUAGE-PLAYBOOK.md` adoption flow; framework adoption follows `FRAMEWORK-PLAYBOOK.md` triggers.
 
 ---
 
-## Gate
+## Eligibility
 
-Phase E acceptance is the entry condition. Every bullet below must hold before any item in this document is started:
+The architecture closure (Phase E acceptance) holds. Every bullet below was demonstrated at refactor close:
 
 - Every universal rule in the inventory tables (`CHARTER.md` §5 hard limits and `LANGUAGE-PLAYBOOK.md` Step 4) is in class 1 (mechanical), class 2 (detectable), or the explicit class-3 universal list (B1, C2, E3).
 - Every active language plugin's `docs/languages/<name>.md` has zero `NEEDS REVIEW` entries.
-- `scope audit confidence` exists and runs against the reference fixture corpus.
-- CI gates active: malformed-source (R6), trait-shape audit + spawn-denylist (R12), immutable-source (R9).
+- `scope audit confidence` runs against the reference fixture corpus.
+- CI gates active: malformed-source (R6), trait-shape audit + spawn-denylist (R12), immutable-source (R9), plus every other gate in [`CI-GATES.md`](CI-GATES.md).
 - Full benchmark suite shows < 10% regression from pre-refactor baseline.
 
-`REFACTOR-STATUS.md` reflects the live state.
+Items below are ordered by priority. Each respects its own per-item gate stated under "Gate to start".
 
 ---
 
@@ -75,13 +73,13 @@ This priority-1 work ships the **actuator** — the closed loop that converts R8
   - **Automatic downgrade** — when N consecutive audits show precision < tier-target by some margin, the next index run stamps the edge `medium` instead of `high`. Pro: closes the loop fully. Con: indirection between extractor source code and emitted confidence — the extractor stops being the single source of truth for what a stamp means.
   - **Flag-for-review** — when the same threshold is met, the next audit report surfaces "pattern_id X is consistently sub-target; manual review recommended"; the human edits the extractor source and commits a downgrade. Pro: extractor source stays canonical. Con: human-in-the-loop on every regression; slow.
   - **Hybrid** — automatic downgrade for tier-internal moves (`high → medium`); manual-only for cross-tier (`medium → low` is downgrade but `low → medium` is upgrade and dangerous).
-  - **Audit-trail invariant** — every automatic re-stamp is logged in `REFACTOR-STATUS.md`-equivalent log so future maintainers can trace why a given edge in the index carries a confidence stamp different from what the extractor source naively produces. The audit trail is non-optional; without it, the loop becomes opaque.
+  - **Audit-trail invariant** — every automatic re-stamp is logged in a dedicated audit-trail file (named when this priority opens) so future maintainers can trace why a given edge in the index carries a confidence stamp different from what the extractor source naively produces. The audit trail is non-optional; without it, the loop becomes opaque.
 
   This policy is the riskiest piece in Priority 1 and ships last. Premature automation here can pollute the index with stamps that lag the actual extractor behaviour by audit-cycle epochs.
 
 ### Gate to start
 
-Phase E acceptance (per "Gate" section above). Specifically: R8 must be `shipped` and the reference fixture corpus must be committed, so this priority has a working sensor to build on.
+Eligibility holds (architecture closed). R8 ships the sensor; the reference fixture corpus is committed; this priority builds the actuator on top.
 
 ---
 
@@ -115,13 +113,13 @@ This principle has been implicit throughout every refactor sprint (Charter, R-mo
   - Update the schema comment in `scope-graph/src/sql/schema.sql` (drop "capped at 2 KB / truncation marker" text).
   - Update [`ARCHITECTURAL-REFACTOR.md` § R0 → Mitigation 2](ARCHITECTURAL-REFACTOR.md#r0--schema-closures--edge-kind-additions--symbols-metadata-shape) (replace with a note recording the original cap was dropped by Priority 2; honesty over performance; pre-1.0 wipe policy stands).
   - Bump `schema_version` from `"1"` to `"2"` in [`AUDIT-LABEL-SCHEMA.md`](AUDIT-LABEL-SCHEMA.md), add the `producer_captured_args: string | null` record field with the auditor-comparison rationale, add a migration note. Update `--label` rejection logic so old `schema_version: "1"` samples error with a re-emit instruction.
-  - Log entry in `REFACTOR-STATUS.md` documenting the amendment (paper-trail discipline per §3 ambiguity protocol).
+  - Log entry in the priority-2 sprint's PR body documenting the amendment (paper-trail discipline; the historical refactor's append-only log doc is retired with the closure).
 - **(d) Fix any further offenders found by (a) + (b).** Each fix lands as its own charter-grade amendment with paper trail.
 - **(e) Capture remaining justified approximations as explicit invariants.** Where (a) or (b) finds a trade-off that *is* justified by a hard runtime constraint, the constraint moves into the document as a first-class invariant (not a footnote). Future sprints know the line was drawn deliberately and where.
 
 ### Gate to start
 
-Phase E acceptance (per "Gate" section above). Runs in parallel with Priority 1 — independent surfaces (Priority 1 builds the self-correction actuator on top of R8; Priority 2 audits the data the actuator measures). Neither blocks the other.
+Eligibility holds. Runs in parallel with Priority 1 — independent surfaces (Priority 1 builds the self-correction actuator on top of R8; Priority 2 audits the data the actuator measures). Neither blocks the other.
 
 ### Why this is **not** absorbed by Priority 1 (self-correction cycle)
 
@@ -158,7 +156,7 @@ The split tracks the same charter discipline as the R-moves: each surface has on
 
 ### Gate to start
 
-Phase E acceptance (per "Gate" section above). Runs in parallel with Priority 1 and Priority 2 — independent surface.
+Eligibility holds. Runs in parallel with Priority 1 and Priority 2 — independent surface.
 
 ### Why this is **not** absorbed by the refactor
 
@@ -168,7 +166,7 @@ The R-moves carved up `scope-core` / `scope-graph` / `scope-index` / `scope-sear
 
 ## Cross-cutting items (charter §6 soft-expansion zone, not absorbed by refactor)
 
-The refactor absorbed several soft-expansion items into its R-moves (resolution pass → R3, domain edge kinds → R0, config-file readers → R4, confidence/provenance metadata → R0, decorator/annotation argument capture → R0 + R5). The items below are the **remainder**: they sit in the soft-expansion zone but require new work after the refactor closes.
+The refactor absorbed several soft-expansion items into its R-moves (resolution pass → R3, domain edge kinds → R0, config-file readers → R4, confidence/provenance metadata → R0, decorator/annotation argument capture → R0 + R5). The items below are the **remainder**: they sit in the soft-expansion zone and remain new work against the closed architecture.
 
 - **Re-export resolution.** `pub use` chain following (Rust), `export * from` / `export {x} from` (TypeScript), `__all__` (Python), via static text. Lives in the resolver layer added by R3 — but R3 only ships the framework; the per-language re-export rules are post-refactor work.
 - **Doc-comment chain merging.** `///` chains and `//!` inner docs (Rust), JSDoc multi-line (TS), `"""` blocks (Python). Improves docstring quality without semantic work.

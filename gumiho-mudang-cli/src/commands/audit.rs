@@ -33,9 +33,6 @@ pub const DEFAULT_SAMPLE_SIZE: usize = 30;
 pub const DEFAULT_SEED: u64 = 0xA5C0_DE17_5EED_0001;
 
 /// Disclaimer printed in `--help` and as the first line of every report.
-///
-/// Stating this verbatim in both surfaces is a sprint 0007 deliverable
-/// (see `docs/sprints/0007-phase-d-confidence-audit.md` → Deliverables).
 pub const PRECISION_ONLY_DISCLAIMER: &str =
     "precision report; recall is measured by integration-test snapshots, not this subcommand.";
 

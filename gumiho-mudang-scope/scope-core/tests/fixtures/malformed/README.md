@@ -1,8 +1,6 @@
 # Malformed-source fixture corpus — R6 resilience harness
 
-> **Ships**: sprint 0008 (R6 — Malformed-source test harness).
-> **Source of truth**: [`ARCHITECTURAL-REFACTOR.md` § R6](../../../../docs/ARCHITECTURAL-REFACTOR.md#r6--malformed-source-test-harness).
-> **Sprint plan**: [`sprints/0008-phase-e-malformed-source-harness.md`](../../../../docs/sprints/0008-phase-e-malformed-source-harness.md).
+> **Source of truth**: [`ARCHITECTURAL-REFACTOR.md` § R6](../../../../docs/ARCHITECTURAL-REFACTOR.md#r6--malformed-source-test-harness) (R6 shipped 2026-05-12).
 
 ---
 

@@ -38,9 +38,7 @@
 //! plugins read that metadata + `&[RawEdge]` and emit derived edges only
 //! when their predicate fires.
 //!
-//! See `docs/ARCHITECTURAL-REFACTOR.md` § R5 for the full target
-//! state and `docs/sprints/0005-phase-c-framework-infrastructure.md`
-//! for the sprint deliverables.
+//! See `docs/ARCHITECTURAL-REFACTOR.md` § R5 for the durable contract.
 
 use crate::edge::{EdgeKind, RawEdge};
 use crate::languages::LanguageId;

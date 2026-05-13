@@ -1,10 +1,10 @@
 # Scope ↔ LSP typed-output interop (forward-looking)
 
-> **Status**: forward-looking note. No binding cross-crate API exists today; this document records a possibility that R10 (sprint 0006 — typed output schema) unlocks for a future composition sprint.
+> **Status**: forward-looking note. No binding cross-crate API exists today; this document records a possibility that R10 (typed output schema, shipped 2026-05-12) unlocks for a future composition sprint.
 
-## What R10 changes
+## What R10 changed
 
-Sprint 0006 (Phase D of the gumiho-mudang-scope architectural refactor) ships R10 — every CLI output path in `gumiho-mudang-cli` becomes a `#[derive(Serialize)]` Rust struct or enum at the boundary, with the strict-reading scope decision recorded in [`gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` § R10 → Sprint 0006 scope decision](../../gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md#r10--typed-output-schema).
+R10 (Phase D of the gumiho-mudang-scope architectural refactor) shipped on 2026-05-12 — every CLI output path in `gumiho-mudang-cli` is a `#[derive(Serialize)]` Rust struct or enum at the boundary, with the strict-reading decision recorded in [`gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` § R10](../../gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md#r10--typed-output-schema).
 
 After R10, the JSON envelope emitted by `mudang ... --json` is the on-the-wire encoding of a concrete Rust type. Field names, shape, nullability, and enum variants are owned by the type definition, not by `serde_json::json!()` macro call sites.
 
@@ -19,9 +19,9 @@ Two concrete things the typed boundary unlocks:
 
 ## What is not in scope today
 
-- No crate currently exports Scope's output structs as a public API. Sprint 0006 lands them as `pub(crate)` (or workspace-internal) inside `gumiho-mudang-cli`. A later sprint can lift them into a shared crate (`gumiho-mudang-scope-output`?) if a real consumer materialises.
-- No `ts-rs` / `typeshare` derive is added in sprint 0006. The Rust-side types are the contract; binding generation is opt-in by the consumer when a real composition use case appears.
-- The composition layer itself is post-refactor. `gumiho-mudang-scope/docs/SCOPE-LSP-COMPOSITION.md` § 5.4 owns the design.
+- No crate currently exports Scope's output structs as a public API. R10 landed them as `pub(crate)` (or workspace-internal) inside `gumiho-mudang-cli`. A later sprint can lift them into a shared crate (`gumiho-mudang-scope-output`?) if a real consumer materialises.
+- No `ts-rs` / `typeshare` derive is wired. The Rust-side types are the contract; binding generation is opt-in by the consumer when a real composition use case appears.
+- The composition layer itself is queued in `gumiho-mudang-scope/docs/POST-REFACTOR-PLAN.md`; `gumiho-mudang-scope/docs/SCOPE-LSP-COMPOSITION.md` § 5.4 owns the design.
 
 ## When the door opens
 
@@ -34,6 +34,5 @@ Until then, `--json` is read as untyped JSON by current consumers; the typed Rus
 
 ## See also
 
-- [`gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` § R10](../../gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md#r10--typed-output-schema) — refactor move that lands the typed structs.
-- [`gumiho-mudang-scope/docs/sprints/0006-phase-d-typed-output-schema.md`](../../gumiho-mudang-scope/docs/sprints/0006-phase-d-typed-output-schema.md) — the sprint shipping R10.
+- [`gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` § R10](../../gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md#r10--typed-output-schema) — refactor move that landed the typed structs.
 - [`gumiho-mudang-scope/docs/SCOPE-LSP-COMPOSITION.md`](../../gumiho-mudang-scope/docs/SCOPE-LSP-COMPOSITION.md) § 5.4 — composition layer design that consumes Scope output + LSP enrichments.

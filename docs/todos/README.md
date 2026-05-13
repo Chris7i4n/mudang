@@ -19,4 +19,4 @@ PR link into the file's `Tracking` field.
 | 0006 | Split `gumiho-mudang-scope` into focused sub-crates                            | shipped (sprint 0000, 2026-05-11) |
 | 0007 | Create `gumiho-mudang-composer` crate (canonical public API)                   | TODO   |
 | 0008 | Constrain `gumiho-mudang-lsp` to basic-RPC primitives only                     | TODO   |
-| 0009 | Expand R0 domain edge kinds to cover Rails/Tokio/Axum/React patterns          | ABSORBED — content now part of `gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` R0; ships in scope sprint 0001 |
+| 0009 | Expand R0 domain edge kinds to cover Rails/Tokio/Axum/React patterns          | ABSORBED — content shipped as part of `gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` R0 (2026-05-12) |

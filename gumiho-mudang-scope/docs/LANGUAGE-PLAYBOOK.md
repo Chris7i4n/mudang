@@ -6,7 +6,7 @@ The charter defines what Scope is and is not. The architectural refactor defines
 
 The charter (sections 5 and 7) states architectural hard limits and per-language IN/OUT examples. This playbook abstracts the universal pattern: a single set of rules that **any language plugin must respect**, regardless of which language it targets. The rules are the answer to one question — "what makes a language plugin become a worse LSP, and how do we never cross that line?"
 
-Where this playbook says "the rule is enforced mechanically by …", the corresponding move in `ARCHITECTURAL-REFACTOR.md` (R0–R12) is the implementation. Until the refactor ships, some rules are enforced by discipline; consult the refactor's inventory tables to see the current versus target enforcement class for each rule.
+Where this playbook says "the rule is enforced mechanically by …", the corresponding move in `ARCHITECTURAL-REFACTOR.md` (R0–R12, closed 2026-05-12) is the implementation. The closure record's inventory tables map each rule to its enforcement class (mechanical / detectable / discipline) and the R-move that owns it.
 
 This document has two purposes:
 
@@ -226,7 +226,7 @@ When a new language is approved for adoption (BUILD verdict, depth target chosen
 3. **Write `queries/<lang>/edges.scm`.** Cover `calls`, `imports`, `contains`, `references_type`, `extends`, `implements`. These are the universal edges; any language-specific edges (e.g., Go's `green_thread_spawn`, renamed from the earlier `goroutine_spawn` draft to fit the 4-kind concurrency taxonomy in `ARCHITECTURAL-REFACTOR.md` R0) are added later in the depth phase. For call-site edges whose target carries semantic anchor information in its arguments (HTTP routes, queue enqueues, env reads, GraphQL operations, pubsub topics), capture the raw argument list as `Edge.args_text` per R0. The extractor caps `args_text` at 2 KB; the resolver skips writing it when the target is a fully-qualified import (Mitigation 1 / 2). Do **not** interpret the captured text at the language-plugin layer — it is a verbatim literal for framework plugins (R5) and downstream consumers to consume. Interpreting at this layer violates rule E2.
 4. **Populate `Symbol.metadata` with the three reserved framework-primitive keys when present in source** (see "Metadata schema for framework primitives" below). Without these keys, no framework plugin can match against this language for AST-shape patterns. This step is mandatory even for surface-only adoption.
 5. **Implement `LanguagePlugin` trait.** Two shapes coexist depending on whether `ARCHITECTURAL-REFACTOR.md` R2 has shipped:
-   - **Pre-R2** (current `src/languages/mod.rs`): `infer_symbol_kind`, `scope_node_types`, `extract_metadata`, `extract_edge`, docstring extraction. The name `infer_symbol_kind` is misleading — the method is a pure node-kind-string-to-symbol-kind-label mapper (a match expression with no type-system involvement); R2 renames it to remove the `infer_*` shape and align with the R12 trait-shape audit. New plugin authors implementing the pre-R2 trait should treat the name as historical and the implementation as a lookup table.
+   - **Closed-shape methods on `impl LanguageId`** (post-R2 / R7): `symbol_kind_for_node` (the historical `infer_symbol_kind` was renamed at R12 to align with the trait-shape audit — pure node-kind-string-to-symbol-kind-label match expression, no type-system involvement), `scope_node_types`, `extract_metadata`, `extract_edge`, docstring extraction. Per-language behaviour lives in `impl LanguageId` match arms delegating to `scope-core/src/languages/<lang>.rs` modules; there is no `LanguagePlugin` trait and no `*Plugin` unit structs.
    - **Post-R2** (target shape): the trait returns `RawCaptures` (typed bag of capture results, declared metadata, `skipped_ranges`) and a separate `Extractor` layer converts those into `Edge::builder()` calls. Plugins do not emit edges directly. See `ARCHITECTURAL-REFACTOR.md` R2 for the full target shape.
 6. **Build 5+ real-world fixtures.** Same discipline as frameworks — anonymized snippets from real maintainer projects, not synthetic toy code.
 7. **Run the index, measure precision and recall.** For each edge kind, manually verify a sample. Edges that fail precision target get downgraded to `medium` or skipped.
@@ -403,7 +403,7 @@ new pain felt with unsupported language
 Working set (static documents that govern decisions):
 
 - **`CHARTER.md`** — what Scope is and is not. Permanent.
-- **`ARCHITECTURAL-REFACTOR.md`** — structural closure that mechanically enforces charter hard limits and the 18 rules in Step 4. Active work item until it ships.
+- **`ARCHITECTURAL-REFACTOR.md`** — closure record of the structural refactor (shipped 2026-05-12) that mechanically enforces charter hard limits and the 18 rules in Step 4.
 - **`LANGUAGE-PLAYBOOK.md`** (this file) — how to add and maintain language plugins within universal boundaries.
 - **`FRAMEWORK-PLAYBOOK.md`** — how to add and maintain framework plugins within universal boundaries.
 

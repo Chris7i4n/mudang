@@ -14,10 +14,10 @@ before the prior phase is at "Acceptance" state.
 ## Phase ordering (immutable)
 
 ```
-A — Scope refactor                       (in progress; R-moves R0…R12)
+A — Scope refactor                       (shipped 2026-05-12; R-moves R0…R12)
         │
         ▼
-B — LSP basic-RPC completion             (transport-layer only, no wrappers)
+B — LSP basic-RPC completion             (next; transport-layer only, no wrappers)
         │
         ▼
 C — Composer + Notify API + Diagnostics  (parallel sub-tracks within C)
@@ -36,33 +36,28 @@ No cross-cutting shortcuts.
 
 ---
 
-## Phase A — Scope refactor
+## Phase A — Scope refactor (shipped 2026-05-12)
 
-Source of truth: `gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md`.
+Closure record: `gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md`.
 
-Covers R0–R12 across scope's own internal phases A–E. Those internal
+R0–R12 closed across scope's own internal phases A–E. Those internal
 phase letters are unrelated to this roadmap's phases A–E and must not
 be conflated.
 
-### Internal-to-phase deliverables
+### Demonstrated at close
 
-- All R-moves merged.
-- `scope-schema-version` bumped to the target value.
+- Every R-move merged.
+- Schema landed in its R0 shape.
 - Confidence audit (R8) green.
 - Trait-shape audit (R12) green.
 - Charter §5 invariants unchanged.
 - **Crate decomposition** per `docs/ARCHITECTURE.md` §2.2 and
-  `docs/todos/0006-split-scope-crate.md`. Scope splits into
-  `scope-core`, `scope-index`, `scope-graph`, `scope-search`,
-  `scope-workspace`; legacy crate becomes a façade re-export. This
-  split happens **inside** phase A so each R-move lands in its final
-  sub-crate.
+  `docs/todos/0006-split-scope-crate.md` shipped (sprint 0000, 2026-05-11).
+  Scope is split into `scope-core`, `scope-index`, `scope-graph`,
+  `scope-search`, `scope-workspace`; `gumiho-mudang-scope` is a façade
+  re-export.
 
-### Dependencies
-
-None.
-
-### Acceptance
+### Acceptance — held
 
 The scope crate (façade + 5 sub-crates) compiles, indexes a polyglot
 fixture workspace, passes the R-acceptance test suite, and exposes
@@ -321,3 +316,6 @@ Last amended: 2026-05-10 (initial capture)
 - **2026-05-10** — initial roadmap captured from design discussion.
   Five phases (A–E) locked. Watcher deletion folded into phase C.
   Scope decomposition folded into phase A.
+- **2026-05-12** — phase A (scope refactor) shipped. R0–R12 closed; see
+  `gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` (closure record)
+  and `gumiho-mudang-scope/docs/POST-REFACTOR-PLAN.md` for queued work.

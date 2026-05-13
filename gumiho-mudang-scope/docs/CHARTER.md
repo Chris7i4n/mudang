@@ -8,12 +8,12 @@ This charter is the outcome of an architectural audit of the legacy codebase (la
 
 The charter defines what Scope is. The following companions define how it is built and maintained, in the order to consult them:
 
-- **`ARCHITECTURAL-REFACTOR.md`** — the structural closure of the system: types, traits, schema, and tests that mechanically enforce the charter's hard limits and the playbooks' rules. This is the active work item until it ships; feature work is paused.
+- **`ARCHITECTURAL-REFACTOR.md`** — closure record of the structural refactor (shipped 2026-05-12). Maps each charter / playbook rule to the R-move and audit that enforces it. Durable reference for "where is rule X enforced?"
 - **`LANGUAGE-PLAYBOOK.md`** — procedure for adopting a new language plugin and the 18 universal boundaries every language plugin must respect.
 - **`FRAMEWORK-PLAYBOOK.md`** — procedure for adopting a new framework plugin, the 15 gotcha categories, and version strategy.
 - **`docs/languages/<name>.md`** and **`docs/frameworks/<name>.md`** — per-instance gotcha logs and compliance records, one per adopted plugin. Templates live next to them as `_TEMPLATE.md`.
 
-When a question recurs, check the charter first, then the playbook of the relevant layer, then the per-instance doc. The architectural refactor governs the shape of the code that produces these artifacts.
+When a question recurs, check the charter first, then the playbook of the relevant layer, then the per-instance doc. The closure record documents how the architecture mechanically enforces the charter's hard limits and the playbooks' rules.
 
 ---
 

@@ -1,11 +1,11 @@
 # 0009 — Expand domain edge kinds to maximize Rails / Tokio / Axum / React coverage
 
-- **Status:** **ABSORBED** by `gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` R0. Every recommendation in this TODO (38-kind whitelist, 4-kind concurrency split, `green_thread_spawn` rename, `edges.args_text` column with Mitigations 1+2) is now part of R0's "Target state". R0 ships in sprint 0001 ([`gumiho-mudang-scope/docs/sprints/0001-phase-a-schema-and-storage.md`](../../gumiho-mudang-scope/docs/sprints/0001-phase-a-schema-and-storage.md)).
-- **Original request:** reopen scope's `ARCHITECTURAL-REFACTOR.md` R0 whitelist before R0 ships.
+- **Status:** **ABSORBED** by `gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` R0 (shipped 2026-05-12). Every recommendation in this TODO (38-kind whitelist, 4-kind concurrency split, `green_thread_spawn` rename, `edges.args_text` column with Mitigations 1+2) landed as part of R0's closure contract.
+- **Original request:** reopen scope's `ARCHITECTURAL-REFACTOR.md` R0 whitelist before R0 shipped.
 - **Decision:** the 14 net-new edge kinds proposed by R0 cover the first-tier patterns of common stacks but leave production-critical patterns (middleware, validation, error handlers, websocket, client-side routing, auth guards, async task spawn naming) on `calls` generic, where scope's value-add over LSP collapses.
-- **Tracking:** implementation moved to scope sprint 0001's R0 deliverables; this file remains the historical rationale.
+- **Tracking:** implementation landed via the architectural refactor; this file remains the historical rationale.
 
-> **Reader note.** This document is kept for the audit trail — it captures the *why* behind R0's final whitelist. Cross-references to this file are historical rationale only; the live contract is R0 in `ARCHITECTURAL-REFACTOR.md`, shipped by sprint 0001.
+> **Reader note.** This document is kept for the audit trail — it captures the *why* behind R0's final whitelist. Cross-references to this file are historical rationale only; the live contract is R0 in `ARCHITECTURAL-REFACTOR.md`.
 
 ---
 

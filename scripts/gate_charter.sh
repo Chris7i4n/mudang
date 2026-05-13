@@ -11,10 +11,10 @@
 #   dual-read code path, or stored-format version detector is
 #   permitted to survive a commit that lands on `main`.
 #
-# Reference: REFACTOR-STATUS.md § Compat shims outstanding is empty
-# at refactor close. Re-opening that table requires an
-# `ARCHITECTURAL-REFACTOR.md` amendment + a charter-amendment commit
-# — not a silent shim addition.
+# Reference: the refactor's Compat-shims-outstanding table was empty
+# at close (2026-05-12) and the tracking doc retired with it. Any new
+# compat shim now requires charter / refactor-doc amendment + a
+# tracking decision before landing — not a silent addition.
 #
 # Each check below targets a *specific shim shape* that sprint 0009
 # retired. The patterns are narrow on purpose: catching loose
@@ -25,9 +25,10 @@
 # shim shapes specifically.
 #
 # Exits non-zero on any match. Output identifies the failing check
-# and points to REFACTOR-STATUS.md § Compat shims outstanding so the
-# operator knows where to record + retire the shim (or — at refactor
-# close — knows the shim is forbidden outright).
+# and the retiring commit so the operator can see why the shim shape
+# was removed in the first place. At refactor close the shim shapes
+# below are forbidden outright; re-introducing one requires charter /
+# refactor-doc amendment, not a silent shim addition.
 
 set -euo pipefail
 
@@ -212,11 +213,10 @@ if [[ "$FAILED" -eq 1 ]]; then
     echo "Charter sweep gate FAILED." >&2
     echo >&2
     echo "Every active shim must either be reverted in this commit or" >&2
-    echo "recorded in REFACTOR-STATUS.md § Compat shims outstanding via" >&2
-    echo "the sprints/README.md § 3 ambiguity protocol. The table is" >&2
-    echo "empty at refactor close (every row retired in sprint 0009 chunk 1);" >&2
-    echo "re-opening it requires a charter amendment, not a silent" >&2
-    echo "addition." >&2
+    echo "escalated via sprints/README.md § 3 ambiguity protocol so the" >&2
+    echo "charter / refactor-closure doc is amended first. Compat shims" >&2
+    echo "are charter-violating at close (CHARTER.md § 3 invariant 8);" >&2
+    echo "re-introducing one requires an amendment, not a silent addition." >&2
     exit 1
 fi
 

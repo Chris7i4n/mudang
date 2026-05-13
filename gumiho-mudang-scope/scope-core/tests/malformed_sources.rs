@@ -1,8 +1,8 @@
-//! R6 — Malformed-source resilience harness (sprint 0008 chunk 4).
+//! R6 — Malformed-source resilience harness.
 //!
 //! Walks every fixture under `tests/fixtures/malformed/<lang>/<case>/`
-//! and asserts the four contracts from
-//! `sprints/0008-phase-e-malformed-source-harness.md § R6 acceptance`:
+//! and asserts the four R6 acceptance contracts (see
+//! `docs/ARCHITECTURAL-REFACTOR.md` § R6):
 //!
 //! 1. No panic on any fixture.
 //! 2. The parseable prefix produces ≥ 1 symbol.
@@ -11,8 +11,7 @@
 //! 4. The recorded reason + range are pinned per fixture via `insta`
 //!    snapshots so future regressions surface as snapshot diffs.
 //!
-//! This is the CI gate `just test-malformed` activates in chunk 5
-//! (`CI-GATES.md § Malformed-source harness`).
+//! Wired into CI by `just test-malformed` (`CI-GATES.md § Malformed-source harness`).
 
 use std::collections::BTreeMap;
 use std::fs;

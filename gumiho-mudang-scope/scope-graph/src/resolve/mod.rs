@@ -52,17 +52,11 @@
 //! import resolution, package-scoped name lookup) is **out of scope for
 //! sprint 0003**: it requires `LanguageWorkspaceContext` to thread
 //! through every indexer call site, which depends on R4's full
-//! `WorkspaceContext` plumbing (sprint 0004). Until then, the resolver
-//! lookup is `symbols.id = ?1 OR symbols.name = ?1`, identical to what
-//! the retired Phase A stub did — the **scope of the rewrite**
-//! is the typestate + multi-row Ambiguous expansion + the
-//! `Captured`→`Resolution` pipeline, not the lookup heuristic. The R3
-//! acceptance bullets do not require workspace-aware resolution this
-//! sprint; the typestate ordering and one-row-per-candidate Ambiguous
-//! are the mechanically enforced contracts. The lookup-quality upgrade
-//! is sprint-0004 work tracked in
-//! `docs/REFACTOR-STATUS.md` § Compat shims outstanding under the
-//! `__module__` synthetic-ID dual-source row.
+//! `WorkspaceContext` plumbing. The current resolver lookup is
+//! `symbols.id = ?1 OR symbols.name = ?1`. The R3 mechanically
+//! enforced contracts are the typestate + multi-row Ambiguous
+//! expansion + the `Captured`→`Resolution` pipeline; lookup-quality
+//! upgrades are queued post-refactor.
 
 use anyhow::Result;
 use rusqlite::Connection;

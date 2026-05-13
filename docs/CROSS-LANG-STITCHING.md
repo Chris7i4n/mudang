@@ -18,8 +18,7 @@ Companion to:
   normalization metadata.
 - `gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` R0 — edge-kind
   whitelist (38 kinds) + `edges.args_text` column that this layer
-  consumes. Ships in sprint 0001
-  ([`gumiho-mudang-scope/docs/sprints/0001-phase-a-schema-and-storage.md`](../gumiho-mudang-scope/docs/sprints/0001-phase-a-schema-and-storage.md)).
+  consumes. Shipped 2026-05-12.
   The original recommendation lives in
   [`docs/todos/0009-expand-domain-edge-kinds.md`](./todos/0009-expand-domain-edge-kinds.md)
   (status: absorbed by R0).

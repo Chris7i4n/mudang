@@ -1,6 +1,6 @@
 # CI Gates
 
-Single source of truth for the quality gates the architectural refactor turns on. Each gate is owned by a refactor move (`ARCHITECTURAL-REFACTOR.md` R0–R12) and ships in that move's phase per `REFACTOR-STATUS.md`.
+Single source of truth for the quality gates the architecture enforces. Each gate is owned by a refactor move (`ARCHITECTURAL-REFACTOR.md` R0–R12, shipped 2026-05-12). The refactor's append-only status log retired with the closure; per-gate provenance lives in this doc's Status column and in git history.
 
 When a gate is active, the script or test path listed below is the **authoritative form**. The `justfile` recipes are convenience wrappers; this document is canonical. If `justfile` is removed or renamed, the script paths in this table remain the contract.
 
@@ -41,9 +41,9 @@ When a gate is active, the script or test path listed below is the **authoritati
 
 ## Authority
 
-This document is the contract. Implementation order for any gate:
+This document is the contract. Implementation order for any new gate:
 
-1. R-move ships per `REFACTOR-STATUS.md`.
+1. The owning move (an R-move from `ARCHITECTURAL-REFACTOR.md`, or a new initiative's deliverable) ships in its own sprint.
 2. Gate's script or test is authored at the path listed in the inventory.
 3. `justfile` recipe is added.
 4. CI workflow calls the recipe (or the script directly).

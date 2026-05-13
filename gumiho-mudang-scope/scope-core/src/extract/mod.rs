@@ -360,10 +360,6 @@ pub fn make_edge(
 /// pattern in `queries/<lang>/edges.scm` fired) plus the parser's
 /// pre-resolved `enclosing_scope_id`.
 ///
-/// Pre-chunk-7 this function took `&HashMap<String, (String, u32)>`
-/// and stamped `pattern_id="legacy.<kind>"`; the migration retired
-/// both shims, registered in `REFACTOR-STATUS.md § Compat shims
-/// outstanding`.
 pub fn extract_edges_for_match(
     lang: LanguageId,
     pattern_index: usize,
