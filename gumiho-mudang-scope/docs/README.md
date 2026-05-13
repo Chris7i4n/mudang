@@ -14,7 +14,7 @@ Entry point for the docs tree. If this is your first time, read in this order.
 ## Reference docs (read on demand)
 
 - **`GLOSSARY.md`** — central term definitions across all docs (types, traits, processes, subcommands, classes of constraint).
-- **`CI-GATES.md`** — single source of truth for every CI gate the architecture enforces. Owned by R-moves; the `justfile` recipes mirror this doc.
+- **`CI-GATES.md`** — single source of truth for every CI gate the architecture enforces. Each gate maps to an R-entry in `ENFORCEMENT-MAP.md`; the `justfile` recipes mirror this doc.
 
 ## Static reference
 
@@ -71,5 +71,5 @@ The architecture is stable. Every CI gate listed in `CI-GATES.md` is `active`; `
 
 - `README.md` (repo root) — install, CLI surface, quickstart.
 - `Cargo.toml` — pinned tree-sitter grammars and crate dependencies.
-- `scope-graph/src/sql/schema.sql` — current schema (R0 closed shape).
+- `scope-graph/src/sql/schema.sql` — current schema (R0 shape).
 - `justfile` — CI-gate recipe wrappers; canonical paths live in `CI-GATES.md`.
