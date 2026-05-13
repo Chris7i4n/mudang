@@ -162,13 +162,47 @@ The SHA-256 check runs lazily: only the files referenced by the sample's edges a
 
 ---
 
-## Committed sample policy
+## Corpus accumulation policy
 
-Labelled `*.jsonl` files committed under `gumiho-mudang-scope/scope-core/tests/fixtures/reference/<lang>/audit-samples/` are **regression assets**. Re-running `--label` against a committed sample reproduces the precision baseline byte-for-byte (seed is pinned per `--seed`). A drift in the recomputed precision is a CI signal.
+Owned by [`BACKLOG.md` § Priority 1 sub-item (e)](BACKLOG.md#priority-1--self-correction-cycle); shipped in sprint 0002 ([`SELF-CORRECTION-STATE.md`](SELF-CORRECTION-STATE.md)).
 
-Sample provenance: each committed file is the output of an `--emit-sample --seed N` run plus a labelling pass by the maintainer (or by a reviewed external labeller). The commit message names the labeller used and the date of labelling.
+### Directory layout
 
-The sample corpus grows over time. Old samples are not deleted unless the underlying fixture is removed — a 6-month-old sample with stable precision is a stronger signal than a freshly labelled one.
+Labelled `*.jsonl` files are committed under `gumiho-mudang-scope/scope-core/tests/fixtures/reference/<db_slug>/audit-samples/`, where `<db_slug>` is the `LanguageId::as_str()` slug ([`scope-core/src/languages/id.rs`](../scope-core/src/languages/id.rs)): `csharp`, `go`, `java`, `python`, `ruby`, `rust`, `typescript`. The layout is gated by the doc-sync gate ([`ENFORCEMENT-MAP.md` § R13](ENFORCEMENT-MAP.md)) — every supported `LanguageId` arm must own a directory; no extras, no missing.
+
+### Why committed
+
+Committed samples are **regression assets**. Re-running `--label` against a committed sample reproduces the precision baseline byte-for-byte (seed is pinned per `--seed`). A drift in the recomputed precision is a CI signal.
+
+### Provenance record (`MANIFEST.md`)
+
+Each `<db_slug>/audit-samples/` directory carries a `MANIFEST.md` that records provenance for every committed sample in that directory. The MANIFEST is append-only — a labelling pass that emits a new sample appends one row; old rows are never edited.
+
+Minimum row fields:
+
+| Field | Description |
+|---|---|
+| `sample_file` | Filename of the `*.jsonl` sample, relative to the MANIFEST directory. |
+| `labeller_id` | Identifier of the labeller that produced the verdicts. Conventional values: `human:<initials>`, `llm:<model-id>`, `lsp:<server>`, `hybrid:<recipe>`. Matches the `labeller_id` field reserved for `schema_version: "2"` records (see [§ Reserved-for-future fields](#reserved-for-future-fields)). |
+| `labelled_at` | ISO-8601 date the labelling pass was committed (`YYYY-MM-DD`). |
+| `scope_commit` | Short SHA of the `scope` commit the sample was emitted against (`scope audit confidence --emit-sample` ties the sample to a specific extractor state). |
+| `sample_count` | Number of labelled records in the file. |
+
+The MANIFEST is a markdown table for git-diff readability; the row format is the contract, not the wrapping. A future sprint may add machine validation; today the doc-sync gate verifies only the directory's existence.
+
+Sidecar `provenance.json` per sample file and JSONL front-matter were both considered and rejected: sidecars multiply files for no payoff; JSONL has no front-matter convention. A single per-directory append-only `MANIFEST.md` keeps the diff surface to one file per labelling pass per language.
+
+### Retention rule
+
+Old samples are not deleted unless the underlying fixture is removed. A 6-month-old sample with stable precision is a stronger signal than a freshly labelled one — see [§ Stable precision over time](#stable-precision-over-time) below.
+
+Eviction policy (when sample volume eventually warrants one) is **explicitly deferred** to a future sprint per [`BACKLOG.md` § Priority 1 sub-item (j) — "future sprint adds eviction"](BACKLOG.md#priority-1--self-correction-cycle).
+
+### Stable precision over time
+
+The corpus is the longitudinal signal. Re-running `--label` against every committed sample in CI ([`BACKLOG.md` § Priority 1 sub-item (c) — continuous re-audit](BACKLOG.md#priority-1--self-correction-cycle), sprint 0007) yields a per-`(producer, pattern_id)` precision time-series. Stable precision over **months** under **unchanged extractor source** is itself the regression signal: a sudden drop at fixed source = the labelling drifted or a dependency shifted; a drop on an extractor edit = the patch regressed precision.
+
+Therefore the *number* of samples is not the gate. The gate is **shape continuity** — same extractor source + same committed sample = same precision number. The sample corpus accumulates because each labelling pass adds a new vantage point on the same fixtures, not because more samples raise some threshold.
 
 ---
 

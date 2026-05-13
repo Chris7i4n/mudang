@@ -46,13 +46,13 @@ reference/
 - `<lang>/` — source fixtures the indexer walks (real-shape code, not
   toy snippets; see [Anonymization rules](#anonymization-rules)).
 - `<lang>/audit-samples/` — committed labelled JSONL samples per
-  [`AUDIT-LABEL-SCHEMA.md` § Committed sample policy](../../../../docs/AUDIT-LABEL-SCHEMA.md#committed-sample-policy).
+  [`AUDIT-LABEL-SCHEMA.md` § Corpus accumulation policy](../../../../docs/AUDIT-LABEL-SCHEMA.md#corpus-accumulation-policy).
   Re-running `scope audit confidence --label` against a committed
   sample reproduces the precision baseline byte-for-byte (seed pinned
   per `--seed`). A drift is a CI signal.
 
 Labelling passes accumulate per
-[`AUDIT-LABEL-SCHEMA.md` § Committed sample policy](../../../../docs/AUDIT-LABEL-SCHEMA.md#committed-sample-policy).
+[`AUDIT-LABEL-SCHEMA.md` § Corpus accumulation policy](../../../../docs/AUDIT-LABEL-SCHEMA.md#corpus-accumulation-policy).
 
 ---
 
@@ -106,14 +106,22 @@ above the contributor checked.
 ## Provenance & sample policy
 
 Sample files committed under `<lang>/audit-samples/` follow the
-provenance policy in
-[`AUDIT-LABEL-SCHEMA.md` § Committed sample policy](../../../../docs/AUDIT-LABEL-SCHEMA.md#committed-sample-policy):
+corpus accumulation policy in
+[`AUDIT-LABEL-SCHEMA.md` § Corpus accumulation policy](../../../../docs/AUDIT-LABEL-SCHEMA.md#corpus-accumulation-policy).
+That section is the source of truth; below is the operator-side
+summary.
 
 - Each committed file is the output of an
   `scope audit confidence --emit-sample --seed N` run plus a
   labelling pass.
-- The commit message names the labeller used (human / LLM /
-  LSP cross-check / hybrid) and the date.
+- Per-sample provenance is recorded in the
+  `<lang>/audit-samples/MANIFEST.md` row added in the same commit
+  as the JSONL file (fields: `sample_file`, `labeller_id`,
+  `labelled_at`, `scope_commit`, `sample_count`).
+- The commit message also names the labeller used (human / LLM /
+  LSP cross-check / hybrid) and the date — the MANIFEST is the
+  machine-readable record; the commit message is the human-readable
+  narrative.
 - Old samples are not deleted unless the underlying fixture is
   removed — a 6-month-old sample with stable precision is a
   stronger signal than a freshly labelled one.

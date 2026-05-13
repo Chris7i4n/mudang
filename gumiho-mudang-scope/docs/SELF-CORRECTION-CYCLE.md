@@ -110,7 +110,7 @@ Each surface has a single owner sprint. Other sprints reference it; never duplic
 | Sensor (`scope audit confidence`) | R8 (shipped) | Per-tier precision check; fails build on tier-target miss |
 | Sample JSONL emitter | R8 (shipped) | One row per audited edge; `schema_version: "2"` from sprint 0004 |
 | Sample schema | sprint 0004 (g) | `SampleRecord` struct ↔ [`AUDIT-LABEL-SCHEMA.md`](./AUDIT-LABEL-SCHEMA.md); gated by doc-sync |
-| Labelled corpus on disk | sprint 0002 (e) | `scope-core/tests/fixtures/reference/<lang>/audit-samples/*.jsonl` + provenance |
+| Labelled corpus on disk | sprint 0002 (e) | `scope-core/tests/fixtures/reference/<lang>/audit-samples/*.jsonl` + per-directory `MANIFEST.md` provenance; policy in [`AUDIT-LABEL-SCHEMA.md` § Corpus accumulation policy](./AUDIT-LABEL-SCHEMA.md#corpus-accumulation-policy) |
 | Labellers | sprint 0005 (b) | External workspace; LLM / LSP / hybrid crates; consume v2 schema |
 | Aggregator | sprint 0006 (i) | Runner-side; merges multi-labeller verdicts; emits single aggregated JSONL |
 | Coverage report | sprint 0004 (h) | `coverage_summary` top-level + per-row `skipped_count` / `coverage_ratio` |

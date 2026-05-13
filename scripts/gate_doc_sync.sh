@@ -283,17 +283,83 @@ check_cycle_docs_indexed() {
 }
 
 # ─────────────────────────────────────────────────────────────
+# Check 5 — every `LanguageId` slug from `as_str()` owns an
+# `audit-samples/` directory under
+# `gumiho-mudang-scope/scope-core/tests/fixtures/reference/`, AND
+# every directory present there corresponds to a `LanguageId` slug
+# (no extras).
+#
+# Rationale: the labelled corpus is keyed by `db_slug`. A new
+# `LanguageId` arm without an `audit-samples/` directory means the
+# audit pipeline cannot accumulate samples for that language —
+# sprint 0002 (e) ([`SELF-CORRECTION-CYCLE.md` § "Sprint-by-sprint
+# additions expected"](gumiho-mudang-scope/docs/SELF-CORRECTION-CYCLE.md))
+# wires this lockstep in.
+#
+# Drift shape caught: arm-set ≠ directory-set (either direction).
+check_audit_samples_layout() {
+    local id_rs="gumiho-mudang-scope/scope-core/src/languages/id.rs"
+    local corpus_root="gumiho-mudang-scope/scope-core/tests/fixtures/reference"
+    [[ -f "$id_rs" ]] || return 0
+    [[ -d "$corpus_root" ]] || return 0
+    # Extract slugs from the `as_str` arms. The const fn body uses
+    # `Self::<Variant> => "<slug>",` lines exclusively; `from_slug`
+    # uses the inverse `"<slug>" => Some(Self::<Variant>)` shape and
+    # does NOT match this regex (direction differs).
+    local slugs_from_code
+    slugs_from_code="$(grep -oE 'Self::[A-Z][a-zA-Z]+ => "[a-z]+"' "$id_rs" \
+                       | sed -E 's/.* => "([a-z]+)"/\1/' \
+                       | sort -u)"
+    # Directories on disk that contain `audit-samples/`. depth-2
+    # matches `<corpus_root>/<slug>/audit-samples` exactly; any
+    # future top-level subdir under the corpus root that happens to
+    # contain its own `audit-samples/` would surface as an "extra"
+    # slug, which is the right signal.
+    local dirs_on_disk
+    dirs_on_disk="$(/usr/bin/find "$corpus_root" -mindepth 2 -maxdepth 2 -type d -name audit-samples \
+                    | sed -E "s#^$corpus_root/##; s#/audit-samples\$##" \
+                    | sort -u)"
+    # Guard against empty inputs — both sides should always be
+    # populated in practice (id.rs always defines arms; the corpus
+    # root always has at least one slug dir). If either is empty
+    # the comparison is meaningless: skip rather than emit a
+    # phantom verdict from `comm` on stray empty lines.
+    if [[ -z "$slugs_from_code" || -z "$dirs_on_disk" ]]; then
+        return 0
+    fi
+    local missing extra
+    missing="$(comm -23 <(printf '%s\n' "$slugs_from_code") <(printf '%s\n' "$dirs_on_disk"))"
+    extra="$(comm -13 <(printf '%s\n' "$slugs_from_code") <(printf '%s\n' "$dirs_on_disk"))"
+    local detail=""
+    if [[ -n "$missing" ]]; then
+        detail+="LanguageId slugs without audit-samples/ dir:"$'\n'
+        while IFS= read -r s; do [[ -n "$s" ]] && detail+="  $s"$'\n'; done <<< "$missing"
+    fi
+    if [[ -n "$extra" ]]; then
+        detail+="audit-samples/ dirs without matching LanguageId slug:"$'\n'
+        while IFS= read -r s; do [[ -n "$s" ]] && detail+="  $s"$'\n'; done <<< "$extra"
+    fi
+    if [[ -n "$detail" ]]; then
+        fail_block "audit-samples-layout" \
+                   "LanguageId arm set ≠ reference/<slug>/audit-samples/ directory set" \
+                   "$detail"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────
 # Future sprint extension hooks. Each later sprint in Priority 1 adds
 # ONE function here (named `check_<short_name>`) and invokes it from
 # `main()`. See SELF-CORRECTION-CYCLE.md § "Extending the doc-sync
 # gate" for the per-sprint table.
 #
 # Sprints expected to extend this script:
+#   - 0003 (d): per-language detector module presence ↔ CHARTER.md § 7
 #   - 0004 (g): SCHEMA_VERSION const ↔ schema_version doc value
 #   - 0004 (g): SampleRecord field set ⊆ AUDIT-LABEL-SCHEMA.md fields
 #   - 0004 (h): coverage_summary fields ↔ doc fields
 #   - 0004 (j): edge_audit_history columns ↔ doc columns
 #   - 0006 (i): documented default aggregation policy ↔ aggregator default
+#   - 0007 (c): audit-ci / audit-nightly recipes ↔ CI-GATES.md rows
 #   - 0009 (k): audit-trail path doc ↔ indexer-read path
 
 # ─────────────────────────────────────────────────────────────
@@ -302,6 +368,7 @@ main() {
     check_ci_gates_recipes
     check_doc_relative_links
     check_cycle_docs_indexed
+    check_audit_samples_layout
 
     if [[ "$FAILED" -ne 0 ]]; then
         echo "doc-sync gate: FAIL" >&2

@@ -90,6 +90,8 @@ When a term collides with a Rust crate name (`semver`, `tree-sitter`), the entry
 | Surrogate PK | `edges.edge_id INTEGER PRIMARY KEY AUTOINCREMENT`; replaces composite `(from_id, to_id, kind)` | R0 |
 | `edges.args_text` | Optional TEXT NULL column carrying call-site / declaration-site argument literal capped at 2 KB. Mitigation 1: resolver skips fully-qualified targets. Mitigation 2: truncated literals end in `[truncated]`. Consumed by framework predicates and downstream cross-language stitching | R0 |
 | Schema bumps | No in-place migration. Single-operator posture (`CHARTER.md` §2): old `.scope/` indexes are wiped (`rm -rf .scope/ && scope index`). Revisit only if external operation is ever entertained per CHARTER §2 | R0 |
+| Labelled corpus | Committed regression assets at `gumiho-mudang-scope/scope-core/tests/fixtures/reference/<db_slug>/audit-samples/*.jsonl`; each file is a labelled `--emit-sample` output reproducing a precision baseline byte-for-byte | `AUDIT-LABEL-SCHEMA.md` § Corpus accumulation policy + `BACKLOG.md` § Priority 1 (e) |
+| Provenance record | Append-only row in `<db_slug>/audit-samples/MANIFEST.md`; minimum fields `sample_file`, `labeller_id`, `labelled_at`, `scope_commit`, `sample_count`; machine-readable counterpart to the commit-message narrative | `AUDIT-LABEL-SCHEMA.md` § Corpus accumulation policy |
 
 ---
 
