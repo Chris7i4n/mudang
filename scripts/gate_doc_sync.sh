@@ -40,6 +40,30 @@ SCOPE_DOCS="gumiho-mudang-scope/docs"
 
 FAILED=0
 
+# Compute the GitHub-style anchor for a single markdown heading line.
+#
+# Input  : `## 5. Hard limits — Scope will never cross these`
+# Output : `5-hard-limits--scope-will-never-cross-these`
+#
+# Algorithm (matches GitHub's renderer for the cases this repo
+# uses — top-level numbered `## N. Title`, sub-sections `### Title`,
+# em-dash separators):
+#   1. Strip the leading `#` markers and following whitespace.
+#   2. Lowercase.
+#   3. Replace spaces with dashes.
+#   4. Drop every char that is not [a-z0-9_-].
+#
+# Locale forced to C so multi-byte chars (em-dash, en-dash) get
+# stripped predictably.
+compute_anchor() {
+    local line="$1"
+    line="$(printf '%s' "$line" | sed -E 's/^#+[[:space:]]*//')"
+    line="$(printf '%s' "$line" | LC_ALL=C tr '[:upper:]' '[:lower:]')"
+    line="${line// /-}"
+    line="$(printf '%s' "$line" | LC_ALL=C sed -E 's/[^a-z0-9_-]+//g')"
+    printf '%s' "$line"
+}
+
 # Print a failure block. Reports the violating drift shape +
 # rationale, then appends the offending values verbatim so the
 # operator can navigate to the source of truth and the drifted copy.
@@ -185,12 +209,40 @@ check_doc_relative_links() {
             [[ "$target" == *"<"* || "$target" == *">"* ]] && continue
             [[ "$target" == *"*"* ]] && continue
             [[ "$target" == *"{"* || "$target" == *"}"* ]] && continue
-            # Strip anchor fragments
+            # Split path + anchor.
             local path="${target%%#*}"
+            local anchor=""
+            if [[ "$target" == *"#"* ]]; then
+                anchor="${target#*#}"
+            fi
             [[ -z "$path" ]] && continue
-            # Resolve relative to the doc's directory
+            # File-existence check first.
             if [[ ! -e "$dir/$path" ]]; then
-                broken+="$doc → $target"$'\n'
+                broken+="$doc → $target (file not found)"$'\n'
+                continue
+            fi
+            # Anchor validation — when present, every named fragment
+            # must match a heading in the target file. A relative
+            # link `target.md#anchor` where the file exists but the
+            # fragment is gone is still drift: the reader lands on
+            # the file but not on the section that was promised.
+            if [[ -n "$anchor" ]]; then
+                local target_file="$dir/$path"
+                # target_file may not be a .md (e.g. justfile). Only
+                # validate anchors against markdown files; non-md
+                # files have no headings to match.
+                if [[ "$target_file" == *.md ]]; then
+                    local found=0
+                    while IFS= read -r heading_line; do
+                        if [[ "$(compute_anchor "$heading_line")" == "$anchor" ]]; then
+                            found=1
+                            break
+                        fi
+                    done < <(grep -E '^#+[[:space:]]' "$target_file" 2>/dev/null || true)
+                    if [[ "$found" -eq 0 ]]; then
+                        broken+="$doc → $target (file exists; anchor #$anchor not found in headings)"$'\n'
+                    fi
+                fi
             fi
         done < <(echo "$stripped" | grep -oE '\]\([^)]+\)' | sed -E 's/^\]\(//; s/\)$//')
     done < <(find "$SCOPE_DOCS" -name '*.md' -type f)

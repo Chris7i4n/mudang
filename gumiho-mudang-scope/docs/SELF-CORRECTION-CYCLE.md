@@ -162,7 +162,7 @@ When an analyser-suggested patch is merged and then proves to regress precision 
 
 The closed loop introduces **two distinct namespaces** in `graph.db`:
 
-- **Source-derived** — `edges`, `symbols`, `file_hashes`, every other table populated by `scope index`. **Immutable during audit.** Wipe-and-reindex per [`CHARTER.md` § 2](./CHARTER.md#2-single-operator-posture) is the only migration path.
+- **Source-derived** — `edges`, `symbols`, `file_hashes`, every other table populated by `scope index`. **Immutable during audit.** Wipe-and-reindex per [`CHARTER.md` § Single-operator posture](./CHARTER.md#single-operator-posture) is the only migration path.
 - **Audit-derived** — `edge_audit_history` (sprint 0004 (j)) plus any future tables sprint 0009 (k) adds. **Writable by `scope audit confidence --label`.** Never mutates source-derived rows.
 
 Two namespaces, two distinct mechanical enforcement gates. The CI gate added in sprint 0004 verifies `--label` writes touch only `edge_audit_history`. The source-derived auditor-immutability rule ([`AUDIT-LABEL-SCHEMA.md` § Auditor immutability rule](./AUDIT-LABEL-SCHEMA.md#auditor-immutability-rule)) gains the writable-namespace paragraph in sprint 0004's commit.
