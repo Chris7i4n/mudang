@@ -295,7 +295,7 @@ mudang map > /tmp/overview.md
 One-time cost: 1–3 minutes. After that the substrate is the entry point
 for every navigation question.
 
-### 4.2 Pre-refactor analysis
+### 4.2 Pre-edit analysis
 
 ```bash
 mudang sketch PaymentService

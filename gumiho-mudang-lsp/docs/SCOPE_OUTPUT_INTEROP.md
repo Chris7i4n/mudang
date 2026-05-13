@@ -10,7 +10,7 @@ After R10, the JSON envelope emitted by `mudang ... --json` is the on-the-wire e
 
 ## Why this matters for the LSP adapter
 
-`gumiho-mudang-lsp` is the raw LSP-protocol surface (per [`README.md` § Surface Boundary](README.md)). Higher composition layers — including any future "Scope + LSP" composer that combines Scope's graph rows with LSP enrichments (call hierarchy, references, definitions) — must read Scope's output without string parsing if they want to be reliable.
+`gumiho-mudang-lsp` is the raw LSP-protocol surface (per [`README.md` § Surface Boundary](README.md#surface-boundary)). Higher composition layers — including any future "Scope + LSP" composer that combines Scope's graph rows with LSP enrichments (call hierarchy, references, definitions) — must read Scope's output without string parsing if they want to be reliable.
 
 Two concrete things the typed boundary unlocks:
 
@@ -35,4 +35,4 @@ Until then, `--json` is read as untyped JSON by current consumers; the typed Rus
 ## See also
 
 - [`gumiho-mudang-scope/docs/ENFORCEMENT-MAP.md` § R10](../../gumiho-mudang-scope/docs/ENFORCEMENT-MAP.md#r10--typed-output-schema) — R-entry that enforces the typed-output schema.
-- [`gumiho-mudang-scope/docs/SCOPE-LSP-COMPOSITION.md`](../../gumiho-mudang-scope/docs/SCOPE-LSP-COMPOSITION.md) § 5.4 — composition layer design that consumes Scope output + LSP enrichments.
+- [`docs/SCOPE-LSP-COMPOSITION.md` § 5.4](../../docs/SCOPE-LSP-COMPOSITION.md#54-merge-algorithm) — composition layer design that consumes Scope output + LSP enrichments.

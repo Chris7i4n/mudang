@@ -1,9 +1,8 @@
 //! Synthetic framework for R5 integration tests.
 //!
 //! Exercises the `FrameworkPlugin` trait surface without committing
-//! scope to maintain any real-world framework. Sprint 0005 ships only
-//! infrastructure; concrete framework adoption follows
-//! `FRAMEWORK-PLAYBOOK.md` later.
+//! scope to maintain any real-world framework. Concrete framework
+//! adoption follows `FRAMEWORK-PLAYBOOK.md`.
 //!
 //! The synthetic recognises symbols with a specific decorator marker
 //! in their metadata (the R0 reserved key `decorators`) and emits

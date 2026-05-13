@@ -136,9 +136,9 @@ sub-crate, not in the legacy monolith.
 - this TODO does not introduce new public types beyond what already
   exists — it relocates them.
 
-## Sprint 0000 ambiguity resolutions
+## Locked decisions
 
-Locked before the decomposition opens, per
+Locked before the decomposition opened, per
 `gumiho-mudang-scope/docs/sprints/README.md` §3 ambiguity protocol.
 
 ### 1. Crate naming and workspace layout
@@ -187,13 +187,13 @@ consumer compile without source changes.
 
 ### 3. `scope-search` backends and feature gates
 
-Sprint 0000 moves `core/searcher.rs` → `scope-search/src/searcher.rs`
-**as-is**. Today that means FTS5 only. **No LanceDB code, no feature
-gates, no `Searcher` trait split lands.** LanceDB
-adoption is mudang Phase D scope, governed by TODO 0004
-(`0004-onnx-and-lancedb-distinction.md`); the `Searcher` trait split
-and the `LanceSearcher` backend land then. Sprint 0000 is file moves
-only.
+The decomposition moves `core/searcher.rs` →
+`scope-search/src/searcher.rs` **as-is**. Today that means FTS5 only.
+**No LanceDB code, no feature gates, no `Searcher` trait split is
+included here.** LanceDB adoption is mudang Phase D scope, governed
+by TODO 0004 (`0004-onnx-and-lancedb-distinction.md`); the
+`Searcher` trait split and the `LanceSearcher` backend land then.
+The decomposition is file moves only.
 
 ### 4. `scope-workspace` content and R4 destination
 

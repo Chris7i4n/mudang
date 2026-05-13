@@ -175,14 +175,15 @@ impl Indexer {
         // `scope_core::frameworks::dispatch::run_frameworks` over the
         // workspace's accumulated `Symbol` + `RawEdge` slices, then
         // routes the framework-emitted `RawEdge`s through
-        // `graph.resolve_batch`. Sprint 0005 ships the helper +
-        // synthetic-framework integration tests (see
-        // `scope-core/tests/framework_plugin_integration.rs`); the seam
-        // here stays dormant until a framework lands because there is
-        // no `FrameworkWorkspaceContext` impl in production yet (the
+        // `graph.resolve_batch`. The seam stays dormant until a
+        // framework lands because there is no
+        // `FrameworkWorkspaceContext` impl in production yet (the
         // workspace-context readers under `scope-core/src/workspace/`
         // populate `FrameworkVersions` + `Lockfile` already, but the
-        // trait-impl binding is per-framework).
+        // trait-impl binding is per-framework). Synthetic-framework
+        // integration tests under
+        // `scope-core/tests/framework_plugin_integration.rs` exercise
+        // the helper.
 
         // Update file hashes
         graph.update_file_hashes(&file_hashes)?;

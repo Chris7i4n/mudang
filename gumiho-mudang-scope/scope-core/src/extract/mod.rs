@@ -42,14 +42,13 @@
 //!   config — `RawCaptures` is the only input, and its types are
 //!   pinned by `Capture` / `MetadataField` / `SkippedRange` below.
 //!
-//! ## Sprint 0003 status
+//! ## Pipeline shape
 //!
-//! Chunks 1-3: types + module skeleton + per-language extractor
-//! relocation + metadata reserved-keys + skipped_ranges plumbing.
+//! Types + module skeleton + per-language extractor + metadata
+//! reserved-keys + skipped_ranges plumbing live here.
 //!
-//! Chunk 7: RawCaptures plugin-output migration. The parser pipeline
-//! builds `RawCaptures` per file (with per-match `CapturedMatch`
-//! grouping carrying `pattern_index` + pre-resolved
+//! The parser pipeline builds `RawCaptures` per file (with per-match
+//! `CapturedMatch` grouping carrying `pattern_index` + pre-resolved
 //! `enclosing_scope_id`) and dispatches into the per-language
 //! extractor through `extract_edges`. The legacy
 //! `HashMap<String, (text, line)>` plumbing and the
@@ -251,8 +250,8 @@ pub struct SkippedRange {
     /// 1-based last line of the skipped region (inclusive).
     pub end_line: u32,
     /// Free-form reason. Convention: `plugin_skip:<plugin>:<rationale>`,
-    /// e.g., `plugin_skip:rust:unparseable_macro_body`. Sprint 0007's
-    /// R6 harness greps this prefix for the malformed-source gate.
+    /// e.g., `plugin_skip:rust:unparseable_macro_body`. The R6
+    /// malformed-source harness greps this prefix.
     pub reason: String,
 }
 

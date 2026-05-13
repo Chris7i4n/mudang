@@ -70,7 +70,7 @@ Each `Pattern` in `patterns.rs` is defined once and carries:
 
 ## Applies to languages (required)
 
-- **`applies_to_languages`**: list of languages this framework's predicate is allowed to match against, e.g., `[Ruby]` for Rails, `[TypeScript]` for React (JS files are handled via the TypeScript plugin's extension dispatch — there is no separate `JavaScript` `SupportedLanguage` variant today), `[Python]` for Flask. The indexer pre-filters symbols/edges by this list before invoking the predicate (R5 in `ENFORCEMENT-MAP.md`); leaving it empty makes the plugin a no-op. Allowed values are the variants of `SupportedLanguage` in `src/core/parser.rs`.
+- **`applies_to_languages`**: list of languages this framework's predicate is allowed to match against, e.g., `[Ruby]` for Rails, `[TypeScript]` for React (JS files are handled via the TypeScript plugin's extension dispatch — there is no separate `JavaScript` `LanguageId` variant today), `[Python]` for Flask. The indexer pre-filters symbols/edges by this list before invoking the predicate (per [R5](../ENFORCEMENT-MAP.md#r5--frameworkplugin-operates-on-symbols-and-edges-not-ast-graph-only-via-metadata)); leaving it empty makes the plugin a no-op. Allowed values are the variants of `LanguageId` in `scope-core/src/languages/id.rs`.
 - **Rationale**: one line on why these and not others. If a framework genuinely spans languages (e.g., NestJS supports TS and JS source), list both.
 
 ---

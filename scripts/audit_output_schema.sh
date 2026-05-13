@@ -12,7 +12,7 @@
 #   forbids. The output struct surface is the mechanical enforcement
 #   point for E1.
 #
-# Per ENFORCEMENT-MAP.md § R10 → "Sprint 0006 scope decision".
+# Per ENFORCEMENT-MAP.md § R10.
 #
 # Mechanism: awk state machine that tracks `struct <Name> {` ... `}`
 # blocks and emits any field declaration matching the banned set.

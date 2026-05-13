@@ -10,7 +10,7 @@
 ## Depth target
 
 - **Level**: surface
-- **Post-refactor depth queue**: no
+- **Depth queue**: no
 
 ## Symbol kinds emitted
 
@@ -40,7 +40,7 @@ Pattern catalog (per `queries/java/edges.scm`):
 ## Universal boundaries — compliance log
 
 - **A1 / A2 / A3** (type system): **mechanically enforced by R12** — `scripts/audit_trait_shape.sh` (gate `ci-trait-shape`) forbids `fn infer_*` / `fn solve_*` / `fn narrow_*` / `fn resolve_overload_*` in the scanned plugin / extractor paths. Java generics are captured as text; the language layer never resolves bounds or overload candidates.
-- **B1**: discipline-only per the universal class-3 list.
+- **B1**: discipline-only per the universal class-3 list ([`ENFORCEMENT-MAP.md` § Discipline-only rules](../ENFORCEMENT-MAP.md#discipline-only-rules)).
 - **B2** (no runtime / dynamic resolution): **mechanically enforced by R12** — `scripts/audit_trait_shape.sh` forbids `fn evaluate_*`. Java reflection (`Class.forName`, `Method.invoke`) is captured by syntactic position only.
 - **B3**: trivially compliant — tree-sitter parser recovery scanner active.
 - **C1** (no macro expansion): **mechanically enforced by R11** — the trait-shape audit forbids `fn expand_*`. Java has no macros; annotation processors run at compile time outside scope's surface.

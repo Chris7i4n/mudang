@@ -62,7 +62,7 @@ These tables map every universal rule to its enforcement class and the R-entry +
 | No semantic rename refactor | mechanical | no write path in plugin layer |
 | No type errors / borrow errors / lint diagnostics | mechanical | [R10](#r10--typed-output-schema) — typed output schema rejects diagnostic-shaped fields |
 
-### 18 language-plugin boundaries ([LANGUAGE-PLAYBOOK Step 4](LANGUAGE-PLAYBOOK.md#step-4--the-18-universal-rules-every-language-plugin-respects))
+### 18 language-plugin boundaries ([LANGUAGE-PLAYBOOK Step 4](LANGUAGE-PLAYBOOK.md#step-4--the-18-universal-boundaries))
 
 | Rule | Class | Enforcement |
 |---|---|---|
@@ -122,7 +122,7 @@ Each entry below has: **ID, rules it enforces, durable contract, where to find i
   - **Symbols metadata structured fields** (JSON shape, no schema change): `decorators`, `annotations`, `template_calls` — reserved keys for framework consumption ([R5](#r5--frameworkplugin-operates-on-symbols-and-edges-not-ast-graph-only-via-metadata)). Other free-form keys may exist. Hooks-style detection is intentionally **not** a reserved metadata key; framework plugins apply regex matchers themselves at the framework layer (per [R5](#r5--frameworkplugin-operates-on-symbols-and-edges-not-ast-graph-only-via-metadata)).
   - **Partial-index recording**: `file_hashes.skipped_ranges TEXT NOT NULL DEFAULT '[]'` — JSON array `[{start_line, end_line, reason}]`.
 - **Where in the tree**: `gumiho-mudang-scope/scope-graph/src/sql/schema.sql`; `scope-core/src/edge.rs` (RawEdge / EdgeBuilder); `scope-core/src/types.rs` (Symbol).
-- **Migration policy**: wipe-and-reindex ([CHARTER §2](CHARTER.md#2-architectural-stance) + [§3 invariant 8](CHARTER.md#3-core-invariants--must-never-break)). `rm -rf .scope/ && mudang index` rebuilds from source.
+- **Migration policy**: wipe-and-reindex ([CHARTER §2 — Single-operator posture](CHARTER.md#single-operator-posture) + [§3 invariant 8](CHARTER.md#3-core-invariants--must-never-break)). `rm -rf .scope/ && mudang index` rebuilds from source.
 
 ### R1 — Typed edge insertion API
 

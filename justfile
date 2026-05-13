@@ -59,13 +59,13 @@ test-integration: test-cli
 # Pre-commit gate. Run before pushing.
 gate: fmt-check clippy test
 
-# --- Refactor CI gates (gumiho-mudang-scope/docs/CI-GATES.md) ---
+# --- Architecture CI gates (gumiho-mudang-scope/docs/CI-GATES.md) ---
 #
 # Until repo-wide CI lands, `just gate-refactor` is the durable
 # contract: every gate flipped to `active` in CI-GATES.md is run by
-# this recipe. See sprint 0001 DOD #3.
+# this recipe.
 
-# Run every active refactor gate.
+# Run every active architecture gate.
 gate-refactor: ci-edge-sealed test-builder test-typestate ci-context-shape ci-no-fs ci-dispatch ci-trait-shape ci-no-spawn ci-no-network ci-immutable ci-no-framework-scm ci-patterns ci-output-schema audit-confidence test-malformed gate-charter
 
 ci-edge-sealed:
@@ -118,12 +118,11 @@ ci-output-schema:
 #
 # This is NOT the continuous re-audit cycle. Committed labelled samples
 # + cross-reindex join key + precision-drift detection over time are
-# post-refactor work — see POST-REFACTOR-PLAN.md § Priority 1 —
-# Self-correction cycle.
+# queued — see BACKLOG.md § Priority 1 — Self-correction cycle.
 audit-confidence:
     cargo test -p gumiho-mudang-cli --test test_audit_confidence
 
-# R6 (sprint 0008) — Malformed-source resilience harness.
+# R6 — Malformed-source resilience harness.
 #
 # Runs the integration test that walks every fixture under
 # `scope-core/tests/fixtures/malformed/<lang>/<case>/` and asserts the
@@ -136,17 +135,16 @@ audit-confidence:
 test-malformed:
     cargo test -p scope-core --test malformed_sources
 
-# Sprint 0009 (Phase E close) — Charter sweep gate.
+# Charter sweep gate.
 #
-# Refuses re-introduction of any compatibility-shim shape that sprint
-# 0009 chunks 1 and 2 retired. Each check in the script targets a
-# specific shim — the `gumiho_mudang_scope::core::*` namespace-synth,
-# the `pub type Edge = RawEdge` alias, `INSERT OR IGNORE`, the
+# Refuses re-introduction of any compatibility-shim shape. Each check
+# in the script targets a specific shim — the
+# `gumiho_mudang_scope::core::*` namespace-synth, the
+# `pub type Edge = RawEdge` alias, `INSERT OR IGNORE`, the
 # `scope impact` CLI command, the `command_label: &'static str`
 # deprecation-alias parameter, etc. Charter § 2 (single-operator
 # posture) + § 3 invariant 8 (no backward-compatibility shims) are
-# the source of truth; this script is the mechanical successor to
-# the manual grep baseline.
+# the source of truth.
 gate-charter:
     ./scripts/gate_charter.sh
 

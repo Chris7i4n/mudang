@@ -749,14 +749,14 @@ fn label_pass(
                 expected_snippet,
             ));
         }
-        // `lang_version` field : the schema's
-        // reserved per-project lang_version slot. Sprint 0007 always
-        // emits `null` (the seven per-language detectors land
-        // atomically — Priority 1 sub-item (d)). The
-        // labeller fills `label` only; rewriting `lang_version` is
-        // sample tamper on the same auditor-immutability rule. With
-        // the emit-time value pinned at `None`, any non-`None` value
-        // in the labelled JSONL is a rewrite.
+        // `lang_version` field : the schema's reserved per-project
+        // lang_version slot. Today the emitter writes `null` (the
+        // seven per-language detectors land atomically — BACKLOG.md
+        // § Priority 1 sub-item (d)). The labeller fills `label`
+        // only; rewriting `lang_version` is sample tamper on the
+        // same auditor-immutability rule. With the emit-time value
+        // pinned at `None`, any non-`None` value in the labelled
+        // JSONL is a rewrite.
         if record.lang_version.is_some() {
             diffs.push((
                 "lang_version",

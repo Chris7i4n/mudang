@@ -7,18 +7,18 @@
 - **License**: MIT
 - **Maturity assessment**: stable. Upstream cadence is moderate, breaking changes are rare in the surface this plugin uses.
 - **Known grammar gaps**:
-  - `macro_rules!` bodies are opaque under tree-sitter — content inside `macro_rules!` is captured as a token tree, not a parsed expression. The plugin records a `plugin_skip:rust:unparseable_macro_body` skipped range for any unparseable body (R& will exercise this).
+  - `macro_rules!` bodies are opaque under tree-sitter — content inside `macro_rules!` is captured as a token tree, not a parsed expression. The plugin records a `plugin_skip:rust:unparseable_macro_body` skipped range for any unparseable body (exercised by the [R6](../ENFORCEMENT-MAP.md#r6--malformed-source-test-harness) malformed-source harness).
   - `attribute_item` attaches as a PRECEDING SIBLING of the item node, not as a direct child — relevant to the `annotations` metadata population (handled by the sibling walk in `scope-core/src/languages/rust_lang.rs::extract_metadata`).
 
 ## Depth target
 
 - **Level**: surface
-- **Post-refactor depth queue**: no
+- **Depth queue**: no
 - **Promotion / demotion history**: empty.
 
 ## Symbol kinds emitted
 
-`function`, `struct`, `enum`, `trait` (R0; before R0 was coerced to `interface`), `type` (alias), `const`, `method`, `property` (struct fields where useful).
+`function`, `struct`, `enum`, `trait` (per [R0](../ENFORCEMENT-MAP.md#r0--schema-closures); Rust traits map to the `trait` symbol kind, not coerced into `interface`), `type` (alias), `const`, `method`, `property` (struct fields where useful).
 
 ## Edge kinds emitted
 
@@ -44,12 +44,12 @@ Pattern catalog (per `queries/rust/edges.scm` + `scope-core/src/extract/rust_lan
 
 ## Universal boundaries — compliance log
 
-R-move shorthand: [R0](../ENFORCEMENT-MAP.md#r0--schema-closures), [R1](../ENFORCEMENT-MAP.md#r1--typed-edge-insertion-api), [R2](../ENFORCEMENT-MAP.md#r2--languageplugin-output-type-closure), [R3](../ENFORCEMENT-MAP.md#r3--pipeline-ordering-via-type-state), [R4](../ENFORCEMENT-MAP.md#r4--workspacecontext-typed-access-split), [R7](../ENFORCEMENT-MAP.md#r7--indexer-level-dispatch-enforcement).
+R-entry shorthand: [R0](../ENFORCEMENT-MAP.md#r0--schema-closures), [R1](../ENFORCEMENT-MAP.md#r1--typed-edge-insertion-api), [R2](../ENFORCEMENT-MAP.md#r2--languageplugin-output-type-closure), [R3](../ENFORCEMENT-MAP.md#r3--pipeline-ordering-via-type-state), [R4](../ENFORCEMENT-MAP.md#r4--workspacecontext-typed-access-split-per-layer), [R7](../ENFORCEMENT-MAP.md#r7--indexer-level-dispatch-enforcement).
 
-- **A1** (no type inference): **mechanically enforced by R12** — `scripts/audit_trait_shape.sh` (gate `ci-trait-shape`) forbids `fn infer_*` in the scanned plugin / extractor paths. The historical `LanguageId::infer_symbol_kind` and `is_likely_generic_param`-callers were renamed (the former to `symbol_kind_for_node` in the same sprint) — the function is a static node-kind lookup, not inference. Rust type identifiers are captured as text via `type_ref` captures only; single uppercase letters are filtered as generic params (`is_likely_generic_param`).
+- **A1** (no type inference): **mechanically enforced by R12** — `scripts/audit_trait_shape.sh` (gate `ci-trait-shape`) forbids `fn infer_*` in the scanned plugin / extractor paths. `LanguageId::symbol_kind_for_node` is a static node-kind lookup, not inference; the naming is the contract (see `scope-core/src/languages/id.rs` doc comment). Rust type identifiers are captured as text via `type_ref` captures only; single uppercase letters are filtered as generic params (`is_likely_generic_param`).
 - **A2** (no constraint solving): **mechanically enforced by R12** — `scripts/audit_trait_shape.sh` forbids `fn solve_*`. Trait bounds in generic params are captured as text, never resolved.
 - **A3** (no type-system name resolution): **mechanically enforced by R12** — `scripts/audit_trait_shape.sh` forbids `fn narrow_*` / `fn resolve_overload_*`. No method dispatch on type. Method calls captured by syntactic position only.
-- **B1** (no flow analysis): discipline-only per the universal class-3 list.
+- **B1** (no flow analysis): discipline-only per the universal class-3 list ([`ENFORCEMENT-MAP.md` § Discipline-only rules](../ENFORCEMENT-MAP.md#discipline-only-rules)).
 - **B2** (no runtime / dynamic resolution): **mechanically enforced by R12** — `scripts/audit_trait_shape.sh` forbids `fn evaluate_*`. Rust has no runtime dispatch surface for the plugin to model.
 - **B3** (no assumption of valid syntax): tree-sitter parser-recovery scanner emits `tree_sitter_error:syntax_error` / `tree_sitter_error:missing_node` skipped ranges; plugin never panics. R6 harness is the enforcement gate.
 - **C1** (no macro expansion): **mechanically enforced by R11** — `scripts/audit_trait_shape.sh` forbids `fn expand_*` in the scanned plugin / extractor paths; combined with the extractor closure (the extractor is the only `EdgeKind`-aware site and has no expander entry point), expansion is unreachable from the plugin layer. At the data level: `macro_invocation` captures only the macro name (`@macro_name`); the body is not walked. `macro_rules!` bodies are recorded as plugin skips. Macro symbols (`kind: macro`) and `calls.macro` / `calls.macro.scoped` edges land per R0 / R2.

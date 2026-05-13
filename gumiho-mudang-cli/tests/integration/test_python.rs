@@ -189,7 +189,7 @@ fn test_index_detects_python_functions_and_methods() {
         count > 0
     };
 
-    // Methods inside classes should be "function" (infer_symbol_kind maps function_definition -> "function")
+    // Methods inside classes should be "function" (symbol_kind_for_node maps function_definition -> "function")
     // but they get parent_id set to their enclosing class.
     assert!(
         symbol_exists("process_payment", "function"),

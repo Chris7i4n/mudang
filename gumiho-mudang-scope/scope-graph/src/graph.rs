@@ -742,10 +742,10 @@ impl Graph {
     /// symbols table (Resolved / Ambiguous endpoints). For unresolved
     /// (Dangling) endpoints the column stores the extractor's
     /// original `to_id` text verbatim, so passing through `id` as-is
-    /// preserves the unresolved reference without parsing — R3
-    /// acceptance bullet 5 deletes the synthetic-id text-parse
-    /// fallback that previously hid the resolved-vs-dangling
-    /// distinction behind a `file::name::kind` split.
+    /// preserves the unresolved reference without parsing. No
+    /// text-parse fallback (per [R3](../../docs/ENFORCEMENT-MAP.md#r3--pipeline-ordering-via-type-state):
+    /// the resolved-vs-dangling distinction is carried by `status`,
+    /// not encoded into the id string).
     fn symbol_name_from_id(&self, id: &str) -> String {
         self.conn
             .query_row(

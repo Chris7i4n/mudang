@@ -11,7 +11,7 @@
 ## Depth target
 
 - **Level**: surface
-- **Post-refactor depth queue**: no
+- **Depth queue**: no
 
 ## Symbol kinds emitted
 
@@ -33,8 +33,8 @@ Pattern catalog (per `queries/python/edges.scm`):
 
 ## Universal boundaries — compliance log
 
-- **A1 / A2 / A3** (type system): **mechanically enforced by R12** — `scripts/audit_trait_shape.sh` (gate `ci-trait-shape`) forbids `fn infer_*` / `fn solve_*` / `fn narrow_*` / `fn resolve_overload_*` in the scanned plugin / extractor paths. The `infer_access(name)` helper that mapped Python naming convention to `access_kind` was renamed `access_from_name` in the same sprint to satisfy the audit — the function does textual classification, never inference. Python type hints are captured as text via `references_type` only at positions the query covers; overload resolution is the type-checker's job.
-- **B1**: discipline-only per the universal class-3 list.
+- **A1 / A2 / A3** (type system): **mechanically enforced by R12** — `scripts/audit_trait_shape.sh` (gate `ci-trait-shape`) forbids `fn infer_*` / `fn solve_*` / `fn narrow_*` / `fn resolve_overload_*` in the scanned plugin / extractor paths. `access_from_name(name)` maps Python naming convention to `access_kind` via textual classification, never inference; the naming is the contract. Python type hints are captured as text via `references_type` only at positions the query covers; overload resolution is the type-checker's job.
+- **B1**: discipline-only per the universal class-3 list ([`ENFORCEMENT-MAP.md` § Discipline-only rules](../ENFORCEMENT-MAP.md#discipline-only-rules)).
 - **B2** (no runtime / dynamic resolution): **mechanically enforced by R12** — `scripts/audit_trait_shape.sh` forbids `fn evaluate_*`. `getattr` / `setattr` / `eval` are captured as syntactic call sites only.
 - **B3** (no assumption of valid syntax): tree-sitter parser-recovery scanner active.
 - **C1** (no macro / template expansion): **mechanically enforced by R11** — the trait-shape audit forbids `fn expand_*`. Python has no macro system; decorator factories' return values are not modelled (the playbook's "definitions captured, expansions not" rule).

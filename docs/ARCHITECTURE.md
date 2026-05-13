@@ -77,9 +77,9 @@ and the CLI) keep working through the façade.
 crate's directory (`gumiho-mudang-scope/scope-core/`,
 `gumiho-mudang-scope/scope-index/`, etc.), not as siblings at the
 workspace root. They are workspace members regardless. See
-`docs/todos/0006-split-scope-crate.md § Sprint 0000 ambiguity
-resolutions` for the locked naming, layout, façade depth, backend
-scope, and R4 destination.
+`docs/todos/0006-split-scope-crate.md § Locked decisions` for the
+locked naming, layout, façade depth, backend scope, and R4
+destination.
 
 The edit crate (`gumiho-mudang-edit`, phase E) reuses
 `scope-core`'s parser and language plugins **without** pulling in the

@@ -161,7 +161,7 @@ The linear-order rule (§1) and the atomic-phase mandate are enforced not only b
 A sprint branch's history reads chronologically as:
 
 1. *(Optional)* Pre-sprint setup commits (fixtures stubbed, scaffolding).
-2. **Implementation commits.** Each commit message uses the initiative's commit-type prefix (e.g. `refactor(scope): <summary>` for the architectural refactor; future initiatives pick their own) and references the owned item ID in the body.
+2. **Implementation commits.** Each commit message uses the initiative's commit-type prefix (e.g. `feat(scope): <summary>`, `refactor(scope): <summary>`, etc. — each initiative picks its own) and references the owned item ID in the body.
 3. **CI-gate activation commit.** Flips the affected rows in `CI-GATES.md` from `planned` → `active`, lands the audit scripts and `justfile` recipes, wires CI to call them. Message: `ci(<initiative>): activate gates for sprint NNNN`.
 4. **Codex review checkpoint.** Run `codex review --base <upstream>` (upstream = `main` for direct-to-main sprints; the phase integration branch for multi-sprint phases) with the focus checklist defined in §9. Follow-up commits addressing review findings use `<type>(scope): address codex review — <summary>` (or `fix(scope): …` for bugs the review caught). The review report itself is attached to the PR body, not committed.
 5. **State-tracking transition commit.** For a sprint that merges directly to `main`, flips rows to `shipped` and appends log entries in the active state doc. Inside a phase integration branch, leaves rows `in-progress` and records acceptance in the sprint PR / commit body; `shipped` is reserved for the phase-close commit that reaches `main`. Message: `chore(<state-doc>): sprint NNNN close`.

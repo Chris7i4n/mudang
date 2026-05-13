@@ -26,10 +26,10 @@ For acceptance-only sprints (no new code-shape change, only verification): recor
 
 Every sprint maps onto charter sections explicitly. State which:
 
-- **Hard limits** ([`CHARTER.md` § Hard limits](../CHARTER.md)) — which rule(s) this sprint mechanises / detects / leaves to discipline.
-- **Soft expansion zone** ([`CHARTER.md` § Soft expansion](../CHARTER.md)) — which expansion row this sprint lands.
-- **Per-language IN/OUT** ([`CHARTER.md` § Per-language scope](../CHARTER.md)) — touched languages.
-- **Invariants** ([`CHARTER.md` § Core invariants](../CHARTER.md)) — invariants this sprint preserves or strengthens.
+- **Hard limits** ([`CHARTER.md` § Hard limits](../CHARTER.md#5-hard-limits--scope-will-never-cross-these)) — which rule(s) this sprint mechanises / detects / leaves to discipline.
+- **Soft expansion zone** ([`CHARTER.md` § Soft expansion](../CHARTER.md#6-soft-expansion-zone--scope-expands-freely-here)) — which expansion row this sprint lands.
+- **Per-language IN/OUT** ([`CHARTER.md` § Per-language scope](../CHARTER.md#7-per-language-scope-and-non-scope)) — touched languages.
+- **Invariants** ([`CHARTER.md` § Core invariants](../CHARTER.md#3-core-invariants--must-never-break)) — invariants this sprint preserves or strengthens.
 
 ## Deliverables
 
@@ -61,7 +61,7 @@ If none: drop this section.
 
 ## CI gates activated in this sprint
 
-Rows in [`CI-GATES.md` § Gate inventory](../CI-GATES.md) that flip `planned` → `active` in this sprint.
+Rows in [`CI-GATES.md` § Gate inventory](../CI-GATES.md#gate-inventory) that flip `planned` → `active` in this sprint.
 
 - [ ] **<gate name>** (`just <recipe>`) — `planned` → `active`.
 - …
@@ -74,12 +74,12 @@ Terms in [`GLOSSARY.md`](../GLOSSARY.md) that gain new behaviour or are first re
 
 ## Reporting
 
-Per [`README.md` § Reporting hooks](./README.md#4-reporting-hooks) and [`README.md` § Branch protocol](./README.md#5-branch-protocol).
+Per [`README.md` § Reporting hooks](./README.md#4-reporting-hooks) and [`README.md` § Branch protocol](./README.md#5-branch-protocol--linear-incremental-atomic-phase-shipment).
 
 - **Branch**: `<prefix>/sprint-NNNN-<slug>`, cut from the correct upstream.
 - **Base**: `main` (single-sprint phase) or `<prefix>/phase-<letter>` (multi-sprint phase).
 - **Open**: flip status row(s) in the state-tracking doc to `in-progress`. Append log entry per item noting branch name.
-- **Codex review** (mandatory per `README.md` § 9 Role 1): run the canonical command before the close commit. Attach report to PR body. Cross-reference the codex report against the sprint's acceptance bullets. Address blockers.
+- **Codex review** (mandatory per [`README.md` § 9 Role 1](./README.md#role-1--mandatory-sprint-review-checkpoint)): run the canonical command before the close commit. Attach report to PR body. Cross-reference the codex report against the sprint's acceptance bullets. Address blockers.
 - **Close**:
   - Single-sprint phase / direct-to-main: flip item rows to `shipped` with commit SHA + date. Flip phase row in same commit.
   - Inside a phase integration branch: leave rows `in-progress`; record acceptance demonstration in PR body. `shipped` is reserved for the phase-close commit that reaches `main`.

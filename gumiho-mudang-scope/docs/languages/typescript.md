@@ -11,7 +11,7 @@
 ## Depth target
 
 - **Level**: surface
-- **Post-refactor depth queue**: no
+- **Depth queue**: no
 
 ## Symbol kinds emitted
 
@@ -38,7 +38,7 @@ Pattern catalog (per `queries/typescript/edges.scm`):
 ## Universal boundaries — compliance log
 
 - **A1 / A2 / A3** (type system): **mechanically enforced by R12** — `scripts/audit_trait_shape.sh` (gate `ci-trait-shape`) forbids `fn infer_*` / `fn solve_*` / `fn narrow_*` / `fn resolve_overload_*` in the scanned plugin / extractor paths. Type annotations captured as text via `references_type.annotation`; conditional-type evaluation and overload resolution belong to the TypeScript compiler, never to scope.
-- **B1**: discipline-only per the universal class-3 list.
+- **B1**: discipline-only per the universal class-3 list ([`ENFORCEMENT-MAP.md` § Discipline-only rules](../ENFORCEMENT-MAP.md#discipline-only-rules)).
 - **B2** (no runtime / dynamic resolution): **mechanically enforced by R12** — `scripts/audit_trait_shape.sh` forbids `fn evaluate_*`.
 - **B3** (no assumption of valid syntax): tree-sitter parser-recovery scanner active.
 - **C1** (no macro / template expansion): **mechanically enforced by R11** — `scripts/audit_trait_shape.sh` forbids `fn expand_*`. TS decorator factories' return values are not modelled — the plugin captures the decorator name + raw `args_text` and stops.

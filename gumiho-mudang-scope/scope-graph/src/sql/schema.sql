@@ -1,14 +1,13 @@
 -- Scope graph schema
 -- Single source of truth for the SQLite schema; loaded via include_str! in src/graph.rs.
 --
--- R0 (sprint 0001) landed: surrogate edge_id PK, confidence/status/producer/pattern_id
+-- R0 closure: surrogate edge_id PK, confidence/status/producer/pattern_id
 -- (+ optional capture_id/framework/args_text), 38-kind edge whitelist (8 universal + 30
--- domain), 13-kind symbol whitelist, file_hashes.skipped_ranges. No in-place migration:
--- pre-1.0 single-user wipe policy (rm -rf .scope/ && scope index).
+-- domain), 13-kind symbol whitelist, file_hashes.skipped_ranges. Migration is
+-- wipe-and-reindex per CHARTER §2 (rm -rf .scope/ && mudang index).
 
 -- symbols: every named code construct.
--- kind whitelist = 13 (10 legacy + macro + module + trait); see
--- ARCHITECTURAL-REFACTOR.md § R0 → Symbol kind whitelist additions.
+-- kind whitelist = 13; see ENFORCEMENT-MAP.md § R0 (Symbol kind whitelist).
 CREATE TABLE IF NOT EXISTS symbols (
     id          TEXT PRIMARY KEY,
     name        TEXT NOT NULL,

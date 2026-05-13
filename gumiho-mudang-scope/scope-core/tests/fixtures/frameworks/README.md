@@ -1,6 +1,6 @@
 # Framework integration test fixtures
 
-Sprint 0005 (R5) infrastructure fixtures.
+R5 infrastructure fixtures.
 
 ## Layout
 
@@ -17,10 +17,9 @@ The R5 integration tests
 (`scope-core/tests/framework_plugin_integration.rs`) construct
 `Symbol` and `Edge` inputs inline rather than parsing real source
 files. The dispatch layer (`scope_core::frameworks::dispatch`) is the
-unit under test; language-plugin metadata population is sprint
-0003's R2, already covered by per-language test corpora.
+unit under test; language-plugin metadata population belongs to R2
+and is already covered by per-language test corpora.
 
 End-to-end fixtures will be added when a concrete framework adopts
-later per `FRAMEWORK-PLAYBOOK.md`. Until then the directory
-layout exists so future sprints have a documented place to land
-fixtures.
+per `FRAMEWORK-PLAYBOOK.md`. Until then the directory layout exists
+so future work has a documented place to land fixtures.

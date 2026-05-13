@@ -2,7 +2,7 @@
 
 Single source of truth for what Scope is, where it expands, and where it deliberately stops. When a feature, sprint, or refactor proposal arises, consult this document first. If the proposal violates a hard limit, it is rejected without further debate. If it sits inside the soft expansion zone, it is eligible for sprint planning.
 
-This charter is the outcome of an architectural audit of the legacy codebase (last commit by original owner: `9201624`) plus a strategic discussion about Scope's relationship to LSP. It is intended to be stable; revisions require an explicit charter-amendment commit.
+This charter is stable. Revisions require an explicit charter-amendment commit.
 
 ### Companion documents
 
@@ -144,7 +144,7 @@ These are the directions Scope can grow without breaking its identity. Sprints s
 
 ## 7. Per-language scope and non-scope
 
-The languages prioritized for depth are the ones the maintainer uses most: Rust, Python, Go, TypeScript. Ruby, Java, and C# are supported at surface level — they are present in `src/core/parser.rs` because earlier sprints registered them, but they are not depth targets and earn only bug-fix maintenance unless the language playbook's adoption flow promotes them.
+The languages prioritized for depth are the ones the maintainer uses most: Rust, Python, Go, TypeScript. Ruby, Java, and C# are supported at surface level — they are registered in `scope-core/src/languages/dispatch.rs`, but they are not depth targets and earn only bug-fix maintenance unless the language playbook's adoption flow promotes them.
 
 For each, the IN list is eligible for sprint work; the OUT list is rejected by the hard limits in section 5 and should not be revisited.
 
@@ -264,7 +264,7 @@ Even if Scope reaches near-LSP semantic depth in the soft-expansion zone, these 
 11. **Git-aware.** `scope diff --ref main`. LSP is atemporal.
 12. **Workspace federation.** Multi-project monorepo as one graph; LSP is mono-project.
 13. **Memory profile.** SQLite in MBs versus rust-analyzer in GBs.
-14. **Stable cross-session IDs.** `file::name::kind::line` (the implementation in `src/core/parser.rs:220` includes the declaration line as a uniqueness disambiguator for overloaded names; the line refers to the declaration site, so the ID survives across sessions and across edits to other parts of the file). Citable in tickets, PRs, logs.
+14. **Stable cross-session IDs.** `file::name::kind::line` (the implementation in `scope-core/src/parser.rs` includes the declaration line as a uniqueness disambiguator for overloaded names; the line refers to the declaration site, so the ID survives across sessions and across edits to other parts of the file). Citable in tickets, PRs, logs.
 15. **Read-only and side-effect-free.** Sandbox-compatible.
 16. **MCP-native.** Already shipping `scope-mcp`.
 17. **Time-travel potential.** Per-commit indices.
@@ -317,17 +317,17 @@ Charter changes are versioned by commit; there is no separate version number on 
 
 ---
 
-## Appendix A — Architectural ceilings inherited from the legacy codebase
+## Appendix A — Architectural ceilings (schema invariants)
 
-For context. These are the structural limits in the codebase as inherited and the reason the hard limits in section 5 are hard:
+The structural limits below are why the hard limits in section 5 are hard. Each is a present-state schema invariant carried by [`ENFORCEMENT-MAP.md`](ENFORCEMENT-MAP.md) R-entries.
 
-- **`symbols.kind` is a closed `CHECK` list of 10 kinds** (`function`, `class`, `method`, `interface`, `struct`, `enum`, `const`, `type`, `property`, `variant`). Adding a kind requires a schema migration. Acceptable; just plan for it. The architecture's R0 closure adds three more (`macro`, `module`, `trait`) to remove the historical coercion of Rust traits and Ruby modules into `interface`.
-- **`edges.kind` is a closed `CHECK` list of 7 kinds** (`calls`, `imports`, `extends`, `implements`, `instantiates`, `references`, `references_type`). Same — domain-edge expansion (section 6) requires migration. R0 lands the additions in one batch (final whitelist: 38 kinds = 8 universal + 30 domain), including `contains` (universal lexical containment, currently absent from the whitelist even though every language plugin needs it).
-- **`edges` PK is `(from_id, to_id, kind)`**, which collapses multiple call sites between the same pair and prevents two HTTP routes binding to the same handler. R0 replaces the PK with a surrogate `edge_id` and a non-unique covering index, restoring per-line provenance.
-- **`symbol.id` format is `file::name::kind::line`** (`src/core/parser.rs:220`), where `line` is the declaration line, used as a uniqueness disambiguator. The earlier statement that the format was `file::name::kind` was a documentation gap; the line component is required for overload disambiguation and the ID is still stable across sessions because the declaration line moves only when the symbol itself is edited.
-- **`edges.to_id` is intentionally not a foreign key.** The schema explicitly tolerates dangling references. The resolution pass (section 6) is what closes this gap statically.
-- **`metadata` is a free-form `TEXT` JSON column.** Useful as escape hatch; not query-able for relational joins. Scope-specific structured fields should graduate to columns when they prove their weight.
-- **`LanguagePlugin` trait is one-pass extractor-shaped.** No semantic phase, no name resolution hook, no multi-pass. The resolution pass lives outside this trait, after extraction, in the indexer pipeline.
-- **`symbol_name_from_id` falls back to parsing `file::name::kind`** when no symbol row matches. This is why ambiguous calls currently look like resolved calls. The resolution pass replaces this fallback with explicit ambiguity flags.
+- **`symbols.kind` is a closed `CHECK` list of 13 kinds** (`function`, `class`, `method`, `interface`, `struct`, `enum`, `const`, `type`, `property`, `variant`, `macro`, `module`, `trait`) — per [R0](ENFORCEMENT-MAP.md#r0--schema-closures). Rust traits map to `trait` and Ruby modules to `module`, not coerced into `interface`. Adding a new kind requires a schema migration.
+- **`edges.kind` is a closed `CHECK` list of 38 kinds** — 8 universal (`calls`, `imports`, `extends`, `implements`, `instantiates`, `references`, `references_type`, `contains`) + 30 domain edges (section 6) — per [R0](ENFORCEMENT-MAP.md#r0--schema-closures). Adding a kind requires a schema migration.
+- **`edges` PK is the surrogate `edge_id`** with a non-unique covering index on `(from_id, to_id, kind)`. Multiple call sites between the same pair are preserved per-line; two HTTP routes can bind to the same handler ([R0](ENFORCEMENT-MAP.md#r0--schema-closures)).
+- **`symbol.id` format is `file::name::kind::line`** (`scope-core/src/parser.rs`), where `line` is the declaration line, used as a uniqueness disambiguator. The line component is required for overload disambiguation; the ID is stable across sessions because the declaration line moves only when the symbol itself is edited.
+- **`edges.to_id` is intentionally not a foreign key.** The schema tolerates dangling references; the resolution pass ([R3](ENFORCEMENT-MAP.md#r3--pipeline-ordering-via-type-state)) attaches an explicit `status` of `Resolved` / `Ambiguous` / `Dangling` rather than smoothing collisions.
+- **`metadata` is a free-form `TEXT` JSON column.** Useful as escape hatch; not query-able for relational joins. Scope-specific structured fields graduate to columns when they prove their weight.
+- **No `trait LanguagePlugin`.** Per-language behaviour lives on `LanguageId` inherent methods (per [R7](ENFORCEMENT-MAP.md#r7--indexer-level-dispatch-enforcement)). The resolution pass lives outside the extractor surface, after extraction, in the indexer pipeline.
+- **`symbol_name_from_id` does not text-parse on miss.** The resolved-vs-dangling distinction is carried by the `status` column, not encoded into the id string ([R3](ENFORCEMENT-MAP.md#r3--pipeline-ordering-via-type-state) acceptance bullet 5).
 
-These ceilings are not bugs to fix; they are the shape Scope was given. The soft-expansion zone in section 6 lives entirely within these ceilings. The hard limits in section 5 are precisely the things that would require breaking these ceilings.
+The soft-expansion zone in section 6 lives entirely within these ceilings. The hard limits in section 5 are precisely the things that would require breaking them.

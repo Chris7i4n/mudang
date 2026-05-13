@@ -51,9 +51,7 @@ reference/
   sample reproduces the precision baseline byte-for-byte (seed pinned
   per `--seed`). A drift is a CI signal.
 
-Sprint 0007 lands the directory skeleton. Content lands as part of
-the same sprint's labelling pass; subsequent labelling passes (post
-the architecture) accumulate per
+Labelling passes accumulate per
 [`AUDIT-LABEL-SCHEMA.md` § Committed sample policy](../../../../docs/AUDIT-LABEL-SCHEMA.md#committed-sample-policy).
 
 ---

@@ -11,11 +11,11 @@
 ## Depth target
 
 - **Level**: surface
-- **Post-refactor depth queue**: no
+- **Depth queue**: no
 
 ## Symbol kinds emitted
 
-`class`, `module` (R0; before R0 was coerced to `interface`), `method`, `function` (top-level `def` outside class context), `const`.
+`class`, `module` (per [R0](../ENFORCEMENT-MAP.md#r0--schema-closures); Ruby modules map to the `module` symbol kind, not coerced into `interface`), `method`, `function` (top-level `def` outside class context), `const`.
 
 ## Edge kinds emitted
 
@@ -45,8 +45,8 @@ Pattern catalog (per `queries/ruby/edges.scm` + `scope-core/src/extract/ruby.rs`
 
 ## Universal boundaries — compliance log
 
-- **A1 / A2 / A3** (type system): **mechanically enforced by R12** — `scripts/audit_trait_shape.sh` (gate `ci-trait-shape`) forbids `fn infer_*` / `fn solve_*` / `fn narrow_*` / `fn resolve_overload_*` in the scanned plugin / extractor paths. The `infer_visibility(node, source)` helper that mapped Ruby AST shape to public/private/protected was renamed `visibility_for_node` in the same sprint to satisfy the audit — the function does syntactic walk, not inference. Ruby is dynamically typed; no type-system work is even attempted in the plugin.
-- **B1**: discipline-only per the universal class-3 list.
+- **A1 / A2 / A3** (type system): **mechanically enforced by R12** — `scripts/audit_trait_shape.sh` (gate `ci-trait-shape`) forbids `fn infer_*` / `fn solve_*` / `fn narrow_*` / `fn resolve_overload_*` in the scanned plugin / extractor paths. `visibility_for_node(node, source)` maps Ruby AST shape to public/private/protected via syntactic walk, not inference; the naming is the contract. Ruby is dynamically typed; no type-system work is even attempted in the plugin.
+- **B1**: discipline-only per the universal class-3 list ([`ENFORCEMENT-MAP.md` § Discipline-only rules](../ENFORCEMENT-MAP.md#discipline-only-rules)).
 - **B2** (no runtime / dynamic resolution): **mechanically enforced by R12** — `scripts/audit_trait_shape.sh` forbids `fn evaluate_*`. **Conservatively compliant at the data level**: `send` / `public_send` / `__send__` / `define_method` / `const_get` literals are emitted as edges only when the argument is a literal symbol or string AND the literal is not dynamic (`is_dynamic_ruby_literal`: rejects strings containing `#{`, `\`, or newlines). Dynamic arguments are intentionally not matched. Tradeoff: literal-only metaprogramming is high-precision low-recall, which fits the playbook's "honest ambiguity beats false certainty" principle.
 - **B3** (no assumption of valid syntax): tree-sitter parser-recovery scanner active.
 - **C1** (no macro / template expansion): **mechanically enforced by R11** — `scripts/audit_trait_shape.sh` forbids `fn expand_*`. Hook-style `define_method` literal capture is the documented data-level exception per the playbook's "definitions captured, expansions not" rule; the plugin captures the definition site, never evaluates the block body.

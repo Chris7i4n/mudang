@@ -182,7 +182,7 @@ D2. **No "best guess" fallback resolution.**
 When multiple candidates exist for a name, the resolution pass (R3 in `ENFORCEMENT-MAP.md`) sets `status='ambiguous'` and writes one row per candidate target (multiplicity is allowed because R0 makes the edge PK a surrogate `edge_id`). The extractor's `confidence` is preserved through resolution **as-is**: a clean syntactic pattern (`class Foo extends Bar`) keeps `confidence='high'` even when the workspace has multiple visible `Bar` symbols, because confidence describes the **pattern's precision** while status describes the **lookup outcome** — they are orthogonal and both columns must be queried by the consumer that wants the cleanest signal (`confidence='high' AND status='resolved'`). The plugin never silently picks one candidate and writes a `resolved` edge. Honest ambiguity beats false certainty.
 
 D3. **No symbol-id collision resolution by guessing.**
-If two symbols collide on `file::name::kind::line` (the implementation in `src/core/parser.rs:220` includes the declaration line as a uniqueness disambiguator), that is a real ambiguity (or a bug). Record both with a disambiguating qualifier in metadata, or mark the symbol as ambiguous. Do not smooth over the collision.
+If two symbols collide on `file::name::kind::line` (the implementation in `scope-core/src/parser.rs` includes the declaration line as a uniqueness disambiguator), that is a real ambiguity (or a bug). Record both with a disambiguating qualifier in metadata, or mark the symbol as ambiguous. Do not smooth over the collision.
 
 ### Category E — Output discipline
 

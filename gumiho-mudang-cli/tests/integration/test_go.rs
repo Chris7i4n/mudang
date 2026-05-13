@@ -159,7 +159,7 @@ fn test_index_detects_go_interfaces() {
 
     assert!(
         symbol_exists(&conn, "Processor", "struct"),
-        "Processor interface should be indexed (kind=struct from infer_symbol_kind, refined via metadata)"
+        "Processor interface should be indexed (kind=struct from symbol_kind_for_node, refined via metadata)"
     );
 
     // Verify metadata marks it as an interface
