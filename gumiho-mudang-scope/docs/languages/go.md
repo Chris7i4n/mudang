@@ -54,6 +54,7 @@ No `NEEDS REVIEW` outstanding for D2 / D3 / E2 / F1.
 ## Known gotchas
 
 1. Struct embedding is captured as `extends.embedding` (Go's closest analogue to inheritance, even though Go's type system does not formally have inheritance). This is a syntactic mapping; semantic interpretation belongs to whatever consumer reads the edge.
+2. `lang_version` detector (sprint 0003 (d), indexer-side carveout per R4): `go_mod::extract_go_directive` walks `go.mod` line-by-line, stripping `//` trailing comments via the same `strip_line_comment` helper as the dependency parser, and returns the body of the **first** `go ` line (e.g. `"1.22"`, `"1.21.5"`). The `toolchain` directive (Go 1.21+) is intentionally ignored — Scope uses the floor version from `go` as the language-version pin. Modules without a `go` directive (rare; pre-1.16 modules predating the mandate) return `None`. Source: `scope-core/src/workspace/go_mod.rs`.
 
 ## Test fixtures
 

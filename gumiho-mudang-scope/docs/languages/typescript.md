@@ -60,6 +60,7 @@ No `NEEDS REVIEW` outstanding for D2 / D3 / E2 / F1.
 
 1. Decorator capture uses tree-sitter-typescript's direct-child walk only. The parent-walk fallback was deleted in commit 733b16c after the review flagged that `class C { @A a(); @B b(); c() }` incorrectly assigned all decorators to all three methods.
 2. The grammar's `LANGUAGE_TYPESCRIPT` variant does not parse JSX; this is intentional per the depth target.
+3. `lang_version` detector (sprint 0003 (d), indexer-side carveout per R4): `tsconfig_json::extract_tsconfig_target` reads `compilerOptions.target` from the file's own `tsconfig.json`. The `extends` chain is **not** followed — a root `tsconfig.json` that extends `@tsconfig/node20/tsconfig.json` returns `None` unless the local file also declares its own `target`. JSONC comments (`//`, `/* ... */`) are stripped via a string-literal-aware scanner before JSON parsing. Case of the returned target is preserved verbatim (`"es2022"` vs `"ES2017"` vs `"esnext"`); case-folding is the caller's concern. Source: `scope-core/src/workspace/tsconfig_json.rs`.
 
 ## Test fixtures
 

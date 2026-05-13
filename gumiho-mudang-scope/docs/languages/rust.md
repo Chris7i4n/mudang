@@ -72,6 +72,7 @@ No `NEEDS REVIEW` outstanding for D2 / D3 / E2 / F1.
 1. `is_likely_generic_param` filters single-uppercase-letter type references because tree-sitter-rust uses `type_identifier` for both generic param names and concrete types. Trade-off: ~24% precision win on `references_type` against the vanishingly rare real one-letter Rust type.
 2. `attribute_item` is a PRECEDING SIBLING of the item, not a direct child; the sibling-walk implementation handles this correctly. A future grammar bump that changes attachment will require updating `scope-core/src/languages/rust_lang.rs::extract_metadata`.
 3. `impl Trait for Type` requires walking the parsed tree (not the edges query) because the extractor needs symbol-list lookup for `from_id` resolution. `scope-core/src/extract/rust_lang.rs::extract_rust_trait_impl_edges` owns this.
+4. `lang_version` detector priority (sprint 0003 (d), indexer-side carveout per R4): `cargo_toml::extract_rust_version` (MSRV from `[package].rust-version`) wins over `cargo_toml::extract_edition` (`[package].edition`). MSRV is closer to a runtime version pin; edition is the language-syntax era. Workspace-inherited declarations (`rust-version.workspace = true`, `edition.workspace = true`) fail TOML deserialization into `Option<String>` and fall through to `None` — the R8 emit surfaces `lang_version: null` rather than a fabricated guess; downstream consumers see "unknown" honestly. Workspace virtual manifests (no `[package]` table) likewise return `None`. Source: `scope-core/src/workspace/cargo_toml.rs`.
 
 ## Test fixtures
 

@@ -58,6 +58,10 @@ Pattern catalog (per `queries/java/edges.scm`):
 
 No `NEEDS REVIEW` outstanding for D2 / D3 / E2 / F1.
 
+## Known gotchas
+
+1. `lang_version` detector (sprint 0003 (d), indexer-side carveout per R4): per-directory priority is `pom.xml` (Maven, `pom_xml::extract_java_version`) → `build.gradle` (Groovy DSL) → `build.gradle.kts` (Kotlin DSL), both Gradle paths sharing `build_gradle::extract_java_version`. Within `pom.xml`, sub-priority is `<maven.compiler.release>` (Java 9+ `--release`) → `<maven.compiler.target>` → `<maven.compiler.source>` → `<java.version>` (Spring Boot / community convention). The reader is a **textual scan** — it does not resolve parent-POM inheritance, profile activation, or property interpolation; unresolved placeholders (`${java.target}`) flow through verbatim and surface in `lang_version` as the literal placeholder string. Within Gradle, recognised shapes are quoted-literal (`sourceCompatibility = '17'`), `JavaVersion.VERSION_X[_Y]` (mapped `_` → `.` so `VERSION_1_8` → `"1.8"`), and `JavaLanguageVersion.of(N)` inside a toolchain block. Dynamic expressions (`libs.versions.java.get()`) and convention-plugin-driven values return `None`. Source: `scope-core/src/workspace/pom_xml.rs` + `scope-core/src/workspace/build_gradle.rs`.
+
 ## Test fixtures
 
 - `gumiho-mudang-scope/tests/fixtures/languages/java/`

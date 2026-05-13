@@ -55,6 +55,7 @@ No `NEEDS REVIEW` outstanding for D2 / D3 / E2 / F1.
 ## Known gotchas
 
 1. Module-level imports use the synthetic `{file_path}::__module__::function` `from_id` form. The resolver filters the synthetic ID strictly to `kind='imports'` (see `scope-graph/src/graph.rs::find_deps`).
+2. `lang_version` detector (sprint 0003 (d), indexer-side carveout per R4): priority is PEP 621 `[project].requires-python` (`pyproject_toml::extract_requires_python`) → Poetry `[tool.poetry.dependencies].python` (string or `{ version = "..." }` table) → legacy `setup.py` `python_requires=` kwarg (`setup_py::extract_python_requires`). PEP 621 wins when both PEP 621 and Poetry tables coexist. `setup.py` parsing is literal-string-only: dynamic forms (`open('req').read()`, const references, triple-quoted strings) return `None` rather than fabricate a guess; projects on those patterns should migrate to `pyproject.toml`. The raw spec is stored verbatim — `">=3.10"`, `"^3.10"`, `"~=3.11"` all flow through unchanged. Source: `scope-core/src/workspace/pyproject_toml.rs` + `scope-core/src/workspace/setup_py.rs`.
 
 ## Test fixtures
 

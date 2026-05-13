@@ -68,6 +68,7 @@ No `NEEDS REVIEW` outstanding for D2 / D3 / E2 / F1.
 
 1. The query `(call method: (_) @call.name) @call.node` also structurally matches receiver calls, imports, mixins, and metaprogramming — the extractor validates call text with `is_plain_ruby_call` and `is_reserved_edge_call` to suppress double-emission across the narrower patterns. Adding new narrow patterns must also extend `is_reserved_edge_call` to prevent double-counting.
 2. `clean_ruby_literal` strips `:` symbol prefix and matching quotes; `clean_ruby_edge_name` strips leading `::` from constants. Both are conservative — round-tripping the source form is not guaranteed.
+3. `lang_version` detector (sprint 0003 (d), indexer-side carveout per R4): per-directory priority is `.ruby-version` (`ruby_version::parse_ruby_version_file`, the de-facto `rbenv` / `chruby` / `asdf` convention) → `Gemfile` `ruby '<version>'` directive (`ruby_version::extract_gemfile_ruby_directive`). The `.ruby-version` body is a single bare version string optionally prefixed `ruby-` (stripped). The Gemfile directive recognises only the literal-string form — `ruby '3.2.2'`, `ruby "3.1.4"`, `ruby '~> 3.2'` — and ignores `ruby_version =` (word-boundary check). Dynamic expressions (`ruby File.read('.ruby-version').chomp`) return `None`; projects on that pattern should keep a literal `.ruby-version`. Source: `scope-core/src/workspace/ruby_version.rs`.
 
 ## Test fixtures
 
