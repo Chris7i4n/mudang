@@ -1,7 +1,7 @@
 # Reference fixture corpus — R8 confidence audit
 
 > **Ships**: sprint 0007 (R8 — Confidence audit subcommand).
-> **Source of truth**: [`ARCHITECTURAL-REFACTOR.md` § R8](../../../../docs/ARCHITECTURAL-REFACTOR.md#r8--confidence-audit-subcommand).
+> **Source of truth**: [`ENFORCEMENT-MAP.md` § R8](../../../../docs/ENFORCEMENT-MAP.md#r8--confidence-audit-subcommand).
 > **Sample schema**: [`AUDIT-LABEL-SCHEMA.md`](../../../../docs/AUDIT-LABEL-SCHEMA.md).
 
 ---

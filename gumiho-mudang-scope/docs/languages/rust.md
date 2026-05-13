@@ -44,7 +44,7 @@ Pattern catalog (per `queries/rust/edges.scm` + `scope-core/src/extract/rust_lan
 
 ## Universal boundaries — compliance log
 
-R-move shorthand: [R0](../ARCHITECTURAL-REFACTOR.md#r0--schema-closures), [R1](../ARCHITECTURAL-REFACTOR.md#r1--typed-edge-insertion-api), [R2](../ARCHITECTURAL-REFACTOR.md#r2--languageplugin-output-type-closure), [R3](../ARCHITECTURAL-REFACTOR.md#r3--pipeline-ordering-via-type-state), [R4](../ARCHITECTURAL-REFACTOR.md#r4--workspacecontext-typed-access-split), [R7](../ARCHITECTURAL-REFACTOR.md#r7--indexer-level-dispatch-enforcement).
+R-move shorthand: [R0](../ENFORCEMENT-MAP.md#r0--schema-closures), [R1](../ENFORCEMENT-MAP.md#r1--typed-edge-insertion-api), [R2](../ENFORCEMENT-MAP.md#r2--languageplugin-output-type-closure), [R3](../ENFORCEMENT-MAP.md#r3--pipeline-ordering-via-type-state), [R4](../ENFORCEMENT-MAP.md#r4--workspacecontext-typed-access-split), [R7](../ENFORCEMENT-MAP.md#r7--indexer-level-dispatch-enforcement).
 
 - **A1** (no type inference): **mechanically enforced after R12 sprint 0004** — `scripts/audit_trait_shape.sh` (gate `ci-trait-shape`) forbids `fn infer_*` in the scanned plugin / extractor paths. The historical `LanguageId::infer_symbol_kind` and `is_likely_generic_param`-callers were renamed (the former to `symbol_kind_for_node` in the same sprint) — the function is a static node-kind lookup, not inference. Rust type identifiers are captured as text via `type_ref` captures only; single uppercase letters are filtered as generic params (`is_likely_generic_param`).
 - **A2** (no constraint solving): **mechanically enforced after R12 sprint 0004** — `scripts/audit_trait_shape.sh` forbids `fn solve_*`. Trait bounds in generic params are captured as text, never resolved.

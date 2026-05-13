@@ -95,6 +95,7 @@ All of the following hold simultaneously:
 4. The codex review report is attached to the PR body with each focus bullet either addressed or recorded as Non-blocker / Rejected with rationale.
 5. No regressions in earlier sprints' acceptance bullets.
 6. Any stub or transitional shim this sprint introduces is registered in its tracking table in the same commit; any stub this sprint retires is struck in the same commit.
+7. **Enforcement-map update** ([`README.md` § 7.5](./README.md#75-enforcement-map-update)). If this sprint introduced or changed any mechanical / detectable enforcement (new audit, new trait-shape ban, new schema constraint, new typed-API closure, new const-fn dispatch), the matching `### R<n>` entry in [`ENFORCEMENT-MAP.md`](../ENFORCEMENT-MAP.md) was added or updated in the same commit, and the inventory tables were updated if the class shifted. If the sprint changed no enforcement, this bullet collapses to "n/a — no enforcement surface touched".
 
 ## Out of scope for this sprint
 

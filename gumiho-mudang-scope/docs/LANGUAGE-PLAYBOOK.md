@@ -1,12 +1,12 @@
 # Language Plugin Playbook
 
-Companion to `CHARTER.md`, `ARCHITECTURAL-REFACTOR.md`, and `FRAMEWORK-PLAYBOOK.md`.
+Companion to `CHARTER.md`, `ENFORCEMENT-MAP.md`, and `FRAMEWORK-PLAYBOOK.md`.
 
-The charter defines what Scope is and is not. The architectural refactor defines the structural closure that mechanically enforces the rules below. The framework playbook governs framework adoption. This document governs language plugin adoption and maintenance.
+The charter defines what Scope is and is not. The enforcement map maps each rule below to the architecture (R-entry) that mechanically enforces or detects it. The framework playbook governs framework adoption. This document governs language plugin adoption and maintenance.
 
 The charter (sections 5 and 7) states architectural hard limits and per-language IN/OUT examples. This playbook abstracts the universal pattern: a single set of rules that **any language plugin must respect**, regardless of which language it targets. The rules are the answer to one question — "what makes a language plugin become a worse LSP, and how do we never cross that line?"
 
-Where this playbook says "the rule is enforced mechanically by …", the corresponding move in `ARCHITECTURAL-REFACTOR.md` (R0–R12, closed 2026-05-12) is the implementation. The closure record's inventory tables map each rule to its enforcement class (mechanical / detectable / discipline) and the R-move that owns it.
+Where this playbook says "the rule is enforced mechanically by …", the corresponding R-entry in [`ENFORCEMENT-MAP.md`](ENFORCEMENT-MAP.md) is the implementation. The enforcement map's inventory tables map each rule to its enforcement class (mechanical / detectable / discipline) and the R-entry that owns it.
 
 This document has two purposes:
 
@@ -119,7 +119,7 @@ Surface-only languages do not earn per-language depth feature work. They live in
 
 ### Depth target
 
-The plugin earns post-refactor depth feature work (currently Rust, Python, Go, TypeScript). Per-language items earn investment because the language is used heavily and the per-language depth pays back.
+The plugin earns depth feature work (currently Rust, Python, Go, TypeScript). Per-language items earn investment because the language is used heavily and the per-language depth pays back.
 
 Pick depth target when:
 
@@ -127,7 +127,7 @@ Pick depth target when:
 - Triggers continue to accumulate even after surface-only support exists.
 - Per-language depth items have measurable ROI.
 
-A language can be promoted from surface to depth (or demoted) via amendment to `LANGUAGE-DECISIONS.md`. Promotion queues depth feature work for the language (resumed only after `ARCHITECTURAL-REFACTOR.md` ships). Demotion freezes existing items but does not retroactively remove them.
+A language can be promoted from surface to depth (or demoted) via amendment to `LANGUAGE-DECISIONS.md`. Promotion queues depth feature work for the language. Demotion freezes existing items but does not retroactively remove them.
 
 ---
 
@@ -167,11 +167,11 @@ Definitions are captured. Expansions are not produced. This applies to Rust `mac
 C2. **No version-specific compiler-quirk modelling.**
 The plugin does not track Rust 2018-vs-2021 edition semantic differences, Python 2-vs-3 semantic differences, TypeScript strict-mode behavior, Go generics-aware overload resolution, etc. The plugin reads source as syntactic structure; semantic interpretation belongs to the compiler.
 
-The plugin **does not read** `.ruby-version`, `python_requires` in `pyproject.toml`, the `target` field in `tsconfig.json`, the `edition` in `Cargo.toml`, the `go` directive in `go.mod`, or any equivalent. A plugin that conditioned its extraction on "is this a Python 2 file" would have to model Python 2 semantics, which is the compiler's job. The mechanical safeguard for this rule is `LanguageWorkspaceContext` (`ARCHITECTURAL-REFACTOR.md` R4 split): the language-facing context trait deliberately omits any accessor for these fields, so reading them is a compile error inside a language plugin. Adding such an accessor is a charter-amendment-grade change.
+The plugin **does not read** `.ruby-version`, `python_requires` in `pyproject.toml`, the `target` field in `tsconfig.json`, the `edition` in `Cargo.toml`, the `go` directive in `go.mod`, or any equivalent. A plugin that conditioned its extraction on "is this a Python 2 file" would have to model Python 2 semantics, which is the compiler's job. The mechanical safeguard for this rule is `LanguageWorkspaceContext` (`ENFORCEMENT-MAP.md` R4 split): the language-facing context trait deliberately omits any accessor for these fields, so reading them is a compile error inside a language plugin. Adding such an accessor is a charter-amendment-grade change.
 
 A single language plugin handles every language version that its pinned tree-sitter grammar parses (typically a syntactic superset across major versions — see `CHARTER.md` section 7 "Multi-version posture"). Newer-version syntax in older sources simply does not appear; older syntax in newer sources is recovered when grammar still recognises it.
 
-**Asymmetry with framework version**: rule C2 governs **language** version. **Framework** version branching is allowed and expected — framework predicates use `Detection.version` (`ARCHITECTURAL-REFACTOR.md` R5) to handle Rails 5 vs 7, Express 4 vs 5, etc. The split is intentional: language semantics are the compiler's territory (out of Scope per CHARTER section 5); framework patterns are the maintainer's working surface (in scope per CHARTER section 6, governed by `FRAMEWORK-PLAYBOOK.md`).
+**Asymmetry with framework version**: rule C2 governs **language** version. **Framework** version branching is allowed and expected — framework predicates use `Detection.version` (`ENFORCEMENT-MAP.md` R5) to handle Rails 5 vs 7, Express 4 vs 5, etc. The split is intentional: language semantics are the compiler's territory (out of Scope per CHARTER section 5); framework patterns are the maintainer's working surface (in scope per CHARTER section 6, governed by `FRAMEWORK-PLAYBOOK.md`).
 
 ### Category D — Resolution discipline
 
@@ -179,7 +179,7 @@ D1. **No cross-file resolution beyond what config files declare.**
 Module hierarchy is derivable from filesystem layout plus config files (`Cargo.toml`, `package.json`, `tsconfig.json`, `pyproject.toml`, `go.mod`). The plugin does not "search the world" or guess based on naming conventions outside these constraints.
 
 D2. **No "best guess" fallback resolution.**
-When multiple candidates exist for a name, the resolution pass (R3 in `ARCHITECTURAL-REFACTOR.md`) sets `status='ambiguous'` and writes one row per candidate target (multiplicity is allowed because R0 makes the edge PK a surrogate `edge_id`). The extractor's `confidence` is preserved through resolution **as-is**: a clean syntactic pattern (`class Foo extends Bar`) keeps `confidence='high'` even when the workspace has multiple visible `Bar` symbols, because confidence describes the **pattern's precision** while status describes the **lookup outcome** — they are orthogonal and both columns must be queried by the consumer that wants the cleanest signal (`confidence='high' AND status='resolved'`). The plugin never silently picks one candidate and writes a `resolved` edge. Honest ambiguity beats false certainty. (An earlier wording of D2 collapsed ambiguous-target into `confidence='medium'`; the post-R3 split distinguishes the two columns and is the version that governs new code.)
+When multiple candidates exist for a name, the resolution pass (R3 in `ENFORCEMENT-MAP.md`) sets `status='ambiguous'` and writes one row per candidate target (multiplicity is allowed because R0 makes the edge PK a surrogate `edge_id`). The extractor's `confidence` is preserved through resolution **as-is**: a clean syntactic pattern (`class Foo extends Bar`) keeps `confidence='high'` even when the workspace has multiple visible `Bar` symbols, because confidence describes the **pattern's precision** while status describes the **lookup outcome** — they are orthogonal and both columns must be queried by the consumer that wants the cleanest signal (`confidence='high' AND status='resolved'`). The plugin never silently picks one candidate and writes a `resolved` edge. Honest ambiguity beats false certainty.
 
 D3. **No symbol-id collision resolution by guessing.**
 If two symbols collide on `file::name::kind::line` (the implementation in `src/core/parser.rs:220` includes the declaration line as a uniqueness disambiguator), that is a real ambiguity (or a bug). Record both with a disambiguating qualifier in metadata, or mark the symbol as ambiguous. Do not smooth over the collision.
@@ -198,13 +198,13 @@ Indexing output is deterministic. The plugin does not "skip this if it looks lik
 ### Category F — Architecture discipline
 
 F1. **No multi-pass semantic analysis inside the plugin.**
-Plugins are one-pass extractors (Appendix A of charter). If a feature requires re-walking with new information, that feature lives in the cross-cutting **resolution pass** (R3 in `ARCHITECTURAL-REFACTOR.md`, enforced via type-state pipeline ordering), not inside the language plugin.
+Plugins are one-pass extractors (Appendix A of charter). If a feature requires re-walking with new information, that feature lives in the cross-cutting **resolution pass** (R3 in `ENFORCEMENT-MAP.md`, enforced via type-state pipeline ordering), not inside the language plugin.
 
 F2. **No write-back to source.**
 The plugin reads files. The plugin never writes to source files. Refactoring, code generation, and formatting are out of scope permanently — those are editor and compiler-toolchain features.
 
 F3. **No file-format parsing beyond tree-sitter and a plain-text fallback.**
-A plugin that wants to read embedded YAML, JSON, or another structured format inside a source file must defer to a **config reader** (R4 in `ARCHITECTURAL-REFACTOR.md`: `WorkspaceContext` is the only typed access path). The plugin does not import a YAML parser to understand a Rust attribute that contains YAML; it captures the attribute as text and lets a config reader do its job.
+A plugin that wants to read embedded YAML, JSON, or another structured format inside a source file must defer to a **config reader** (R4 in `ENFORCEMENT-MAP.md`: `WorkspaceContext` is the only typed access path). The plugin does not import a YAML parser to understand a Rust attribute that contains YAML; it captures the attribute as text and lets a config reader do its job.
 
 F4. **No language detection by content sniffing beyond extension and shebang.**
 The plugin is invoked when the file extension or shebang matches. It does not try to parse a `.txt` file as Rust to "see if it fits." Detection is the indexer's job, not the plugin's.
@@ -223,16 +223,14 @@ When a new language is approved for adoption (BUILD verdict, depth target chosen
 
 1. **Locate or pick a tree-sitter grammar.** Verify maturity, license, and that it produces the AST shapes you need. Reject the language adoption if no usable grammar exists.
 2. **Write `queries/<lang>/symbols.scm`.** Cover the language's basic symbol kinds: function, class/struct/interface/enum, type alias, constant, module. Skip macro/template definitions if Category C makes them awkward.
-3. **Write `queries/<lang>/edges.scm`.** Cover `calls`, `imports`, `contains`, `references_type`, `extends`, `implements`. These are the universal edges; any language-specific edges (e.g., Go's `green_thread_spawn`, renamed from the earlier `goroutine_spawn` draft to fit the 4-kind concurrency taxonomy in `ARCHITECTURAL-REFACTOR.md` R0) are added later in the depth phase. For call-site edges whose target carries semantic anchor information in its arguments (HTTP routes, queue enqueues, env reads, GraphQL operations, pubsub topics), capture the raw argument list as `Edge.args_text` per R0. The extractor caps `args_text` at 2 KB; the resolver skips writing it when the target is a fully-qualified import (Mitigation 1 / 2). Do **not** interpret the captured text at the language-plugin layer — it is a verbatim literal for framework plugins (R5) and downstream consumers to consume. Interpreting at this layer violates rule E2.
+3. **Write `queries/<lang>/edges.scm`.** Cover `calls`, `imports`, `contains`, `references_type`, `extends`, `implements`. These are the universal edges; any language-specific edges (e.g., Go's `green_thread_spawn`, which fits the 4-kind concurrency taxonomy in `ENFORCEMENT-MAP.md` R0) are added later in the depth phase. For call-site edges whose target carries semantic anchor information in its arguments (HTTP routes, queue enqueues, env reads, GraphQL operations, pubsub topics), capture the raw argument list as `Edge.args_text` per R0. The extractor caps `args_text` at 2 KB; the resolver skips writing it when the target is a fully-qualified import (Mitigation 1 / 2). Do **not** interpret the captured text at the language-plugin layer — it is a verbatim literal for framework plugins (R5) and downstream consumers to consume. Interpreting at this layer violates rule E2.
 4. **Populate `Symbol.metadata` with the three reserved framework-primitive keys when present in source** (see "Metadata schema for framework primitives" below). Without these keys, no framework plugin can match against this language for AST-shape patterns. This step is mandatory even for surface-only adoption.
-5. **Implement `LanguagePlugin` trait.** Two shapes coexist depending on whether `ARCHITECTURAL-REFACTOR.md` R2 has shipped:
-   - **Closed-shape methods on `impl LanguageId`** (post-R2 / R7): `symbol_kind_for_node` (the historical `infer_symbol_kind` was renamed at R12 to align with the trait-shape audit — pure node-kind-string-to-symbol-kind-label match expression, no type-system involvement), `scope_node_types`, `extract_metadata`, `extract_edge`, docstring extraction. Per-language behaviour lives in `impl LanguageId` match arms delegating to `scope-core/src/languages/<lang>.rs` modules; there is no `LanguagePlugin` trait and no `*Plugin` unit structs.
-   - **Post-R2** (target shape): the trait returns `RawCaptures` (typed bag of capture results, declared metadata, `skipped_ranges`) and a separate `Extractor` layer converts those into `Edge::builder()` calls. Plugins do not emit edges directly. See `ARCHITECTURAL-REFACTOR.md` R2 for the full target shape.
+5. **Implement the per-language extractor.** The plugin surface is `impl LanguageId` methods (`ENFORCEMENT-MAP.md` R7) plus a per-language module under `scope-core/src/languages/<lang>.rs` and a per-extractor module under `scope-core/src/extract/<lang>.rs`. Methods: `symbol_kind_for_node` (pure node-kind-string-to-symbol-kind-label match expression — no type-system involvement; `ENFORCEMENT-MAP.md` R12 trait-shape audit enforces the name), `scope_node_types`, `extract_metadata`, `extract_edge`, docstring extraction. The per-extractor module returns `RawCaptures { matches, metadata, skipped_ranges }` and `scope-core/src/extract/mod.rs::extract_edges` converts those into `EdgeBuilder` calls — plugins never emit edges directly. There is no `LanguagePlugin` trait and no `*Plugin` unit structs. See `ENFORCEMENT-MAP.md` R2 for the full extractor contract.
 6. **Build 5+ real-world fixtures.** Same discipline as frameworks — anonymized snippets from real maintainer projects, not synthetic toy code.
 7. **Run the index, measure precision and recall.** For each edge kind, manually verify a sample. Edges that fail precision target get downgraded to `medium` or skipped.
 8. **Stop when**:
    - Surface-only target: `calls`, `imports`, `contains` work on real fixtures with > 80% precision and the symbol set covers > 80% of relevant top-level definitions; the three reserved metadata keys (`decorators`, `annotations`, `template_calls`) are populated where AST exposes them.
-   - Depth target: same as surface-only baseline plus per-language depth feature work queued for later sprints (resumed only after `ARCHITECTURAL-REFACTOR.md` ships).
+   - Depth target: same as surface-only baseline plus per-language depth feature work queued for later sprints.
 
 ### Metadata schema for framework primitives
 
@@ -248,7 +246,7 @@ Framework plugins are forbidden from accessing AST or running their own `.scm` q
 
 If the language has no concept matching a metadata key (no decorators, no annotations, no templates), the key is omitted (not present in JSON), not set to an empty array — that distinction lets the audit detect "language did not implement this surface" vs "AST has no instances".
 
-**Why these three keys.** All three correspond to dedicated AST node shapes — capturing them is purely structural and language-plugin-safe (no E2 interpretation). Each key is a noun-phrase capturing what the AST literally said (decorators applied to a symbol; annotations applied to a symbol; template/component calls inside a symbol's body). The corresponding *resolved* relationships live in the **edge** layer (`http_route`, `renders`, etc.) and are emitted only when a framework predicate matches — never by the language plugin. Pre-resolution (metadata) and post-resolution (edge) are separate stages; see `ARCHITECTURAL-REFACTOR.md` R3 (resolution) and R5 (framework match).
+**Why these three keys.** All three correspond to dedicated AST node shapes — capturing them is purely structural and language-plugin-safe (no E2 interpretation). Each key is a noun-phrase capturing what the AST literally said (decorators applied to a symbol; annotations applied to a symbol; template/component calls inside a symbol's body). The corresponding *resolved* relationships live in the **edge** layer (`http_route`, `renders`, etc.) and are emitted only when a framework predicate matches — never by the language plugin. Pre-resolution (metadata) and post-resolution (edge) are separate stages; see `ENFORCEMENT-MAP.md` R3 (resolution) and R5 (framework match).
 
 **Why not a `hooks` key.** An earlier draft included `hooks` (React-style `^use[A-Z]` calls) as a reserved key. It was removed because applying a regex to a function name to decide "this is a hook" interprets a naming convention — exactly what E2 forbids the language plugin from doing. React, Vue's composition API, and any other hook-style framework are matched at the framework-plugin layer, where the predicate is allowed to apply naming-convention regexes to `Symbol.name` and `edges.kind='calls'` rows.
 
@@ -281,7 +279,7 @@ Every adopted language has a companion document at `docs/languages/<name>.md`:
 
 ## Depth target
 - surface | depth
-- Post-refactor depth queue: yes | no (depth feature work resumes only after `ARCHITECTURAL-REFACTOR.md` ships)
+- Depth queue: yes | no
 
 ## Symbol kinds emitted
 - function | class | struct | enum | trait | interface | type_alias | constant | module | macro | property
@@ -339,7 +337,7 @@ After a language plugin ships, watch for:
 ### Depth promotion request
 
 - If triggers accumulate against a surface-only language, evaluate promotion to depth target.
-- Promotion queues post-refactor depth feature work for the language. Demotion freezes existing items.
+- Promotion queues depth feature work for the language. Demotion freezes existing items.
 
 ### Surface plugin unused for 12 months
 
@@ -403,7 +401,7 @@ new pain felt with unsupported language
 Working set (static documents that govern decisions):
 
 - **`CHARTER.md`** — what Scope is and is not. Permanent.
-- **`ARCHITECTURAL-REFACTOR.md`** — closure record of the structural refactor (shipped 2026-05-12) that mechanically enforces charter hard limits and the 18 rules in Step 4.
+- **`ENFORCEMENT-MAP.md`** — rule→implementation map. Maps each charter hard limit and each of the 18 rules in Step 4 to the R-entry that enforces it.
 - **`LANGUAGE-PLAYBOOK.md`** (this file) — how to add and maintain language plugins within universal boundaries.
 - **`FRAMEWORK-PLAYBOOK.md`** — how to add and maintain framework plugins within universal boundaries.
 

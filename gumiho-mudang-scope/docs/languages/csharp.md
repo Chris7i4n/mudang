@@ -39,7 +39,7 @@ Pattern catalog (per `queries/csharp/edges.scm`):
 ## Universal boundaries — compliance log
 
 - **A1 / A2 / A3** (type system): **mechanically enforced after R12 sprint 0004** — `scripts/audit_trait_shape.sh` (gate `ci-trait-shape`) forbids any `fn infer_*` / `fn solve_*` / `fn narrow_*` / `fn resolve_overload_*` in the scanned plugin / extractor paths. C# generics are not solved; method-resolution semantics are not modelled.
-- **B1**: discipline-only per the universal class-3 list (`ARCHITECTURAL-REFACTOR.md § What remains discipline-only after the refactor`).
+- **B1**: discipline-only per the universal class-3 list (`ENFORCEMENT-MAP.md § What remains discipline-only after the refactor`).
 - **B2** (no runtime / dynamic resolution): **mechanically enforced after R12 sprint 0004** — `scripts/audit_trait_shape.sh` forbids `fn evaluate_*`. C# `dynamic` dispatch is captured by syntactic position only.
 - **B3**: trivially compliant — tree-sitter parser recovery scanner active.
 - **C1** (no macro / template expansion): **mechanically enforced after R11 sprint 0004** — the same trait-shape audit forbids `fn expand_*`. C# has no macro system; the rule's enforcement layer applies uniformly across languages.

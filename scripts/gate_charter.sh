@@ -11,10 +11,10 @@
 #   dual-read code path, or stored-format version detector is
 #   permitted to survive a commit that lands on `main`.
 #
-# Reference: the refactor's Compat-shims-outstanding table was empty
-# at close (2026-05-12) and the tracking doc retired with it. Any new
-# compat shim now requires charter / refactor-doc amendment + a
-# tracking decision before landing — not a silent addition.
+# Reference: the architecture forbids compat shims (`CHARTER.md` § 2
+# + § 3 inv 8). Any new compat shim requires charter amendment + an
+# `ENFORCEMENT-MAP.md` R-entry update before landing — not a silent
+# addition.
 #
 # Each check below targets a *specific shim shape* that sprint 0009
 # retired. The patterns are narrow on purpose: catching loose
@@ -26,9 +26,9 @@
 #
 # Exits non-zero on any match. Output identifies the failing check
 # and the retiring commit so the operator can see why the shim shape
-# was removed in the first place. At refactor close the shim shapes
-# below are forbidden outright; re-introducing one requires charter /
-# refactor-doc amendment, not a silent shim addition.
+# was removed in the first place. The shim shapes below are forbidden
+# outright; re-introducing one requires charter amendment + an
+# `ENFORCEMENT-MAP.md` update, not a silent shim addition.
 
 set -euo pipefail
 

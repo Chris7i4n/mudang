@@ -14,7 +14,7 @@
 //! plugin's constructor argument.
 //!
 //! See sprint 0005 ambiguity #1 resolution in
-//! `ARCHITECTURAL-REFACTOR.md` § R5 → "Synthetic test framework
+//! `ENFORCEMENT-MAP.md` § R5 → "Synthetic test framework
 //! location" for why this lives under `tests/` rather than
 //! `src/frameworks/_test/`.
 

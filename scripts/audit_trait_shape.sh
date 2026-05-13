@@ -25,7 +25,7 @@
 # doc comments, or string literals do not count (`// infer_*` in prose
 # is fine).
 #
-# Per ARCHITECTURAL-REFACTOR.md § R11 + § R12, sprint 0002 ae37e30
+# Per ENFORCEMENT-MAP.md § R11 + § R12, sprint 0002 ae37e30
 # (A.4 trait collapse), and LANGUAGE-PLAYBOOK.md A1/A2/A3/B2/C1.
 #
 # Exits non-zero on any match.

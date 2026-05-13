@@ -16,16 +16,14 @@ Companion to:
 - `gumiho-mudang-scope/docs/FRAMEWORK-PLAYBOOK.md` §219 / R5 —
   `applies_to_languages` opt-in, framework predicate writes
   normalization metadata.
-- `gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` R0 — edge-kind
-  whitelist (38 kinds) + `edges.args_text` column that this layer
-  consumes. Shipped 2026-05-12.
+- `gumiho-mudang-scope/docs/ENFORCEMENT-MAP.md` R0 — edge-kind
+  whitelist (38 kinds) + `edges.args_text` column this layer consumes.
   The original recommendation lives in
   [`docs/todos/0009-expand-domain-edge-kinds.md`](./todos/0009-expand-domain-edge-kinds.md)
   (status: absorbed by R0).
 - `docs/todos/0007-composer-crate.md` — the crate that owns this code.
 
-Phase: composer (phase C). Implementation depends on scope R0 landing
-first (sprint 0001 close on `main`).
+Phase: composer (phase C). Depends on scope R0 (current architecture).
 
 ---
 
@@ -291,18 +289,17 @@ output shows `high` and `medium` and hides `low` behind `--strict` /
 
 ---
 
-## 8. What scope must provide (post-R0)
+## 8. What scope provides
 
-The stitcher consumes only fields that exist after R0 ships
-(sprint 0001 close on `main`; final whitelist + `args_text` per
-[`docs/todos/0009-expand-domain-edge-kinds.md`](./todos/0009-expand-domain-edge-kinds.md),
+The stitcher consumes fields from R0 (final whitelist + `args_text`
+per [`docs/todos/0009-expand-domain-edge-kinds.md`](./todos/0009-expand-domain-edge-kinds.md),
 absorbed into R0). Required:
 
 - `edges.kind` — whitelist of 38 kinds includes every producer /
   consumer kind named in §3.
 - `edges.args_text` — TEXT NULL, capped at 2 KB, with Mitigation 1
   (resolver-skip on fully-qualified targets) and Mitigation 2
-  (`[truncated]` marker) per `ARCHITECTURAL-REFACTOR.md` R0.
+  (`[truncated]` marker) per `ENFORCEMENT-MAP.md` R0.
 - `edges.framework` — per-edge framework tag (`react`, `axios`,
   `rails`, `fastapi`, …) so the stitcher can scope to specific
   producer / consumer framework sets when an anchor demands it.
@@ -423,7 +420,7 @@ stitcher task.
 - `gumiho-mudang-scope/docs/LANGUAGE-PLAYBOOK.md` rule E2 — language
   plugins do not interpret cross-language semantics.
 - `docs/todos/0007-composer-crate.md` — owning crate.
-- `gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` R0 — edge-kind
+- `gumiho-mudang-scope/docs/ENFORCEMENT-MAP.md` R0 — edge-kind
   whitelist (38 kinds) + `edges.args_text` column this layer consumes.
 - `docs/todos/0009-expand-domain-edge-kinds.md` — historical
   recommendation (status: absorbed by R0).

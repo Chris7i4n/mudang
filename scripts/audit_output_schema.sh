@@ -12,7 +12,7 @@
 #   forbids. The output struct surface is the mechanical enforcement
 #   point for E1.
 #
-# Per ARCHITECTURAL-REFACTOR.md § R10 → "Sprint 0006 scope decision".
+# Per ENFORCEMENT-MAP.md § R10 → "Sprint 0006 scope decision".
 #
 # Mechanism: awk state machine that tracks `struct <Name> {` ... `}`
 # blocks and emits any field declaration matching the banned set.
@@ -116,7 +116,7 @@ echo "lint / correctness in the CLI output surface:" >&2
 echo "" >&2
 printf '%s' "$failures" >&2
 echo "" >&2
-echo "Per ARCHITECTURAL-REFACTOR.md § R10 + CHARTER.md §5 (E1 — no" >&2
+echo "Per ENFORCEMENT-MAP.md § R10 + CHARTER.md §5 (E1 — no" >&2
 echo "semantic correctness assertions): output structs cannot carry" >&2
 echo "diagnostic content. Rename the field to its observable shape" >&2
 echo "(e.g., 'skipped_ranges' instead of 'errors', 'status' instead of" >&2

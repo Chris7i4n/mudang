@@ -217,7 +217,7 @@ pub struct MetadataEntry {
 
 /// One declared metadata field attached to a symbol the plugin saw.
 ///
-/// Reserved keys per `ARCHITECTURAL-REFACTOR.md` § R0 schema and
+/// Reserved keys per `ENFORCEMENT-MAP.md` § R0 schema and
 /// `LANGUAGE-PLAYBOOK.md` Step 5: `decorators`, `annotations`,
 /// `template_calls`. Plugins may emit other keys for their own
 /// reserved domain, but framework-shaped derivations (`hooks`, route

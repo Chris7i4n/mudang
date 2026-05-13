@@ -28,7 +28,7 @@
 # matched directly so introducing an alias does not bypass the gate.
 # The codex sprint-0004 review surfaced this as a P2 bypass.
 #
-# Per ARCHITECTURAL-REFACTOR.md § R12, CHARTER.md § 5, and
+# Per ENFORCEMENT-MAP.md § R12, CHARTER.md § 5, and
 # CI-GATES.md § Allowlist convention.
 #
 # Exits non-zero on any unallowlisted match.

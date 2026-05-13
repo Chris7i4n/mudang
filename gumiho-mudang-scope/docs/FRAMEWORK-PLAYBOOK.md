@@ -1,6 +1,6 @@
 # Framework Adoption Playbook
 
-Companion to `CHARTER.md`, `ARCHITECTURAL-REFACTOR.md`, and `LANGUAGE-PLAYBOOK.md`.
+Companion to `CHARTER.md`, `ENFORCEMENT-MAP.md`, and `LANGUAGE-PLAYBOOK.md`.
 
 The charter (section 6) says framework awareness is a legitimate expansion direction. The architectural refactor's R5 move ships the infrastructure: `FrameworkPlugin` consumes Symbols and Edges (never AST) and operates on the indexed graph rather than the parser's output. This document defines how the per-framework adoption decision is made — when to add a framework, how to support multiple versions, how to catalogue gotchas, and when to remove a framework that is no longer used.
 
@@ -124,7 +124,7 @@ Most frameworks have multiple major versions in active use simultaneously, and p
 
 This is the **opposite** of the language layer. Language plugins do not branch by language version (rule C2, `LANGUAGE-PLAYBOOK.md` Step 4): the tree-sitter grammar handles the syntactic superset and version-specific semantics are the compiler's territory. Framework patterns, by contrast, are the maintainer's working surface and shift with each major framework release; ignoring the version produces false positives that audit (R8) cannot easily fix.
 
-Mechanically: `Detection { detected, version, applies_to_languages }` (`ARCHITECTURAL-REFACTOR.md` R5) carries the version. The framework predicate inspects `Detection.version` and selects which `Symbol.metadata` shapes to match plus which `Edge.args_text` literals to filter (e.g., HTTP path strings, queue names, env-var names — `args_text` is captured raw by language plugins per R0 and interpreted by framework plugins). The version source of truth is the workspace config: `Gemfile.lock`, `package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`, exposed via `WorkspaceContext` (R4). The framework plugin never reads files directly.
+Mechanically: `Detection { detected, version, applies_to_languages }` (`ENFORCEMENT-MAP.md` R5) carries the version. The framework predicate inspects `Detection.version` and selects which `Symbol.metadata` shapes to match plus which `Edge.args_text` literals to filter (e.g., HTTP path strings, queue names, env-var names — `args_text` is captured raw by language plugins per R0 and interpreted by framework plugins). The version source of truth is the workspace config: `Gemfile.lock`, `package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`, exposed via `WorkspaceContext` (R4). The framework plugin never reads files directly.
 
 ### Granularity (semver via VersionReq)
 
@@ -138,7 +138,7 @@ Predicates use full semver via `semver::VersionReq` rather than match arms on `(
 
 Why full semver and not `(major, minor)`: real frameworks ship breaking changes in patches occasionally; `7.0.4.3` may behave differently from `7.0.4`. Full semver costs nothing extra (one `.matches(version)` call per pattern) and prevents the "I assumed minor was enough and was wrong" failure mode.
 
-**Non-strict-semver versions** (Rails `7.0.4.3`, Python `3.11.0a1`, build-metadata-coupled tags) do not parse with `semver::Version::parse` directly. The version-coercion layer (`ARCHITECTURAL-REFACTOR.md` R5 → `DetectedVersion::Resolved`) maps each framework's raw version string to a `semver::Version` via a per-framework rule recorded in the per-framework doc — typically dropping the 4th component or stripping pre-release identifiers. The coercion is lossy: a `7.0.4.3` security patch that fixes behavior versus `7.0.4.0` is invisible to `VersionReq` after coercion. Frameworks whose versioning fundamentally cannot be coerced declare `DetectedVersion::NoVersionConcept` and treat every pattern as `VersionReq::STAR`.
+**Non-strict-semver versions** (Rails `7.0.4.3`, Python `3.11.0a1`, build-metadata-coupled tags) do not parse with `semver::Version::parse` directly. The version-coercion layer (`ENFORCEMENT-MAP.md` R5 → `DetectedVersion::Resolved`) maps each framework's raw version string to a `semver::Version` via a per-framework rule recorded in the per-framework doc — typically dropping the 4th component or stripping pre-release identifiers. The coercion is lossy: a `7.0.4.3` security patch that fixes behavior versus `7.0.4.0` is invisible to `VersionReq` after coercion. Frameworks whose versioning fundamentally cannot be coerced declare `DetectedVersion::NoVersionConcept` and treat every pattern as `VersionReq::STAR`.
 
 **Range-only manifests** (a `package.json` with `"^7.0"` but no `package-lock.json`; a `pyproject.toml` declaring a range without `poetry.lock`) resolve to `DetectedVersion::Indeterminate`, not a synthetic concrete version. The plugin's `unknown_version_policy()` decides what happens (zero edges by default). Inventing a version inside the range would silently lock in an answer the workspace has not committed to.
 
@@ -181,7 +181,7 @@ This is the default. Most frameworks should ship with strategy A.
 
 Detect framework version from the workspace config (`package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`) via `WorkspaceContext` (R4). Branch the framework predicate by detected version.
 
-Implementation pattern (graph-only model — see `ARCHITECTURAL-REFACTOR.md` R5):
+Implementation pattern (graph-only model — see `ENFORCEMENT-MAP.md` R5):
 
 - The framework plugin's predicate code reads `Detection { version, … }` and selects which `Symbol.metadata` shapes (`decorators`, `annotations`, `template_calls`) to match. Naming-convention shapes (React `^use[A-Z]` hooks, Vue composable conventions) are matched directly against `Symbol.name` and `edges WHERE kind='calls'` rows; they are not reserved metadata keys.
 - No per-version `.scm` files exist. The language plugin remains unaware of the framework's versions; only the framework predicate branches.
@@ -216,7 +216,7 @@ Every framework plugin has a companion document at `docs/frameworks/<name>.md` t
 
 ### Language scope
 
-Every framework plugin declares `Detection.applies_to_languages` (per R5 in `ARCHITECTURAL-REFACTOR.md`). The indexer pre-filters symbols and edges by this list before the predicate runs, so a Rails plugin scoped to `[Ruby]` cannot accidentally match a Python file that happens to use a decorator name shared with a Rails callback. Polyglot remains a feature of the graph; cross-language matching is opt-in per framework, not the default. Record the list in the per-framework doc and justify it.
+Every framework plugin declares `Detection.applies_to_languages` (per R5 in `ENFORCEMENT-MAP.md`). The indexer pre-filters symbols and edges by this list before the predicate runs, so a Rails plugin scoped to `[Ruby]` cannot accidentally match a Python file that happens to use a decorator name shared with a Rails callback. Polyglot remains a feature of the graph; cross-language matching is opt-in per framework, not the default. Record the list in the per-framework doc and justify it.
 
 **Allowed values are the variants of `LanguageId`** (`scope-core/src/languages/id.rs`, post-R7 rename of historical `SupportedLanguage`): `TypeScript`, `CSharp`, `Python`, `Go`, `Java`, `Rust`, `Ruby`. JavaScript is not currently a `LanguageId` variant. **`.js` and `.jsx` files are not indexed today** — the indexer's extension dispatch (`scope-core::languages::dispatch::dispatch_extension`) accepts only `ts|tsx`, and `LanguageId::TypeScript.extensions()` declares only `&["ts", "tsx"]`. React-style framework plugins therefore declare `applies_to_languages = vec![LanguageId::TypeScript]` and match exclusively against `.ts`/`.tsx` sources; a `.jsx` file written in plain JavaScript is invisible to every framework predicate today.
 
@@ -316,7 +316,7 @@ For each, the framework's gotcha doc records the decision and the reasoning.
 
 ## Step 5 — Implementation order within a framework
 
-Inside a single framework adoption (graph-only model — no `.scm` per framework, see `ARCHITECTURAL-REFACTOR.md` R5):
+Inside a single framework adoption (graph-only model — no `.scm` per framework, see `ENFORCEMENT-MAP.md` R5):
 
 1. **Confirm the language plugin populates the relevant metadata keys.** For Flask, the Python plugin must populate `Symbol.metadata.decorators` with `{name, args_text}`. For React, the TypeScript plugin must populate `metadata.template_calls` with `{name, args_text}` for each JSX component invocation. (The same key is populated for ERB partials in Ruby, Jinja includes/extends in Python, HEEx components in Elixir, etc., when those plugins ship.) Hook detection (`^use[A-Z]` calls) is the framework predicate's responsibility — no `metadata.hooks` key exists, since regex-on-name violates E2 at the language layer. If a required AST-shape key is missing, file a language-plugin change first; framework adoption blocks on that.
 2. **Pick the highest-frequency pattern first.** For Flask, that's the `@app.route` decorator. For React, that's JSX rendering. For Axum, that's the route macro. Implement the predicate (SQL or Rust matcher over `Symbol.metadata`, `Edge` rows, and `Edge.args_text` literals captured by the language plugin per R0) for just this pattern. The predicate may write framework-specific normalisation hints into `Symbol.metadata` for downstream consumers (e.g., `base_url`, `mount_prefix`, `version_prefix`, `method`, `queue`, `wildcard`) — the framework plugin is allowed to interpret what the language plugin captured raw.
@@ -359,7 +359,7 @@ After a framework plugin ships, watch for these signals:
 - Consider sunset (Step 7).
 - Dormant ≠ broken; it just means no recent triggers.
 
-### Confidence audit fails (R8 in `ARCHITECTURAL-REFACTOR.md`)
+### Confidence audit fails (R8 in `ENFORCEMENT-MAP.md`)
 
 - If `confidence='high'` edges from this plugin are wrong > 5%, downgrade to `medium` or root-cause and fix.
 - If `confidence='medium'` edges are wrong > 30%, downgrade to `low`.
@@ -428,7 +428,7 @@ new pain felt
 Four documents form the working set for any framework decision:
 
 - **`CHARTER.md`** — what Scope is and is not. Permanent constraints.
-- **`ARCHITECTURAL-REFACTOR.md`** — structural closure that mechanically enforces charter and playbook rules. R5 lands the framework infrastructure.
+- **`ENFORCEMENT-MAP.md`** — structural closure that mechanically enforces charter and playbook rules. R5 lands the framework infrastructure.
 - **`LANGUAGE-PLAYBOOK.md`** — language-plugin universal boundaries (the 18 rules). Framework gotchas may also touch language-plugin rules; check both.
 - **`FRAMEWORK-PLAYBOOK.md`** (this file) — how to choose what frameworks to support, when, and at what version coverage.
 

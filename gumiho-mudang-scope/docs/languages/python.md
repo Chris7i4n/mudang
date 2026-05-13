@@ -54,7 +54,7 @@ No `NEEDS REVIEW` outstanding for D2 / D3 / E2 / F1.
 
 ## Known gotchas
 
-1. Module-level imports use the synthetic `{file_path}::__module__::function` `from_id` form. The historical dual-source fallback was retired at refactor close — the resolver now filters the synthetic ID strictly to `kind='imports'` (see `scope-graph/src/graph.rs::find_deps`).
+1. Module-level imports use the synthetic `{file_path}::__module__::function` `from_id` form. The resolver filters the synthetic ID strictly to `kind='imports'` (see `scope-graph/src/graph.rs::find_deps`).
 
 ## Test fixtures
 

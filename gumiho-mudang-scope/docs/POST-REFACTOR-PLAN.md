@@ -1,12 +1,12 @@
 # Post-Refactor Plan
 
-Work eligible against the closed architecture. The architectural refactor closed on **2026-05-12** ([`ARCHITECTURAL-REFACTOR.md`](ARCHITECTURAL-REFACTOR.md) is now the closure record). The items below are queued for delivery in priority order. Each item additionally respects its own gate — language depth follows `LANGUAGE-PLAYBOOK.md` adoption flow; framework adoption follows `FRAMEWORK-PLAYBOOK.md` triggers.
+Work queued against the current architecture. [`ENFORCEMENT-MAP.md`](ENFORCEMENT-MAP.md) holds the rule→implementation map; the items below are queued for delivery in priority order. Each item additionally respects its own gate — language depth follows `LANGUAGE-PLAYBOOK.md` adoption flow; framework adoption follows `FRAMEWORK-PLAYBOOK.md` triggers.
 
 ---
 
 ## Eligibility
 
-The architecture closure (Phase E acceptance) holds. Every bullet below was demonstrated at refactor close:
+The architecture is stable and every bullet below holds:
 
 - Every universal rule in the inventory tables (`CHARTER.md` §5 hard limits and `LANGUAGE-PLAYBOOK.md` Step 4) is in class 1 (mechanical), class 2 (detectable), or the explicit class-3 universal list (B1, C2, E3).
 - Every active language plugin's `docs/languages/<name>.md` has zero `NEEDS REVIEW` entries.
@@ -101,7 +101,7 @@ This principle has been implicit throughout every refactor sprint (Charter, R-mo
 
 ### Known offender (Priority 2 sprint opens here)
 
-- **R0 `edges.args_text` 2 KB cap** — see [`ARCHITECTURAL-REFACTOR.md` § R0 → Mitigation 2](ARCHITECTURAL-REFACTOR.md#r0--schema-closures--edge-kind-additions--symbols-metadata-shape) and the const `ARGS_TEXT_CAP_BYTES = 2048` in [`scope-core/src/edge.rs`](../scope-core/src/edge.rs). Truncating call-site / declaration-site argument literals at 2 KB plus a `[truncated]` marker is an approximation justified by *"common case fits"* — **not** by any hard runtime constraint. SQLite TEXT holds up to ~1 GB; long literals make Scope slower on pathological codebases but cannot panic, OOM, or fail to run. The fix is to drop the cap and the truncation marker; the pre-1.0 wipe-and-reindex policy (CHARTER §2) absorbs the schema impact for existing local DBs.
+- **R0 `edges.args_text` 2 KB cap** — see [`ENFORCEMENT-MAP.md` § R0 → Mitigation 2](ENFORCEMENT-MAP.md#r0--schema-closures) and the const `ARGS_TEXT_CAP_BYTES = 2048` in [`scope-core/src/edge.rs`](../scope-core/src/edge.rs). Truncating call-site / declaration-site argument literals at 2 KB plus a `[truncated]` marker is an approximation justified by *"common case fits"* — **not** by any hard runtime constraint. SQLite TEXT holds up to ~1 GB; long literals make Scope slower on pathological codebases but cannot panic, OOM, or fail to run. The fix is to drop the cap and the truncation marker; the pre-1.0 wipe-and-reindex policy (CHARTER §2) absorbs the schema impact for existing local DBs.
 
 ### Sub-items (sequenced — (a) and (b) feed (c) and (d))
 
@@ -111,9 +111,9 @@ This principle has been implicit throughout every refactor sprint (Charter, R-mo
   - Delete `ARGS_TEXT_CAP_BYTES`, `TRUNCATION_MARKER`, and the truncation logic in `scope-core/src/edge.rs`.
   - Delete the matching unit test (currently asserts the truncation byte length).
   - Update the schema comment in `scope-graph/src/sql/schema.sql` (drop "capped at 2 KB / truncation marker" text).
-  - Update [`ARCHITECTURAL-REFACTOR.md` § R0 → Mitigation 2](ARCHITECTURAL-REFACTOR.md#r0--schema-closures--edge-kind-additions--symbols-metadata-shape) (replace with a note recording the original cap was dropped by Priority 2; honesty over performance; pre-1.0 wipe policy stands).
+  - Update [`ENFORCEMENT-MAP.md` § R0 → Mitigation 2](ENFORCEMENT-MAP.md#r0--schema-closures) (replace with a note recording the original cap was dropped by Priority 2; honesty over performance; pre-1.0 wipe policy stands).
   - Bump `schema_version` from `"1"` to `"2"` in [`AUDIT-LABEL-SCHEMA.md`](AUDIT-LABEL-SCHEMA.md), add the `producer_captured_args: string | null` record field with the auditor-comparison rationale, add a migration note. Update `--label` rejection logic so old `schema_version: "1"` samples error with a re-emit instruction.
-  - Log entry in the priority-2 sprint's PR body documenting the amendment (paper-trail discipline; the historical refactor's append-only log doc is retired with the closure).
+  - Log entry in the priority-2 sprint's PR body documenting the amendment (paper-trail discipline).
 - **(d) Fix any further offenders found by (a) + (b).** Each fix lands as its own charter-grade amendment with paper trail.
 - **(e) Capture remaining justified approximations as explicit invariants.** Where (a) or (b) finds a trade-off that *is* justified by a hard runtime constraint, the constraint moves into the document as a first-class invariant (not a footnote). Future sprints know the line was drawn deliberately and where.
 
@@ -160,15 +160,15 @@ Eligibility holds. Runs in parallel with Priority 1 and Priority 2 — independe
 
 ### Why this is **not** absorbed by the refactor
 
-The R-moves carved up `scope-core` / `scope-graph` / `scope-index` / `scope-search` / `scope-workspace` (sprint 0000 decomposition) but did not retouch `gumiho-mudang-cli`. R8 (sprint 0007) is the first refactor R-move that grew a substantial engine; nothing in the R-move catalogue forced the engine into the CLI, the implementation simply landed there because chunks 3-8 were under sprint-clock pressure and the CLI was the most obvious place to keep momentum. The honesty principle (Priority 2) applies here too in a different shape: *the layering on the box does not match the layering in the code*. Priority 3 corrects that.
+The crate decomposition carved up `scope-core` / `scope-graph` / `scope-index` / `scope-search` / `scope-workspace` but did not retouch `gumiho-mudang-cli`. R8 is the first R-entry that grew a substantial engine; nothing in the R-entry catalogue forced the engine into the CLI, the implementation simply landed there because the CLI was the most obvious place to keep momentum. The honesty principle (Priority 2) applies here too in a different shape: *the layering on the box does not match the layering in the code*. Priority 3 corrects that.
 
 ---
 
 ## Cross-cutting items (charter §6 soft-expansion zone, not absorbed by refactor)
 
-The refactor absorbed several soft-expansion items into its R-moves (resolution pass → R3, domain edge kinds → R0, config-file readers → R4, confidence/provenance metadata → R0, decorator/annotation argument capture → R0 + R5). The items below are the **remainder**: they sit in the soft-expansion zone and remain new work against the closed architecture.
+The architecture already absorbed several soft-expansion items into its R-entries (resolution pass → R3, domain edge kinds → R0, config-file readers → R4, confidence/provenance metadata → R0, decorator/annotation argument capture → R0 + R5). The items below are the **remainder**: they sit in the soft-expansion zone and remain new work against the current architecture.
 
-- **Re-export resolution.** `pub use` chain following (Rust), `export * from` / `export {x} from` (TypeScript), `__all__` (Python), via static text. Lives in the resolver layer added by R3 — but R3 only ships the framework; the per-language re-export rules are post-refactor work.
+- **Re-export resolution.** `pub use` chain following (Rust), `export * from` / `export {x} from` (TypeScript), `__all__` (Python), via static text. Lives in the resolver layer (R3) — the per-language re-export rules are new work against the current architecture.
 - **Doc-comment chain merging.** `///` chains and `//!` inner docs (Rust), JSDoc multi-line (TS), `"""` blocks (Python). Improves docstring quality without semantic work.
 - **Cross-project edges (`scope link`).** Mono-repo and microservice graphs as a single queryable index. Already on the roadmap per CHARTER §6.
 - **Vector embeddings for `scope find`.** Semantic search by intent over name + doc + path + callers. CHARTER §6 names this.
@@ -181,7 +181,7 @@ Order is set by separate triggers, not by this document.
 
 ## Per-language depth queue
 
-Per `LANGUAGE-PLAYBOOK.md` Step 6, each language plugin's depth queue lives in `docs/languages/<name>.md`. The seed list below is a copy of `CHARTER.md` §7 IN-scope items; the per-doc queue is the source of truth once each per-language doc is populated post-refactor.
+Per `LANGUAGE-PLAYBOOK.md` Step 6, each language plugin's depth queue lives in `docs/languages/<name>.md`. The seed list below is a copy of `CHARTER.md` §7 IN-scope items; the per-doc queue is the source of truth once each per-language doc is populated.
 
 ### Rust (depth target)
 - `pub use` chain following via static text resolution
@@ -256,8 +256,8 @@ Recorded so they are not lost; their triggers are insufficient today.
 
 - **Self-indexing of Scope's own source** — `scope` is not run on the Scope repository during development. Until a stable release ships, dogfooding hides bugs from the developer (the same buggy binary builds the index that the developer queries to debug the bug, so symptoms and tooling fail together). Re-enable when stable. In the meantime, the `bench-self` justfile recipe is removed; benchmarks run against external sandboxes (`bench-rails`) only. References to "dogfooding" in user-facing copy (README "Done" list) are removed; CHANGELOG entries are historical and stay.
 - **Per-sub-root version detection** for npm/Python multi-package monorepos (`FRAMEWORK-PLAYBOOK.md` Step 3 known limitation; promoted when frequency justifies).
-- **Module isolation** for stronger A1–A3 + B2 mechanical enforcement (`ARCHITECTURAL-REFACTOR.md` "Why detectable, not mechanical"; charter-amendment-grade follow-up).
-- **Byte-level lossy file reading** for invalid UTF-8 (`ARCHITECTURAL-REFACTOR.md` R6 known limitation; separate refactor with its own trigger).
+- **Module isolation** for stronger A1–A3 + B2 mechanical enforcement (`ENFORCEMENT-MAP.md` § "Why detectable, not mechanical"; charter-amendment-grade follow-up).
+- **Byte-level lossy file reading** for invalid UTF-8 (`ENFORCEMENT-MAP.md` R6 known limitation; separate initiative with its own trigger).
 - **`scope audit coverage`** subcommand for recall-side detection (separate from R8; trigger-deferred).
 - **`.js` / `.jsx` indexing** via cheap path (extend `LanguageId::TypeScript.extensions()` arm) or strict path (new `JavaScript` variant of `LanguageId` — `scope-core/src/languages/id.rs`) — governed by `LANGUAGE-PLAYBOOK.md` adoption flow when triggers prove the need.
 - **Optional symbol-kind renames** (`const` → `constant`, `type` → `type_alias`) — deferred to a post-R0 follow-up migration; not a blocker.

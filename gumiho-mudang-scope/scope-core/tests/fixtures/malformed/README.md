@@ -1,6 +1,6 @@
 # Malformed-source fixture corpus — R6 resilience harness
 
-> **Source of truth**: [`ARCHITECTURAL-REFACTOR.md` § R6](../../../../docs/ARCHITECTURAL-REFACTOR.md#r6--malformed-source-test-harness) (R6 shipped 2026-05-12).
+> **Source of truth**: [`ENFORCEMENT-MAP.md` § R6](../../../../docs/ENFORCEMENT-MAP.md#r6--malformed-source-test-harness).
 
 ---
 
@@ -184,7 +184,7 @@ contributor checked.
 The 5-fixture floor per language is **mechanical** (CI counts).
 **Category selection is editorial** — driven by each language's
 grammar. The shared base set from
-[`ARCHITECTURAL-REFACTOR.md` § R6](../../../../docs/ARCHITECTURAL-REFACTOR.md#r6--malformed-source-test-harness)
+[`ENFORCEMENT-MAP.md` § R6](../../../../docs/ENFORCEMENT-MAP.md#r6--malformed-source-test-harness)
 is the starting point; each language records its actual five
 categories in the per-language section below as fixtures land.
 
@@ -232,7 +232,6 @@ The table is editorial; chunk 2 finalises the picks and rewrites the
 - **Cross-language pre-filter corpus** — see
   [`../frameworks/_pre_filter/`](../frameworks/_pre_filter/).
 - **Byte-level invalid-UTF-8 fixtures** — explicitly out of scope per
-  [`ARCHITECTURAL-REFACTOR.md` § R6](../../../../docs/ARCHITECTURAL-REFACTOR.md#r6--malformed-source-test-harness)
-  ("invalid UTF-8 at the byte level"). Trigger-deferred to a
-  post-refactor effort
+  [`ENFORCEMENT-MAP.md` § R6](../../../../docs/ENFORCEMENT-MAP.md#r6--malformed-source-test-harness)
+  ("invalid UTF-8 at the byte level"). Trigger-deferred
   ([`POST-REFACTOR-PLAN.md` § Items deliberately deferred](../../../../docs/POST-REFACTOR-PLAN.md#items-deliberately-deferred-beyond-this-plan)).

@@ -12,7 +12,7 @@
 # Tagged exceptions: prefix the line with `// scope:audit-allow
 # mutable-source — <rationale>` on the immediately preceding line.
 #
-# Per ARCHITECTURAL-REFACTOR.md § R9 + LANGUAGE-PLAYBOOK.md F2.
+# Per ENFORCEMENT-MAP.md § R9 + LANGUAGE-PLAYBOOK.md F2.
 #
 # Exits non-zero on any unallowlisted match.
 

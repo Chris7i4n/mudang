@@ -1,6 +1,6 @@
 # 0006 — Split `gumiho-mudang-scope` into sub-crates
 
-- **Status:** shipped (2026-05-11, sprint 0000 via branch `refactor/sprint-0000-crate-decomposition`)
+- **Status:** shipped
 - **Decision:** decompose the current monolithic `gumiho-mudang-scope` crate into focused sub-crates so the AST edit crate (phase E) and the composer (phase C) can depend only on what they need.
 - **Tracking:** sprint 0000 closed; all acceptance criteria demonstrated (workspace builds, `cargo test --workspace` green — 456 tests across 43 suites, `cargo doc` builds per crate, `scope-core` has zero sibling-sub-crate dependencies, 1:1 public surface re-exported through the façade). Codex review: PASS, no blockers.
 
@@ -31,7 +31,7 @@ composer and the CLI) keep working through the same import path.
   `graph.rs` know each other's internals freely;
 - splitting compile units reduces incremental build time on the
   monorepo;
-- the R-moves in `ARCHITECTURAL-REFACTOR.md` (R3 typestate pipeline,
+- the R-moves in `ENFORCEMENT-MAP.md` (R3 typestate pipeline,
   R4 WorkspaceContext split) become easier when each phase owns one
   sub-crate;
 - a third-party consumer that wants only "tree-sitter parse + symbol

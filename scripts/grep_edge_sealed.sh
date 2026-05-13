@@ -70,7 +70,7 @@ if [[ -n "$hits" ]]; then
     echo "$hits" >&2
     echo "" >&2
     echo "Construction must go through Edge::builder() per R1." >&2
-    echo "See ARCHITECTURAL-REFACTOR.md § R1 — typed edge insertion API." >&2
+    echo "See ENFORCEMENT-MAP.md § R1 — typed edge insertion API." >&2
     exit 1
 fi
 

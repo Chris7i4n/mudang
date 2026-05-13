@@ -1,11 +1,11 @@
 # 0009 — Expand domain edge kinds to maximize Rails / Tokio / Axum / React coverage
 
-- **Status:** **ABSORBED** by `gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` R0 (shipped 2026-05-12). Every recommendation in this TODO (38-kind whitelist, 4-kind concurrency split, `green_thread_spawn` rename, `edges.args_text` column with Mitigations 1+2) landed as part of R0's closure contract.
-- **Original request:** reopen scope's `ARCHITECTURAL-REFACTOR.md` R0 whitelist before R0 shipped.
+- **Status:** **ABSORBED** by `gumiho-mudang-scope/docs/ENFORCEMENT-MAP.md` R0. Every recommendation in this TODO (38-kind whitelist, 4-kind concurrency split, `green_thread_spawn` rename, `edges.args_text` column with Mitigations 1+2) landed as part of R0's durable contract.
+- **Original request:** reopen scope's R0 whitelist before R0 shipped.
 - **Decision:** the 14 net-new edge kinds proposed by R0 cover the first-tier patterns of common stacks but leave production-critical patterns (middleware, validation, error handlers, websocket, client-side routing, auth guards, async task spawn naming) on `calls` generic, where scope's value-add over LSP collapses.
 - **Tracking:** implementation landed via the architectural refactor; this file remains the historical rationale.
 
-> **Reader note.** This document is kept for the audit trail — it captures the *why* behind R0's final whitelist. Cross-references to this file are historical rationale only; the live contract is R0 in `ARCHITECTURAL-REFACTOR.md`.
+> **Reader note.** This document is kept for the audit trail — it captures the *why* behind R0's final whitelist. Cross-references to this file are historical rationale only; the live contract is R0 in `ENFORCEMENT-MAP.md`.
 
 ---
 
@@ -19,7 +19,7 @@ Patterns that fall into the generic `calls` edge force consumers to re-derive st
 
 ## Where this lives
 
-- **scope-side**: `gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` R0 whitelist + matching migration. The decision is scope's; this TODO is mudang's recorded position arguing for the expansion.
+- **scope-side**: `gumiho-mudang-scope/docs/ENFORCEMENT-MAP.md` R0 whitelist + matching migration. The decision is scope's; this TODO is mudang's recorded position arguing for the expansion.
 - **mudang-side**: every composition case that depends on filtering by edge kind (Case T `triggers`, Case M `api-surface`, Case X `find-tests`, Case J `flow`, Case W `xref-monorepo`) gets richer when the kind list distinguishes middleware from handler, validation from data, auth-guard from route, etc.
 
 At the time this was written, it was a **pre-R0 amendment** request,
@@ -450,7 +450,7 @@ Rejected because:
 
 ### Why args_text on edges is R5-compliant
 
-`ARCHITECTURAL-REFACTOR.md` R5 explicitly permits framework plugins
+`ENFORCEMENT-MAP.md` R5 explicitly permits framework plugins
 to regex over `edges WHERE kind='calls'`:
 
 > "Framework plugins that need hook-style matching apply the regex
@@ -503,7 +503,7 @@ Per-phase estimate vs current scope:
 | Row read overhead | <1 % |
 
 Combined with R0's other additions: 5–12 % regression vs pre-refactor
-baseline. `ARCHITECTURAL-REFACTOR.md` accepts < 10 %. Args_text
+baseline. `ENFORCEMENT-MAP.md` accepts < 10 %. Args_text
 contribution alone is well under the gate; the **risk is the sum**.
 Mitigations below bring args_text contribution to < 3 %.
 
@@ -696,7 +696,7 @@ Scope-side R0 owners may choose to push back on Tier 2 (legitimate trade-off: sc
 
 ## Cross-refs
 
-- `gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` R0 — the whitelist this TODO requests be expanded.
+- `gumiho-mudang-scope/docs/ENFORCEMENT-MAP.md` R0 — the whitelist this TODO requests be expanded.
 - `gumiho-mudang-scope/docs/CHARTER.md` §4 q4 + §6 — the moat rationale for domain edges.
 - `gumiho-mudang-scope/docs/FRAMEWORK-PLAYBOOK.md` — the per-framework adoption flow; new kinds need framework predicates emitting them.
 - `docs/SCOPE-LSP-COMPOSITION.md` §14 — composition cases that depend on rich edge-kind filtering.

@@ -6,7 +6,7 @@
 #   `python_requires`, `go_directive`, `tsconfig_target`,
 #   `framework_versions`. These belong to per-package metadata or the
 #   framework layer (`FrameworkWorkspaceContext`), never the language
-#   plugin surface. See ARCHITECTURAL-REFACTOR.md § R4 and
+#   plugin surface. See ENFORCEMENT-MAP.md § R4 and
 #   LANGUAGE-PLAYBOOK.md C2.
 #
 # Mechanism: extract the `pub trait LanguageWorkspaceContext` block
@@ -66,7 +66,7 @@ if (( ${#violations[@]} > 0 )); then
         echo "  - $v" >&2
     done
     echo "" >&2
-    echo "Per ARCHITECTURAL-REFACTOR.md § R4, these belong to per-package" >&2
+    echo "Per ENFORCEMENT-MAP.md § R4, these belong to per-package" >&2
     echo "metadata or FrameworkWorkspaceContext, never the language" >&2
     echo "plugin surface." >&2
     exit 1

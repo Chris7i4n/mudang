@@ -40,5 +40,5 @@ tempfile = { workspace = true }
 trybuild = "1.0"
 # R6 — snapshot tests for the malformed-source harness.
 # Pins recorded reason + range per fixture; regressions surface as
-# snapshot diffs. See docs/ARCHITECTURAL-REFACTOR.md § R6.
+# snapshot diffs. See docs/ENFORCEMENT-MAP.md § R6.
 insta = { workspace = true }

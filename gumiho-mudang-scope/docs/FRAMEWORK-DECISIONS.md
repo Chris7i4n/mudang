@@ -20,7 +20,7 @@ Note: the **adoption path** field (`Path: trigger-driven | maintainer-asserted`)
 
 DEFER entries are re-evaluated 90 days after the original verdict; record the re-evaluation as a new dated entry that references the original.
 
-A BUILD verdict authorizes implementation per `FRAMEWORK-PLAYBOOK.md` Step 5. The unknown-version policy and `applies_to_languages` list are recorded in the per-framework doc (`docs/frameworks/<name>.md`), not here. Framework adoption resumes only after `ARCHITECTURAL-REFACTOR.md` Phase C (R5) ships, since R5 owns the FrameworkPlugin trait shape.
+A BUILD verdict authorizes implementation per `FRAMEWORK-PLAYBOOK.md` Step 5. The unknown-version policy and `applies_to_languages` list are recorded in the per-framework doc (`docs/frameworks/<name>.md`), not here. Framework adoption resumes only after `ENFORCEMENT-MAP.md` Phase C (R5) ships, since R5 owns the FrameworkPlugin trait shape.
 
 The `Path` field is mandatory. Path B (maintainer-asserted) skips the trigger log but not the ROI worksheet; the active-projects field is the substitute for trigger evidence.
 

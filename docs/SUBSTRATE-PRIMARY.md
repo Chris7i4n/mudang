@@ -582,7 +582,7 @@ The bet in §1 only pays off when all three hold.
   presumes (especially Sections 2, 3, 4, 13, 14).
 - **gumiho-mudang-scope/docs/CHARTER.md** — the invariants Scope keeps,
   on which index reliability rests.
-- **gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md** — the
+- **gumiho-mudang-scope/docs/ENFORCEMENT-MAP.md** — the
   unfinished work that turns "Scope is mostly right" into "Scope is
   honest about what it knows."
 - **docs/todos/0004-onnx-and-lancedb-distinction.md** — the embedding

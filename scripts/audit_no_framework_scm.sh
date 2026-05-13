@@ -7,7 +7,7 @@
 #   `scope-core/src/frameworks/<name>/` and consume graph rows; they
 #   never compile to tree-sitter queries.
 #
-# Per ARCHITECTURAL-REFACTOR.md § R5 → "Why not `.scm` per framework
+# Per ENFORCEMENT-MAP.md § R5 → "Why not `.scm` per framework
 # (variant C)", and CHARTER.md § E2 (frameworks operate on graph rows,
 # not AST).
 #
@@ -44,7 +44,7 @@ echo "Found queries/*/frameworks/ directories:" >&2
 echo "" >&2
 printf '%s\n' "$hits" >&2
 echo "" >&2
-echo "Per ARCHITECTURAL-REFACTOR.md § R5: framework predicates live in" >&2
+echo "Per ENFORCEMENT-MAP.md § R5: framework predicates live in" >&2
 echo "Rust at scope-core/src/frameworks/<name>/ and consume graph rows" >&2
 echo "(symbols + edges + metadata). They never compile to" >&2
 echo "tree-sitter queries because that would violate E2 (frameworks" >&2

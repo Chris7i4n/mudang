@@ -24,7 +24,7 @@
 # `// scope:audit-allow network — <rationale>` on the line immediately
 # preceding the reference.
 #
-# Per ARCHITECTURAL-REFACTOR.md § R12, CHARTER.md § 5, and
+# Per ENFORCEMENT-MAP.md § R12, CHARTER.md § 5, and
 # CI-GATES.md § Allowlist convention.
 #
 # Exits non-zero on any unallowlisted match.

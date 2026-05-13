@@ -77,7 +77,7 @@ pub const COVERAGE_LIMITATION_NOTE: &str =
 pub const SCHEMA_VERSION: &str = "1";
 
 /// Minimum precision the **high** tier must hit, per R8 acceptance
-/// (`docs/ARCHITECTURAL-REFACTOR.md` § R8). The CI gate enforces this:
+/// (`docs/ENFORCEMENT-MAP.md` § R8). The CI gate enforces this:
 /// any high-tier row whose `precision < HIGH_TIER_MIN` is a build
 /// failure. The number itself is the pre-Phase-D ambiguity #2 anchor —
 /// `high` exists to mean "this edge is almost certainly correct" and
@@ -818,7 +818,7 @@ fn label_pass(
 /// downgrade the confidence stamp or fix the pattern, not just the first
 /// offender.
 ///
-/// Tier targets per `docs/ARCHITECTURAL-REFACTOR.md` § R8 (verbatim):
+/// Tier targets per `docs/ENFORCEMENT-MAP.md` § R8 (verbatim):
 /// - `high ≥ 95%`
 /// - `medium ≥ 70%`
 /// - `low` has no minimum
@@ -835,7 +835,7 @@ pub fn check_tier_gate(report: &PrecisionReport) -> Result<()> {
             "low" => continue,
             other => anyhow::bail!(
                 "unknown tier {other:?} in report row (kind={}, producer={}, pattern_id={}); \
-                 expected `high` / `medium` / `low` per docs/ARCHITECTURAL-REFACTOR.md § R8",
+                 expected `high` / `medium` / `low` per docs/ENFORCEMENT-MAP.md § R8",
                 row.kind,
                 row.producer,
                 row.pattern_id

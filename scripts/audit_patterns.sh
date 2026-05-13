@@ -22,7 +22,7 @@
 #   (Adoption of a real framework adds its `patterns.rs` under
 #   `src/frameworks/<name>/`, automatically in scope.)
 #
-# Per ARCHITECTURAL-REFACTOR.md § R5 → Pattern catalog organization.
+# Per ENFORCEMENT-MAP.md § R5 → Pattern catalog organization.
 #
 # Exits non-zero on any match.
 
@@ -123,7 +123,7 @@ echo "Pattern { ... } literals with empty id:" >&2
 echo "" >&2
 printf '%s' "$failures" >&2
 echo "" >&2
-echo "Per ARCHITECTURAL-REFACTOR.md § R5 → Pattern catalog organization:" >&2
+echo "Per ENFORCEMENT-MAP.md § R5 → Pattern catalog organization:" >&2
 echo "every Pattern in ALL_PATTERNS must have a non-empty id (used in" >&2
 echo 'edges.pattern_id and the R8 confidence audit). Rename "" to a' >&2
 echo "stable identifier in the form <framework>.<descriptor>." >&2

@@ -8,7 +8,7 @@
 # Plugins receive parsed `tree-sitter::Tree` + source `&str` from the
 # indexer. Reading files from inside a plugin breaks reproducibility
 # (the indexer is the only filesystem reader) and shape-tests the
-# C2/C3 split. See ARCHITECTURAL-REFACTOR.md § R4.
+# C2/C3 split. See ENFORCEMENT-MAP.md § R4.
 #
 # Allowlist: precede the call with `// scope:audit-allow filesystem`.
 # Tags survive grep because each violation is reported with its grep

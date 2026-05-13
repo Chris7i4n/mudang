@@ -3,7 +3,7 @@
 //! Drives `trybuild` over fixtures in `tests/compile_fail/typestate/`.
 //! Each fixture must fail to compile; trybuild records the rustc
 //! stderr as the test signal. See `docs/CI-GATES.md` § Insertable
-//! typestate and `docs/ARCHITECTURAL-REFACTOR.md` § R3 ("Resolver
+//! typestate and `docs/ENFORCEMENT-MAP.md` § R3 ("Resolver
 //! location") for the contract:
 //!
 //! - `Graph::insert_*` accepts only `InsertableEdge`; passing a

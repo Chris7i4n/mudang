@@ -12,7 +12,7 @@
 //! `scope_graph::resolve` can produce an `InsertableEdge`. The
 //! compile-fail CI gate at
 //! `scope-graph/tests/compile_fail/typestate/` proves this
-//! mechanically. See `docs/ARCHITECTURAL-REFACTOR.md` § R3
+//! mechanically. See `docs/ENFORCEMENT-MAP.md` § R3
 //! ("Resolver location") and `docs/CI-GATES.md` § Insertable
 //! typestate.
 //!
@@ -68,7 +68,7 @@ use serde::{Deserialize, Serialize};
 // `InsertableEdge` and `Insertable` live here, not in `scope-core`,
 // because the resolver is the sole legitimate construction site and
 // Rust's module-level visibility is the mechanical safeguard
-// (`ARCHITECTURAL-REFACTOR.md` § R3 — "Resolver location"). The
+// (`ENFORCEMENT-MAP.md` § R3 — "Resolver location"). The
 // constructor `InsertableEdge::new` is module-private (no `pub`) and
 // the struct fields are private — only code inside this module can
 // produce an `InsertableEdge`. The compile-fail CI gate proves both
@@ -247,7 +247,7 @@ impl<'a> Resolver<'a> {
     ///   set instead of implicit.
     /// - **Ambiguous (N > 1 matches)**: one `InsertableEdge` per
     ///   candidate, each with `to_id` set to the candidate's full
-    ///   symbol id (`ARCHITECTURAL-REFACTOR.md § R3` line "to_id set
+    ///   symbol id (`ENFORCEMENT-MAP.md § R3` line "to_id set
     ///   to the candidate"). Multi-row spread is the only place
     ///   rebinding is structurally required, because each row needs a
     ///   distinct target identity.

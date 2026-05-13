@@ -163,21 +163,21 @@ architecture discussion. See `todos/README.md` for the index.
 | 0003 | Update GitHub URLs once the new repository is published                       | TODO   |
 | 0004 | Clarify ONNX vs LanceDB roles in the embeddings stack                         | TODO   |
 | 0005 | Delete `gumiho-mudang-scope/src/core/watcher.rs`                              | TODO   |
-| 0006 | Split `gumiho-mudang-scope` into focused sub-crates                            | shipped (sprint 0000, 2026-05-11) |
+| 0006 | Split `gumiho-mudang-scope` into focused sub-crates                            | shipped |
 | 0007 | Create `gumiho-mudang-composer` crate                                          | TODO   |
 | 0008 | Constrain `gumiho-mudang-lsp` to basic-RPC primitives                          | TODO   |
-| 0009 | Expand R0 domain edge kinds to cover Rails/Tokio/Axum/React patterns          | ABSORBED into R0 (ships in scope sprint 0001) |
+| 0009 | Expand R0 domain edge kinds to cover Rails/Tokio/Axum/React patterns          | ABSORBED into R0 |
 
 ---
 
 ## Related docs outside this directory
 
 - `gumiho-mudang-scope/docs/CHARTER.md` — scope's read-only invariants.
-- `gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` — closure record
-  of scope's internal R-moves (R0–R12) shipped during phase A
-  (2026-05-12).
+- `gumiho-mudang-scope/docs/ENFORCEMENT-MAP.md` — rule→implementation
+  map for scope's internal R-entries (R0–R12). Grows by mandatory
+  end-of-sprint update gate (`sprints/README.md` §7.5).
 - `gumiho-mudang-scope/docs/POST-REFACTOR-PLAN.md` — scope's work queue
-  against the closed architecture.
+  against the current architecture.
 
 ---
 
@@ -185,7 +185,7 @@ architecture discussion. See `todos/README.md` for the index.
 
 - **"I want the whole picture"**: `ROADMAP.md` → `ARCHITECTURE.md` →
   `SCOPE-LSP-COMPOSITION.md` §1–§4 → `SUBSTRATE-PRIMARY.md` §1–§3.
-- **"I want to implement phase B"** (phase A shipped 2026-05-12):
+- **"I want to implement phase B"** (phase A shipped):
   scope's own docs + `ARCHITECTURE.md` §2.2 + `docs/todos/0007`–`0008`.
 - **"I want to implement phase C"**: `ARCHITECTURE.md` §3 + §4,
   `SCOPE-LSP-COMPOSITION.md` §17 (decision tree), `NOTIFY-API.md`,

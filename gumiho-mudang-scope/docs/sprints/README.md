@@ -1,8 +1,8 @@
 # Sprints — scope methodology
 
-Sequential delivery contract used by every scope sprint. Past sprints (the architectural refactor that closed 2026-05-12 — R0–R12 across phases A–E) followed this contract; future sprints inherit it.
+Sequential delivery contract used by every scope sprint. Durable for every initiative — past and future — that runs against this codebase.
 
-This document is the **methodology**. The per-sprint index (which sprint is next, which is in flight, which item owns which doc) lives wherever the active initiative tracks state. For the closed refactor, the historical record lives in the git history of `gumiho-mudang-scope/docs/sprints/0000…0009-*.md` (deleted from the working tree at refactor close).
+This document is the **methodology**. The per-sprint index (which sprint is next, which is in flight, which item owns which doc) lives wherever the active initiative tracks state. Historical sprint plans live in git history.
 
 ---
 
@@ -13,11 +13,12 @@ These documents are **law**, not suggestion. Every sprint links into them instea
 | Doc | Owns |
 |---|---|
 | [`CHARTER.md`](../CHARTER.md) | Mission, hard limits, soft expansion zone, per-language IN/OUT, amendment rule |
+| [`ENFORCEMENT-MAP.md`](../ENFORCEMENT-MAP.md) | Rule→implementation map (R-entries). Every sprint that changes an enforcement updates the matching R-entry in the same commit (§7.5) |
 | [`LANGUAGE-PLAYBOOK.md`](../LANGUAGE-PLAYBOOK.md) | Universal language-plugin boundaries, adoption flow |
 | [`FRAMEWORK-PLAYBOOK.md`](../FRAMEWORK-PLAYBOOK.md) | Framework adoption flow, version strategies, gotcha catalogue |
 | [`GLOSSARY.md`](../GLOSSARY.md) | Term definitions (one source of truth) |
 | [`CI-GATES.md`](../CI-GATES.md) | CI gate inventory, allowlist convention |
-| [`POST-REFACTOR-PLAN.md`](../POST-REFACTOR-PLAN.md) | Work queue eligible against the closed architecture |
+| [`POST-REFACTOR-PLAN.md`](../POST-REFACTOR-PLAN.md) | Work queue eligible against the current architecture |
 
 A sprint pulls its rules from these. If a sprint surfaces a rule that does not live in any of them, the sprint **halts** under § 3 Ambiguity protocol — the rule is decided on `main` first, then the sprint resumes.
 
@@ -211,6 +212,19 @@ If the hot-fix touches code the open sprint is restructuring, halt (per §3) and
 ### 7. CI gate activation
 
 Each sprint lists the CI gates from [`CI-GATES.md` § Gate inventory](../CI-GATES.md#gate-inventory) it is responsible for flipping from `planned` → `active`. The flip lands in the same commit as the gate's script and the recipe's wiring. Status column drift is not tolerated: doc and CI agree, always.
+
+### 7.5 Enforcement-map update
+
+Every sprint that introduces or changes a mechanical / detectable enforcement updates [`ENFORCEMENT-MAP.md`](../ENFORCEMENT-MAP.md) in the **same commit** that ships the code. A sprint that adds a new audit script, a new trait-shape ban, a new compile-time schema constraint, a new typed-API closure, or a new const-fn dispatch — without registering it in the rule→enforcement map — does not close.
+
+Two update shapes:
+
+- **Refinement** — the technique is already represented by an existing `### R<n>` entry. Edit the entry's "Durable contract", "Where in the tree", or "CI gates" lines in place. Inventory-table rows are updated in the same commit if the class shifts (mechanical / detectable / discipline).
+- **New technique** — the technique is genuinely new. Append a `### R<next>` section after the highest existing R-ID. Fill in: rules it enforces, durable contract, where in the tree, CI gates. The next free R-ID is the integer one after the highest existing R-ID; the choice is mechanical, not editorial. If the new technique brings a new universal rule into mechanical/detectable enforcement, the inventory tables gain a row in the same commit.
+
+The class-3 universal list (`B1`, `C2`, `E3` per [`ENFORCEMENT-MAP.md` § Discipline-only rules](../ENFORCEMENT-MAP.md#discipline-only-rules)) is fixed; expanding it requires a charter amendment.
+
+Sprint reviewers check the diff for code touching audit scripts, schema definitions, trait surfaces, typed APIs, or dispatch against the matching `ENFORCEMENT-MAP.md` edit. Missing the update is a blocker, not a defer-able finding.
 
 ### 8. Out of scope for any sprint
 

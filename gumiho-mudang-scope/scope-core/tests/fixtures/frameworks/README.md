@@ -6,7 +6,7 @@ Sprint 0005 (R5) infrastructure fixtures.
 
 - `_pre_filter/{python,ruby}/` — cross-language pre-filter test
   corpus. Path resolved by sprint 0005 ambiguity #2 (see
-  `ARCHITECTURAL-REFACTOR.md` § R5 → "Cross-language fixture
+  `ENFORCEMENT-MAP.md` § R5 → "Cross-language fixture
   location"). Underscore prefix denotes test-infrastructure-only.
 - `synthetic/` — synthetic framework fixtures. Per-version subtrees
   appear here when version-pinned end-to-end tests are added.

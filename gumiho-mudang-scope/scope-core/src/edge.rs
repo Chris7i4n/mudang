@@ -10,10 +10,10 @@
 //! `scope-graph::resolve`, not here — sprint 0003 chunk 6 moved them
 //! out of `scope-core` so the resolver-only construction site is
 //! module-private to `scope_graph::resolve`. See
-//! `docs/ARCHITECTURAL-REFACTOR.md` § R3 ("Resolver location") and
+//! `docs/ENFORCEMENT-MAP.md` § R3 ("Resolver location") and
 //! `docs/CI-GATES.md` § Insertable typestate.
 //!
-//! See `docs/ARCHITECTURAL-REFACTOR.md` § R1 (typed edge insertion API)
+//! See `docs/ENFORCEMENT-MAP.md` § R1 (typed edge insertion API)
 //! for the contract and § R0 (schema closures) for the column layout.
 
 use serde::{Deserialize, Serialize};
@@ -437,7 +437,7 @@ impl<F, T, K, C, P, I> EdgeBuilder<F, T, K, C, P, I> {
     }
     /// Truncates the literal at 2 KB and appends `[truncated]` if the
     /// input exceeds the cap. Mitigation 2 per
-    /// `ARCHITECTURAL-REFACTOR.md` § R0 → edges.args_text.
+    /// `ENFORCEMENT-MAP.md` § R0 → edges.args_text.
     pub fn args_text(mut self, text: impl Into<String>) -> Self {
         let raw = text.into();
         let stored = if raw.len() > ARGS_TEXT_CAP_BYTES {

@@ -5,11 +5,11 @@ Entry point for the docs tree. If this is your first time, read in this order.
 ## Reading order (governing docs)
 
 1. **`CHARTER.md`** — what Scope is, what it is not, hard limits, soft expansion zone, per-language IN/OUT. Permanent constraints; revisions require explicit charter-amendment commits per CHARTER §11.
-2. **`ARCHITECTURAL-REFACTOR.md`** — closure record of the structural refactor (shipped 2026-05-12). R0–R12 across phases A–E. Maps each charter / playbook rule to the R-move and CI audit that enforces it.
+2. **`ENFORCEMENT-MAP.md`** — rule→implementation map. R-entries (R0, R1, …) name the technique that enforces each charter / playbook rule. Mandatory end-of-sprint update gate keeps it live (see `sprints/README.md` §7.5).
 3. **`LANGUAGE-PLAYBOOK.md`** — how to add and maintain a language plugin within the 18 universal boundaries.
 4. **`FRAMEWORK-PLAYBOOK.md`** — how to add and maintain a framework plugin within the 15 gotcha categories. Includes version-strategy rules (A/B/C) and unknown-version policy.
-5. **`POST-REFACTOR-PLAN.md`** — work queued against the closed architecture, ordered by priority. Eligibility holds.
-6. **`sprints/README.md`** — sprint methodology (linear order, atomic phase shipment, codex consultation, branch protocol). Used by past sprints (architectural refactor) and durable for future initiatives. The sprint skeleton lives in [`sprints/_TEMPLATE.md`](sprints/_TEMPLATE.md).
+5. **`POST-REFACTOR-PLAN.md`** — work queued against the current architecture, ordered by priority.
+6. **`sprints/README.md`** — sprint methodology (linear order, atomic phase shipment, codex consultation, branch protocol, enforcement-map update gate). Durable for any initiative. The sprint skeleton lives in [`sprints/_TEMPLATE.md`](sprints/_TEMPLATE.md).
 
 ## Reference docs (read on demand)
 
@@ -23,12 +23,12 @@ These documents govern decisions; revise via explicit commit, not silent edit.
 | Document | Owns |
 |---|---|
 | `CHARTER.md` | Mission, hard limits, soft expansion, per-language IN/OUT, moats vs LSP, amendment rule |
-| `ARCHITECTURAL-REFACTOR.md` | R0–R12 closure record; rule-to-enforcement map; phase-order historical record |
-| `sprints/README.md` | Sprint methodology — durable for any future initiative |
+| `ENFORCEMENT-MAP.md` | Rule→implementation map. R-entries (R0, R1, …) carry the durable contract for each enforcement technique |
+| `sprints/README.md` | Sprint methodology — durable for any initiative |
 | `sprints/_TEMPLATE.md` | Per-sprint doc skeleton |
 | `LANGUAGE-PLAYBOOK.md` | 18 universal language-plugin rules, language-adoption flow, per-language doc structure |
 | `FRAMEWORK-PLAYBOOK.md` | Framework adoption flow, version strategies, unknown-version policy, 15 gotcha categories |
-| `POST-REFACTOR-PLAN.md` | Work queue eligible against the closed architecture |
+| `POST-REFACTOR-PLAN.md` | Work queue against the current architecture |
 | `GLOSSARY.md` | Central term definitions |
 | `CI-GATES.md` | CI gate inventory; canonical script paths; allowlist convention |
 
@@ -51,22 +51,20 @@ These documents govern decisions; revise via explicit commit, not silent edit.
 
 ## Current state
 
-The architectural refactor (R0–R12 across phases A–E) closed on **2026-05-12**. Every CI gate listed in `CI-GATES.md` is `active`; `just gate-refactor` runs every gate green. Plugin authoring follows the closed shapes (see `LANGUAGE-PLAYBOOK.md` Step 5).
-
-The historical sprint plans (`sprints/0000…0009-*.md`) and the append-only refactor-status log (`REFACTOR-STATUS.md`) were retired at refactor close. Their history is preserved in git — search for `refactor/sprint-*` merge commits and `chore(refactor-status): …` commits on `main`.
+The architecture is stable. Every CI gate listed in `CI-GATES.md` is `active`; `just gate-refactor` runs every gate green. Plugin authoring follows the shapes documented in `LANGUAGE-PLAYBOOK.md` Step 5. The rule→enforcement map lives in `ENFORCEMENT-MAP.md` and grows by mandatory end-of-sprint update (`sprints/README.md` §7.5).
 
 ## Where to put a new note
 
 | Recording … | Goes in |
 |---|---|
 | Why a feature is permanent out-of-scope | `CHARTER.md` §5 (charter-amendment commit) |
-| A new mechanically enforced rule | propose a new R-move via amendment to `ARCHITECTURAL-REFACTOR.md` |
+| A new mechanically enforced rule | append a `### R<n>` to `ENFORCEMENT-MAP.md` in the same commit that ships the code (per `sprints/README.md` §7.5) |
 | A new CI gate | row in `CI-GATES.md` (status `planned` until shipped) |
 | Sprint sequencing / scope / ordering for a new initiative | new sprint doc copied from `sprints/_TEMPLATE.md`; methodology in `sprints/README.md` |
 | A friction event for a candidate plugin | the matching trigger log |
 | A verdict on a candidate plugin | the matching decision log |
 | A per-plugin gotcha or rule-temptation rejection | the per-instance doc (`languages/<name>.md` or `frameworks/<name>.md`) |
-| A post-refactor work item | `POST-REFACTOR-PLAN.md` |
+| A work item against the current architecture | `POST-REFACTOR-PLAN.md` |
 | An unfamiliar term used elsewhere | look up in `GLOSSARY.md`; if missing, add it |
 
 ## Outside this directory

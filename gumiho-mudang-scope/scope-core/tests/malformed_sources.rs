@@ -2,7 +2,7 @@
 //!
 //! Walks every fixture under `tests/fixtures/malformed/<lang>/<case>/`
 //! and asserts the four R6 acceptance contracts (see
-//! `docs/ARCHITECTURAL-REFACTOR.md` § R6):
+//! `docs/ENFORCEMENT-MAP.md` § R6):
 //!
 //! 1. No panic on any fixture.
 //! 2. The parseable prefix produces ≥ 1 symbol.

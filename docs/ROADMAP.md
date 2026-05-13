@@ -14,7 +14,7 @@ before the prior phase is at "Acceptance" state.
 ## Phase ordering (immutable)
 
 ```
-A — Scope refactor                       (shipped 2026-05-12; R-moves R0…R12)
+A — Scope refactor                       (shipped; R-entries R0…R12)
         │
         ▼
 B — LSP basic-RPC completion             (next; transport-layer only, no wrappers)
@@ -36,31 +36,30 @@ No cross-cutting shortcuts.
 
 ---
 
-## Phase A — Scope refactor (shipped 2026-05-12)
+## Phase A — Scope refactor (shipped)
 
-Closure record: `gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md`.
+Enforcement map: `gumiho-mudang-scope/docs/ENFORCEMENT-MAP.md`.
 
-R0–R12 closed across scope's own internal phases A–E. Those internal
-phase letters are unrelated to this roadmap's phases A–E and must not
-be conflated.
+R0–R12 are part of the current architecture. Scope's own internal
+phase letters used during the refactor are unrelated to this roadmap's
+phases A–E and must not be conflated.
 
-### Demonstrated at close
+### Demonstrated
 
-- Every R-move merged.
-- Schema landed in its R0 shape.
+- Every R-entry landed.
+- Schema in its R0 shape.
 - Confidence audit (R8) green.
 - Trait-shape audit (R12) green.
 - Charter §5 invariants unchanged.
 - **Crate decomposition** per `docs/ARCHITECTURE.md` §2.2 and
-  `docs/todos/0006-split-scope-crate.md` shipped (sprint 0000, 2026-05-11).
-  Scope is split into `scope-core`, `scope-index`, `scope-graph`,
-  `scope-search`, `scope-workspace`; `gumiho-mudang-scope` is a façade
-  re-export.
+  `docs/todos/0006-split-scope-crate.md`. Scope is split into
+  `scope-core`, `scope-index`, `scope-graph`, `scope-search`,
+  `scope-workspace`; `gumiho-mudang-scope` is a façade re-export.
 
-### Acceptance — held
+### Acceptance
 
 The scope crate (façade + 5 sub-crates) compiles, indexes a polyglot
-fixture workspace, passes the R-acceptance test suite, and exposes
+fixture workspace, passes the R-entry acceptance test suite, and exposes
 clean public types ready for the composer to consume.
 
 ---
@@ -305,17 +304,17 @@ E (CodeStruct AST edit)               ───── new edit crate
 To amend this roadmap:
 
 1. Open a PR editing this file.
-2. Bump the `Last amended` date.
-3. Record the change in the changelog below, naming the requester.
-4. The PR must reference explicit approval from the project owner.
+2. Record the change in the changelog below, naming the requester.
+3. The PR must reference explicit approval from the project owner.
 
-Last amended: 2026-05-10 (initial capture)
+(Amendment dates live in git history.)
 
 ## Changelog
 
-- **2026-05-10** — initial roadmap captured from design discussion.
-  Five phases (A–E) locked. Watcher deletion folded into phase C.
-  Scope decomposition folded into phase A.
-- **2026-05-12** — phase A (scope refactor) shipped. R0–R12 closed; see
-  `gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` (closure record)
-  and `gumiho-mudang-scope/docs/POST-REFACTOR-PLAN.md` for queued work.
+- Initial roadmap captured from design discussion. Five phases (A–E)
+  locked. Watcher deletion folded into phase C. Scope decomposition
+  folded into phase A.
+- Phase A (scope refactor) shipped. R0–R12 part of the current
+  architecture — see `gumiho-mudang-scope/docs/ENFORCEMENT-MAP.md`
+  (rule→implementation map) and
+  `gumiho-mudang-scope/docs/POST-REFACTOR-PLAN.md` for queued work.

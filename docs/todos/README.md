@@ -16,7 +16,7 @@ PR link into the file's `Tracking` field.
 | 0003 | Update GitHub URLs once the new repository is published                       | TODO   |
 | 0004 | Clarify ONNX vs LanceDB roles in the embeddings stack                         | TODO   |
 | 0005 | Delete `gumiho-mudang-scope/src/core/watcher.rs` (event bus moves to composer)| TODO   |
-| 0006 | Split `gumiho-mudang-scope` into focused sub-crates                            | shipped (sprint 0000, 2026-05-11) |
+| 0006 | Split `gumiho-mudang-scope` into focused sub-crates                            | shipped |
 | 0007 | Create `gumiho-mudang-composer` crate (canonical public API)                   | TODO   |
 | 0008 | Constrain `gumiho-mudang-lsp` to basic-RPC primitives only                     | TODO   |
-| 0009 | Expand R0 domain edge kinds to cover Rails/Tokio/Axum/React patterns          | ABSORBED — content shipped as part of `gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` R0 (2026-05-12) |
+| 0009 | Expand R0 domain edge kinds to cover Rails/Tokio/Axum/React patterns          | ABSORBED — content shipped as part of `gumiho-mudang-scope/docs/ENFORCEMENT-MAP.md` R0 |

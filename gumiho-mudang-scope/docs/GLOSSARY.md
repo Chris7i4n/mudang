@@ -10,11 +10,10 @@ When a term collides with a Rust crate name (`semver`, `tree-sitter`), the entry
 
 | Term | Definition | Source |
 |---|---|---|
-| **Class 1 / mechanical** | Architecture makes the violation impossible (does not compile or cannot be produced through the public API) | `ARCHITECTURAL-REFACTOR.md` § "Three classes of constraint" |
+| **Class 1 / mechanical** | Architecture makes the violation impossible (does not compile or cannot be produced through the public API) | `ENFORCEMENT-MAP.md` § "Three classes of constraint" |
 | **Class 2 / detectable** | Architecture allows compile but a test or audit catches the violation before merge | same |
 | **Class 3 / discipline-only** | Cannot be prevented or detected by code; review and judgment catch it. Universal list is exactly three rules: B1, C2, E3 | same |
-| **R-move** | One refactor step (R0–R12) with ID, rules enforced, current state, target state, migration steps, acceptance | `ARCHITECTURAL-REFACTOR.md` § "Refactor moves" |
-| **Phase** | Atomic batch of R-moves (A–E); ships together or not at all | `ARCHITECTURAL-REFACTOR.md` § "Phase order" |
+| **R-entry** | One enforcement entry (R0, R1, …) with ID, rules enforced, durable contract, where in the tree, CI gates. Stable anchor external docs deep-link to | `ENFORCEMENT-MAP.md` § "Rule enforcements" |
 | **Hard limit** | Permanent out-of-scope rule; rejected without debate | `CHARTER.md` §5 |
 | **Soft expansion zone** | Directions Scope may grow without breaking identity | `CHARTER.md` §6 |
 | **3-question test** | Quick eligibility check (no toolchain / static second pass / preserves invariants) | `CHARTER.md` §4 |

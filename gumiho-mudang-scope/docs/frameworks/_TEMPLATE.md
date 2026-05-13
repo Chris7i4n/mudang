@@ -48,7 +48,7 @@ When the workspace config cannot resolve a clean semver (vendored fork, git dep 
 
 ## Code organization (required)
 
-Per `ARCHITECTURAL-REFACTOR.md` R5, the plugin's source layout is fixed:
+Per `ENFORCEMENT-MAP.md` R5, the plugin's source layout is fixed:
 
 ```
 src/frameworks/<name>/
@@ -70,7 +70,7 @@ Each `Pattern` in `patterns.rs` is defined once and carries:
 
 ## Applies to languages (required)
 
-- **`applies_to_languages`**: list of languages this framework's predicate is allowed to match against, e.g., `[Ruby]` for Rails, `[TypeScript]` for React (JS files are handled via the TypeScript plugin's extension dispatch — there is no separate `JavaScript` `SupportedLanguage` variant today), `[Python]` for Flask. The indexer pre-filters symbols/edges by this list before invoking the predicate (R5 in `ARCHITECTURAL-REFACTOR.md`); leaving it empty makes the plugin a no-op. Allowed values are the variants of `SupportedLanguage` in `src/core/parser.rs`.
+- **`applies_to_languages`**: list of languages this framework's predicate is allowed to match against, e.g., `[Ruby]` for Rails, `[TypeScript]` for React (JS files are handled via the TypeScript plugin's extension dispatch — there is no separate `JavaScript` `SupportedLanguage` variant today), `[Python]` for Flask. The indexer pre-filters symbols/edges by this list before invoking the predicate (R5 in `ENFORCEMENT-MAP.md`); leaving it empty makes the plugin a no-op. Allowed values are the variants of `SupportedLanguage` in `src/core/parser.rs`.
 - **Rationale**: one line on why these and not others. If a framework genuinely spans languages (e.g., NestJS supports TS and JS source), list both.
 
 ---
@@ -90,7 +90,7 @@ If strategy ever changes, append an entry below:
 
 ## Patterns matched (required)
 
-For every pattern this plugin emits edges for, fill out one block. Keep blocks small and concrete. Per `ARCHITECTURAL-REFACTOR.md` R5, framework plugins are predicates over `Symbol.metadata` and `Edge` rows — they do not own `.scm` queries.
+For every pattern this plugin emits edges for, fill out one block. Keep blocks small and concrete. Per `ENFORCEMENT-MAP.md` R5, framework plugins are predicates over `Symbol.metadata` and `Edge` rows — they do not own `.scm` queries.
 
 ### <pattern name 1>
 
@@ -130,7 +130,7 @@ For each pattern that exists in the framework but the plugin does not match, rec
 
 Walk every category from `FRAMEWORK-PLAYBOOK.md` Step 4 (15 numbered categories). **Category titles and bodies live in the playbook, not here** — each row references the playbook's category by number; consult the playbook for the current canonical text. If the playbook is amended (categories renamed or reworded), the numeric references below remain valid.
 
-Decisions that interact with language-plugin behavior must also respect the 18 rules in `LANGUAGE-PLAYBOOK.md` Step 4. The framework infrastructure is mechanically constrained by R5 in `ARCHITECTURAL-REFACTOR.md` (FrameworkPlugin operates on Symbols/Edges, not AST).
+Decisions that interact with language-plugin behavior must also respect the 18 rules in `LANGUAGE-PLAYBOOK.md` Step 4. The framework infrastructure is mechanically constrained by R5 in `ENFORCEMENT-MAP.md` (FrameworkPlugin operates on Symbols/Edges, not AST).
 
 Decision values: `matched`, `not matched`, `matched with confidence downgrade`, or `N/A`. Use `N/A` only when the framework genuinely lacks any pattern in the category.
 
@@ -210,7 +210,7 @@ For tempting shortcuts considered and rejected during implementation:
 ```
 ### Rejected: <short name>
 - Tempting because: ...
-- Would violate: <CHARTER hard limit | LANGUAGE-PLAYBOOK rule ID | FRAMEWORK-PLAYBOOK Step 4 gotcha | ARCHITECTURAL-REFACTOR R-id if mechanically enforced>
+- Would violate: <CHARTER hard limit | LANGUAGE-PLAYBOOK rule ID | FRAMEWORK-PLAYBOOK Step 4 gotcha | ENFORCEMENT-MAP R-id if mechanically enforced>
 - Non-negotiable because: ...
 ```
 

@@ -612,7 +612,7 @@ algorithms depending on the query shape. The §1.2 verb sub-variants
 
 Composer correctness depends on Scope's row contract. Scope commits the
 following producer-side guarantees (locked by
-`ARCHITECTURAL-REFACTOR.md` § R3 → "Multi-row Ambiguous — scope's
+`ENFORCEMENT-MAP.md` § R3 → "Multi-row Ambiguous — scope's
 producer commitment"):
 
 - **One row per candidate target on `status='ambiguous'`.** When the
@@ -1046,7 +1046,7 @@ behaves consistently in both:
   delegates the forbidden-to-Scope work to LSP; it does not relax
   Scope's invariants.
 - **Not a feature plan.** Implementation order is governed by
-  Scope's `ARCHITECTURAL-REFACTOR.md` (Phase E must close first) and
+  Scope's `ENFORCEMENT-MAP.md` (Phase E must close first) and
   by `gumiho-mudang-lsp`'s own milestones.
 - **Not a guarantee that every query exists today.** Many of the
   example commands in Section 4 (`mudang type-at`, `mudang refs

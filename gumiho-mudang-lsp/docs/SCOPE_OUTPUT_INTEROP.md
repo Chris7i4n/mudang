@@ -1,10 +1,10 @@
 # Scope ↔ LSP typed-output interop (forward-looking)
 
-> **Status**: forward-looking note. No binding cross-crate API exists today; this document records a possibility that R10 (typed output schema, shipped 2026-05-12) unlocks for a future composition sprint.
+> **Status**: forward-looking note. No binding cross-crate API exists today; this document records a possibility that R10 (typed output schema) unlocks for a future composition sprint.
 
-## What R10 changed
+## What R10 enforces
 
-R10 (Phase D of the gumiho-mudang-scope architectural refactor) shipped on 2026-05-12 — every CLI output path in `gumiho-mudang-cli` is a `#[derive(Serialize)]` Rust struct or enum at the boundary, with the strict-reading decision recorded in [`gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` § R10](../../gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md#r10--typed-output-schema).
+R10 keeps every CLI output path in `gumiho-mudang-cli` as a `#[derive(Serialize)]` Rust struct or enum at the boundary, with the strict-reading decision recorded in [`gumiho-mudang-scope/docs/ENFORCEMENT-MAP.md` § R10](../../gumiho-mudang-scope/docs/ENFORCEMENT-MAP.md#r10--typed-output-schema).
 
 After R10, the JSON envelope emitted by `mudang ... --json` is the on-the-wire encoding of a concrete Rust type. Field names, shape, nullability, and enum variants are owned by the type definition, not by `serde_json::json!()` macro call sites.
 
@@ -34,5 +34,5 @@ Until then, `--json` is read as untyped JSON by current consumers; the typed Rus
 
 ## See also
 
-- [`gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` § R10](../../gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md#r10--typed-output-schema) — refactor move that landed the typed structs.
+- [`gumiho-mudang-scope/docs/ENFORCEMENT-MAP.md` § R10](../../gumiho-mudang-scope/docs/ENFORCEMENT-MAP.md#r10--typed-output-schema) — R-entry that enforces the typed-output schema.
 - [`gumiho-mudang-scope/docs/SCOPE-LSP-COMPOSITION.md`](../../gumiho-mudang-scope/docs/SCOPE-LSP-COMPOSITION.md) § 5.4 — composition layer design that consumes Scope output + LSP enrichments.

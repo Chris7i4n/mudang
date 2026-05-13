@@ -4,7 +4,7 @@
 //! struct or enum defined in this module. Procedural `println!`
 //! / `format!` and `serde_json::json!()` ad-hoc trees are forbidden by
 //! the strict-reading scope decision recorded in
-//! [`gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` § R10](../../../../gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md#r10--typed-output-schema).
+//! [`gumiho-mudang-scope/docs/ENFORCEMENT-MAP.md` § R10](../../../../gumiho-mudang-scope/docs/ENFORCEMENT-MAP.md#r10--typed-output-schema).
 //!
 //! Module layout:
 //!

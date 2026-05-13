@@ -17,7 +17,7 @@
 ## Depth target (required)
 
 - **Level**: `surface` | `depth`
-- **Post-refactor depth queue**: `yes` | `no`. Depth feature work resumes only after `ARCHITECTURAL-REFACTOR.md` ships; until then, mark `yes` if the language is on the depth track and queue the items here.
+- **Depth queue**: `yes` | `no`. Mark `yes` if the language is on the depth track and queue the items below.
 - **Queued depth items** (only fill if depth queue is `yes`):
   ```
   - <one-line description of a depth item>, e.g., "pub use chain following via static text"
@@ -46,11 +46,11 @@ List every kind this plugin can produce, with the `.scm` capture group that driv
 | type | `@type` | type aliases (`type Foo = ...`); kind name matches `src/sql/schema.sql` (R0 keeps `type`; the rename to `type_alias` is deferred to a follow-up migration) |
 | const | `@const` | constants (`const FOO = 1`); kind name matches `src/sql/schema.sql` (R0 keeps `const`; the rename to `constant` is deferred to a follow-up migration) |
 | property | `@property` | ... |
-| trait | `@trait` | post-R0 only — until R0 ships, Rust traits are coerced to `interface` per `src/languages/rust_lang.rs:44` |
-| module | `@module` | post-R0 only — until R0 ships, Ruby modules are coerced to `interface` |
-| macro | `@macro` | post-R0 only; definition only — no expansion (see C1) |
+| trait | `@trait` | Rust traits |
+| module | `@module` | Ruby modules, Python modules |
+| macro | `@macro` | definition only — no expansion (see C1) |
 
-Remove rows that do not apply. Add rows for language-specific kinds, but do not invent kinds outside the `symbols.kind` whitelist (see `ARCHITECTURAL-REFACTOR.md` R0 for the post-refactor whitelist; the schema source of truth is `src/sql/schema.sql`). Pre-R0 the whitelist is 10 kinds (`function`, `class`, `method`, `interface`, `struct`, `enum`, `const`, `type`, `property`, `variant`); R0 adds `trait`, `module`, `macro`.
+Remove rows that do not apply. Add rows for language-specific kinds, but do not invent kinds outside the `symbols.kind` whitelist (`ENFORCEMENT-MAP.md` R0 holds the 13-kind whitelist; the schema source of truth is `src/sql/schema.sql`).
 
 ---
 
@@ -68,7 +68,7 @@ For each edge kind, state the confidence rationale. Do not list a kind that this
 | implements | high \| medium | Direct `impl Trait for Type` (Rust): high. Method-set comparison (Go): medium. Document case-by-case. |
 | inherits_from | high | Type embedding (Go), mixin (where supported). |
 
-Language-specific edges (e.g., `green_thread_spawn`, `channel_send`, `hook_use`) are added here when applicable; each must already exist in the `edges.kind` whitelist (see `ARCHITECTURAL-REFACTOR.md` R0 for the post-refactor whitelist of 38 kinds — 8 universal + 30 domain across R0 baseline + Tier 1 + Tier 2 + Tier 3; the schema source of truth is `src/sql/schema.sql`).
+Language-specific edges (e.g., `green_thread_spawn`, `channel_send`, `hook_use`) are added here when applicable; each must already exist in the `edges.kind` whitelist (`ENFORCEMENT-MAP.md` R0 holds the 38-kind whitelist — 8 universal + 30 domain across baseline + Tier 1 + Tier 2 + Tier 3; the schema source of truth is `src/sql/schema.sql`).
 
 ---
 
@@ -91,14 +91,14 @@ A plugin with any `NEEDS REVIEW` entry is not shippable. Every `populated` key m
 
 ## Universal boundaries — compliance log (required)
 
-For each of the 18 rules in `LANGUAGE-PLAYBOOK.md` Step 4, record compliance status. **Rule bodies live in the playbook, not here.** The IDs below match the playbook's section; cross-reference for the current canonical text. The corresponding mechanical-enforcement move (R0–R12) lives in `ARCHITECTURAL-REFACTOR.md`; cite it when explaining how compliance is achieved.
+For each of the 18 rules in `LANGUAGE-PLAYBOOK.md` Step 4, record compliance status. **Rule bodies live in the playbook, not here.** The IDs below match the playbook's section; cross-reference for the current canonical text. The corresponding R-entry lives in `ENFORCEMENT-MAP.md`; cite it when explaining how compliance is achieved.
 
 This section deliberately does not restate the rule text. If the playbook is amended, the IDs below remain valid and the cross-reference always resolves to the current wording — no per-language doc needs to be touched.
 
 Status values:
 - `trivially compliant` — the plugin does not even attempt the forbidden behavior.
 - `compliant by design` — the plugin had a tempting shortcut but explicitly rejected it.
-- `mechanically enforced` — compliance is ensured by the architecture (R-id from `ARCHITECTURAL-REFACTOR.md`); cite the move.
+- `mechanically enforced` — compliance is ensured by the architecture (R-id from `ENFORCEMENT-MAP.md`); cite the R-entry.
 - `NEEDS REVIEW` — placeholder; ship blocker.
 
 One to three lines per rule.
@@ -168,7 +168,7 @@ This list exists so future-you does not re-debate the same shortcut.
 ```
 ### Rejected: <short name>
 - Tempting because: ...
-- Would violate: <rule ID, e.g., A3 from LANGUAGE-PLAYBOOK Step 4, or hard limit from CHARTER section 5; cite ARCHITECTURAL-REFACTOR R-id if the rule is mechanically enforced>
+- Would violate: <rule ID, e.g., A3 from LANGUAGE-PLAYBOOK Step 4, or hard limit from CHARTER section 5; cite ENFORCEMENT-MAP R-id if the rule is mechanically enforced>
 - Non-negotiable because: ...
 ```
 

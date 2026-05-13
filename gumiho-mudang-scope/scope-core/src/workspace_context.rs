@@ -4,23 +4,18 @@
 //! the Rust compiler refuses any language-plugin code that tries to
 //! read framework versions or other fields that would tempt a C2
 //! violation. This is the **mechanical safeguard** for C2 referenced
-//! in `ARCHITECTURAL-REFACTOR.md` § R4 and `CHARTER.md` § 5.
+//! in `ENFORCEMENT-MAP.md` § R4 and `CHARTER.md` § 5.
 //!
-//! - `LanguageWorkspaceContext` (`pub`) — visible to `LanguagePlugin`
-//!   (R2, sprint 0003). Exposes workspace-internal-vs-external,
-//!   module layout, and per-file package membership. **Does not**
-//!   expose `edition` / `target` / `python_requires` / `go_directive`
-//!   / `tsconfig_target` / `framework_versions`. Reading those would
+//! - `LanguageWorkspaceContext` (`pub`) — visible to per-language
+//!   extractors (R2). Exposes workspace-internal-vs-external, module
+//!   layout, and per-file package membership. **Does not** expose
+//!   `edition` / `target` / `python_requires` / `go_directive` /
+//!   `tsconfig_target` / `framework_versions`. Reading those would
 //!   let a plugin branch on language or framework version, weakening
 //!   C2.
-//! - `FrameworkWorkspaceContext` (`pub` since sprint 0005, Phase C
-//!   first-impl commit) — extends `LanguageWorkspaceContext` with
-//!   framework-version and lockfile access. Phase B (sprints 0002,
-//!   0003, 0004) shipped this as `pub(crate)` so the compiler refused
-//!   language-plugin code that tried to bound on framework-version
-//!   accessors; sprint 0005 widens to `pub` in the same commit that
-//!   lands the first `FrameworkPlugin` impl. See
-//!   `ARCHITECTURAL-REFACTOR.md` § R4 → "Visibility of
+//! - `FrameworkWorkspaceContext` (`pub`) — extends
+//!   `LanguageWorkspaceContext` with framework-version and lockfile
+//!   access. See `ENFORCEMENT-MAP.md` § R4 → "Visibility of
 //!   FrameworkWorkspaceContext".
 //!
 //! No filesystem handle is reachable from either trait. Config readers
@@ -112,12 +107,12 @@ pub struct Lockfile {
     pub source_path: PathBuf,
 }
 
-/// Visible to `LanguagePlugin` (R2, sprint 0003).
+/// Visible to per-language extractors (R2).
 ///
 /// **Does not** expose `edition`, `target`, `python_requires`,
 /// `go_directive`, `tsconfig_target`, `framework_versions`. Adding such
 /// a method is a charter-amendment-grade change per
-/// `ARCHITECTURAL-REFACTOR.md` § R4. CI gate
+/// `ENFORCEMENT-MAP.md` § R4. CI gate
 /// `scripts/audit_context_shape.sh` (`just ci-context-shape`) refuses
 /// any method whose name suggests these fields.
 pub trait LanguageWorkspaceContext: Send + Sync {
@@ -138,22 +133,14 @@ pub trait LanguageWorkspaceContext: Send + Sync {
     fn module_layout(&self, package: &Package) -> &ModuleLayout;
 }
 
-/// Visible to `FrameworkPlugin` (R5, sprint 0005).
+/// Visible to `FrameworkPlugin` (R5).
 ///
 /// Extends `LanguageWorkspaceContext` with framework-version and
 /// lockfile access. Frameworks branch on framework version because
 /// framework patterns diverge between releases — the deliberate
 /// asymmetry with the language layer (see C2 in
-/// `LANGUAGE-PLAYBOOK.md` Step 4).
-///
-/// **Visibility:** `pub` since sprint 0005, Phase C first-impl commit
-/// (this commit). Phase B (sprints 0002, 0003, 0004) shipped this as
-/// `pub(crate)` so the Rust compiler refused language-plugin code that
-/// tried to bound on framework-version accessors. Sprint 0005 widens
-/// to `pub` in the same commit as the first `FrameworkPlugin` impl —
-/// mechanical one-keyword flip, unconditional, recorded in the sprint
-/// plan ambiguity register (#3) as mandatory not conditional. See
-/// `ARCHITECTURAL-REFACTOR.md` § R4 → "Visibility of
+/// `LANGUAGE-PLAYBOOK.md` Step 4). See
+/// `ENFORCEMENT-MAP.md` § R4 → "Visibility of
 /// FrameworkWorkspaceContext".
 pub trait FrameworkWorkspaceContext: LanguageWorkspaceContext {
     /// Framework versions resolved from manifest + lockfile pairs.
@@ -164,14 +151,8 @@ pub trait FrameworkWorkspaceContext: LanguageWorkspaceContext {
 }
 
 /// No-op `LanguageWorkspaceContext` for callers that have not yet wired
-/// a real one.
-///
-/// Used by `parser.rs` and test fixtures during Phase A (sprint 0002).
-/// R2/R3 (sprint 0003) replace these call sites with a real context
-/// populated from `crate::workspace::*` readers. **Not a stub** in the
-/// stubs-outstanding sense — this is a legitimate no-op implementation
-/// for environments that have no workspace (one-off snippet parsing,
-/// unit tests, dry runs). The type is retained post-refactor.
+/// a real one. Legitimate use cases: one-off snippet parsing, unit
+/// tests, dry runs — anything with no workspace.
 #[derive(Default)]
 pub struct NoopWorkspaceContext {
     empty_layout: ModuleLayout,

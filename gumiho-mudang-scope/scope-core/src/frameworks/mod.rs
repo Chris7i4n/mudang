@@ -1,4 +1,4 @@
-//! R5 — framework infrastructure (sprint 0005, Phase C).
+//! R5 — framework infrastructure.
 //!
 //! Defines the `FrameworkPlugin` trait and supporting types.
 //! `FrameworkPlugin` consumes already-extracted `&[Symbol]` and
@@ -32,13 +32,13 @@
 //!   queries infeasible. The `scripts/audit_no_framework_scm.sh` gate
 //!   refuses any `queries/<lang>/frameworks/` directory.
 //!
-//! Variant B (eager metadata) ships: language plugins populate the
-//! three reserved metadata keys (`decorators`, `annotations`,
-//! `template_calls`) on `Symbol.metadata` (R0 schema); framework
-//! plugins read that metadata + `&[RawEdge]` and emit derived edges only
-//! when their predicate fires.
+//! Variant B (eager metadata) is the active design: language plugins
+//! populate the three reserved metadata keys (`decorators`,
+//! `annotations`, `template_calls`) on `Symbol.metadata` (R0 schema);
+//! framework plugins read that metadata + `&[RawEdge]` and emit derived
+//! edges only when their predicate fires.
 //!
-//! See `docs/ARCHITECTURAL-REFACTOR.md` § R5 for the durable contract.
+//! See `docs/ENFORCEMENT-MAP.md` § R5 for the durable contract.
 
 use crate::edge::{EdgeKind, RawEdge};
 use crate::languages::LanguageId;
@@ -51,11 +51,11 @@ use semver::{Version, VersionReq};
 /// text, tree-sitter nodes, and filesystem paths — the trait surface
 /// is the mechanical safeguard.
 ///
-/// Implementors live at `src/frameworks/<name>/mod.rs` post-refactor
-/// when concrete frameworks are adopted per `FRAMEWORK-PLAYBOOK.md`.
-/// Sprint 0005 ships no concrete framework; the synthetic test
-/// framework at `scope-core/tests/synthetic_framework/mod.rs`
-/// exercises the trait surface.
+/// Implementors live at `src/frameworks/<name>/mod.rs` when concrete
+/// frameworks are adopted per `FRAMEWORK-PLAYBOOK.md`. No concrete
+/// framework is in-tree yet; the synthetic test framework at
+/// `scope-core/tests/synthetic_framework/mod.rs` exercises the trait
+/// surface.
 pub trait FrameworkPlugin: Send + Sync {
     /// Stable lowercase identifier, e.g., `"rails"`, `"react"`. Used
     /// in `Producer::Framework(name)` and integration-test fixtures.
@@ -102,7 +102,7 @@ pub struct Detection {
 /// Outcome of reading the workspace's framework version. The three
 /// variants exist because `Option<semver::Version>` overloaded the
 /// `None` case across three policy-distinct situations; see
-/// `ARCHITECTURAL-REFACTOR.md` § R5 → "Version source semantics".
+/// `ENFORCEMENT-MAP.md` § R5 → "Version source semantics".
 #[derive(Debug, Clone)]
 pub enum DetectedVersion {
     /// Lockfile (or equivalent pinned manifest) resolved to a single

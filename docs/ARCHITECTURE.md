@@ -346,7 +346,7 @@ Everything else stays in orthogonal tools.
   turns the polyglot graph into end-to-end cross-language flows.
 - `SUBSTRATE-PRIMARY.md` — daily workflow built on this architecture.
 - `gumiho-mudang-scope/docs/CHARTER.md` — what scope refuses to do.
-- `gumiho-mudang-scope/docs/ARCHITECTURAL-REFACTOR.md` — scope's
+- `gumiho-mudang-scope/docs/ENFORCEMENT-MAP.md` — scope's
   internal R-moves.
 - `NOTIFY-API.md` — the notify protocol (written ahead of phase C as
   the design contract; covers lib / CLI-daemon / CLI-one-off usage
