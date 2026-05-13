@@ -19,11 +19,15 @@
 //! code. CHARTER §5 forbids plugins from reading non-source files;
 //! readers in this module are the only typed access path.
 
+pub mod build_gradle;
 pub mod cargo_toml;
+pub mod csproj;
 pub mod gemfile_lock;
 pub mod go_mod;
 pub mod package_json;
+pub mod pom_xml;
 pub mod pyproject_toml;
+pub mod ruby_version;
 pub mod setup_py;
 pub mod tsconfig_json;
 
