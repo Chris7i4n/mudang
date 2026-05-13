@@ -685,6 +685,12 @@ fn label_pass(
         .filter(|r| parsed_ids.contains(&r.edge_id))
         .cloned()
         .collect();
+    // Freshness gate runs **before** the lang_version recomputation
+    // in the tamper check below: the detector reads manifests from
+    // disk, and a working-tree drift since index time would let a
+    // since-edited `Cargo.toml` / `tsconfig.json` shadow the indexed
+    // truth. Failing fresh here guarantees the detector below sees
+    // the same workspace state the indexer did.
     enforce_freshness(graph, project_root, &referenced_rows)?;
 
     // Report-key + endpoint + snippet tamper gate (after the round,

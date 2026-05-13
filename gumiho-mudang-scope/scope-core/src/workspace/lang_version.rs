@@ -50,6 +50,13 @@ use super::{
 /// - the file is not under `project_root`,
 /// - no manifest on the walk yields a version.
 pub fn detect_lang_version(project_root: &Path, file_path: &Path) -> Option<String> {
+    debug_assert!(
+        project_root.is_absolute() && file_path.is_absolute(),
+        "detect_lang_version requires absolute paths (project_root={:?}, file_path={:?}); \
+         the audit-emit caller passes `project_root.join(...)` against a canonicalised root",
+        project_root,
+        file_path
+    );
     let lang = lang_for_path(file_path)?;
     let start = file_path.parent()?;
     if !start.starts_with(project_root) {

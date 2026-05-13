@@ -146,7 +146,7 @@ mod tests {
     }
 
     #[test]
-    fn returns_none_on_unresolved_property_placeholder() {
+    fn returns_verbatim_placeholder_on_unresolved_property() {
         // A property placeholder is not a literal value; this reader
         // doesn't resolve parent POM inheritance, so the body is the
         // verbatim placeholder string. Document the behaviour: we

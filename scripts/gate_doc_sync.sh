@@ -395,6 +395,26 @@ check_lang_version_detector_modules() {
             detail+="LanguageId::$v → expected arm in lang_version.rs::detect_in_dir"$'\n'
         fi
     done <<< "$variants"
+    # Reverse pass — every `### <Lang>` subsection under CHARTER §7
+    # must map back to a `LanguageId` variant. Catches the drift the
+    # forward pass cannot: an orphan heading (e.g. `### Kotlin`) added
+    # to CHARTER §7 without a matching enum variant in `id.rs`. The
+    # "Multi-version posture for languages" subsection is the only
+    # non-language `###` heading and is exempted by name.
+    while IFS= read -r heading; do
+        [[ -z "$heading" ]] && continue
+        # Strip leading "### " and trailing " (surface)" / whitespace.
+        local name
+        name="$(printf '%s' "$heading" | sed -E 's/^###[[:space:]]+//; s/[[:space:]]+\(surface\)$//; s/[[:space:]]+$//')"
+        # Skip the documented non-language §7 subsection.
+        [[ "$name" == "Multi-version posture for languages" ]] && continue
+        # CHARTER renders C# as `C#`; map back to enum variant CSharp.
+        local expected="$name"
+        [[ "$name" == "C#" ]] && expected="CSharp"
+        if ! printf '%s\n' "$variants" | grep -qxE "$expected"; then
+            detail+="CHARTER.md § 7 subsection '### $name' has no matching LanguageId variant in id.rs"$'\n'
+        fi
+    done < <(printf '%s\n' "$charter_section" | grep -E '^### ')
     if [[ -n "$detail" ]]; then
         fail_block "lang-version-detector-modules" \
                    "LanguageId variant set ≠ CHARTER.md § 7 subsections or lang_version.rs::detect_in_dir arms" \
