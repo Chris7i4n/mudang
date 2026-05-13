@@ -1155,3 +1155,85 @@ fn test_audit_confidence_emit_and_label_are_mutually_exclusive() {
         .failure()
         .stderr(contains("cannot be used with"));
 }
+
+// ─────────────────────────────────────────────────────────────
+// lang_version coverage gate (sprint 0003 (d)).
+//
+// One fixture per supported language; each fixture carries the
+// canonical manifest form for that language's `lang_version`
+// detector, plus enough source to produce sampleable edges. The
+// gate fires when **any** emitted JSONL record carries `lang_version:
+// null` — that is the "extractor regressed; detector unwired or
+// fixture missing manifest" signal the sprint plan calls out.
+
+const LANG_FIXTURES: &[(&str, &str, &str)] = &[
+    ("rust", "tests/fixtures/rust-simple", "2021"),
+    ("go", "tests/fixtures/go-simple", "1.21"),
+    ("python", "tests/fixtures/python-simple", ">=3.10"),
+    ("typescript", "tests/fixtures/typescript-simple", "ES2020"),
+    ("java", "tests/fixtures/java-simple", "21"),
+    ("csharp", "tests/fixtures/csharp-simple", "net8.0"),
+    ("ruby", "tests/fixtures/ruby-simple", "3.2.2"),
+];
+
+fn run_audit_emit_for_fixture(fixture: &str) -> (TempDir, String) {
+    let dir = TempDir::new().unwrap();
+    copy_dir_all(Path::new(fixture), dir.path());
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .arg("init")
+        .current_dir(dir.path())
+        .assert()
+        .success();
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["index", "--full"])
+        .current_dir(dir.path())
+        .assert()
+        .success();
+    let sample = dir.path().join("sample.jsonl");
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--emit-sample"])
+        .arg(&sample)
+        .current_dir(dir.path())
+        .assert()
+        .success();
+    let raw = std::fs::read_to_string(&sample).unwrap();
+    (dir, raw)
+}
+
+#[test]
+fn test_audit_confidence_lang_version_coverage_all_seven_languages() {
+    // Per-fixture, parse each emitted JSONL record and assert
+    // `lang_version` is the manifest-declared value (no `null`, no
+    // drift). A `null` here is the detector regression signal: either
+    // the dispatcher arm is unwired, the manifest reader returns
+    // `None` for a shape it should handle, or the fixture's manifest
+    // does not match what the doc claims.
+    for &(lang, fixture, expected) in LANG_FIXTURES {
+        let (_dir, raw) = run_audit_emit_for_fixture(fixture);
+        let mut record_count = 0usize;
+        for (i, line) in raw.lines().enumerate() {
+            if line.trim().is_empty() || line.starts_with('#') {
+                continue;
+            }
+            let v: serde_json::Value = serde_json::from_str(line).unwrap_or_else(|e| {
+                panic!("[{lang}] line {} not valid JSON: {e}\n{line}", i + 1)
+            });
+            assert_eq!(
+                v["lang_version"], expected,
+                "[{lang}] line {} expected lang_version={expected:?} (from fixture manifest); \
+                 got {:?}",
+                i + 1,
+                v["lang_version"]
+            );
+            record_count += 1;
+        }
+        assert!(
+            record_count > 0,
+            "[{lang}] fixture {fixture} produced zero sampleable edges — \
+             extend the fixture so audit emit has something to sample"
+        );
+    }
+}
