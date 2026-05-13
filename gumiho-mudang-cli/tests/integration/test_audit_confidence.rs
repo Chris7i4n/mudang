@@ -197,11 +197,33 @@ fn test_audit_confidence_label_emits_json_report_by_default() {
     // ambiguity #4 contract.
     let report: serde_json::Value = serde_json::from_str(&stdout)
         .unwrap_or_else(|e| panic!("stdout not valid JSON: {e}\n{stdout}"));
-    assert_eq!(report["schema_version"], "1");
+    assert_eq!(report["schema_version"], "2");
     assert!(report["disclaimer"]
         .as_str()
         .unwrap()
         .contains("precision report"));
+    // Sprint 0004 CP3: coverage_summary is a top-level structured object.
+    let cs = report["coverage_summary"]
+        .as_object()
+        .expect("coverage_summary object");
+    for field in [
+        "records_total",
+        "records_labelled",
+        "records_skipped",
+        "distinct_groups_with_coverage",
+        "distinct_groups_fully_skipped",
+    ] {
+        assert!(cs.contains_key(field), "coverage_summary missing {field}");
+    }
+    // All-true labelling => records_total == records_labelled, no skipped,
+    // no fully-skipped groups.
+    let total = cs["records_total"].as_u64().unwrap();
+    let labelled = cs["records_labelled"].as_u64().unwrap();
+    assert!(total > 0, "expected non-empty sample");
+    assert_eq!(labelled, total, "all-true labelling: every record counted");
+    assert_eq!(cs["records_skipped"].as_u64().unwrap(), 0);
+    assert_eq!(cs["distinct_groups_fully_skipped"].as_u64().unwrap(), 0);
+
     let rows = report["report"].as_array().expect("report array");
     assert!(!rows.is_empty(), "expected at least one report row");
     for row in rows {
@@ -211,6 +233,9 @@ fn test_audit_confidence_label_emits_json_report_by_default() {
             "producer",
             "pattern_id",
             "sample_size",
+            "labelled_count",
+            "skipped_count",
+            "coverage_ratio",
             "correct_count",
             "precision",
         ] {
@@ -219,6 +244,11 @@ fn test_audit_confidence_label_emits_json_report_by_default() {
         // Labeller said true everywhere => precision must be 1.0.
         assert_eq!(row["precision"].as_f64().unwrap(), 1.0);
         assert_eq!(row["sample_size"], row["correct_count"]);
+        // labelled_count is the alias for sample_size; skipped_count is
+        // zero on the all-true path.
+        assert_eq!(row["labelled_count"], row["sample_size"]);
+        assert_eq!(row["skipped_count"].as_u64().unwrap(), 0);
+        assert_eq!(row["coverage_ratio"].as_f64().unwrap(), 1.0);
     }
 }
 
@@ -238,8 +268,9 @@ fn test_audit_confidence_label_format_tsv() {
     let stdout = String::from_utf8_lossy(&out.get_output().stdout).to_string();
 
     // Preamble: three `#`-prefixed lines carrying the precision-only
-    // disclaimer, the sample-file schema pointer, and the
-    // coverage-limitation note.
+    // disclaimer, the sample-file schema pointer, and the structured
+    // coverage_summary line (sprint 0004 CP3 replaced the old
+    // coverage_limitation_note with this; see AUDIT-LABEL-SCHEMA.md).
     let mut lines = stdout.lines();
     let p1 = lines.next().expect("preamble line 1");
     let p2 = lines.next().expect("preamble line 2");
@@ -256,22 +287,30 @@ fn test_audit_confidence_label_format_tsv() {
         "second preamble line must point to the sample-file schema doc: {p2:?}"
     );
     assert!(
-        p3.contains("BACKLOG.md"),
-        "third preamble line must point to `BACKLOG.md`: {p3:?}"
+        p3.contains("coverage_summary:") && p3.contains("total=") && p3.contains("labelled="),
+        "third preamble line must carry the coverage_summary: {p3:?}"
     );
 
     let header = lines.next().expect("header line");
     assert_eq!(
         header,
-        "kind\ttier\tproducer\tpattern_id\tsample_size\tcorrect_count\tprecision"
+        "kind\ttier\tproducer\tpattern_id\tsample_size\tlabelled_count\tskipped_count\tcoverage_ratio\tcorrect_count\tprecision"
     );
     let body: Vec<_> = lines.collect();
     assert!(!body.is_empty(), "expected at least one body row");
     for row in body {
         let cols: Vec<&str> = row.split('\t').collect();
-        assert_eq!(cols.len(), 7, "expected 7 tab-separated columns: {row}");
+        assert_eq!(cols.len(), 10, "expected 10 tab-separated columns: {row}");
         // All-true labelling => precision rendered as 1.0000.
-        assert_eq!(cols[6], "1.0000", "row: {row}");
+        assert_eq!(cols[9], "1.0000", "row: {row}");
+        // labelled_count == sample_size, skipped_count == 0,
+        // coverage_ratio == 1.0000 on the all-true path.
+        assert_eq!(
+            cols[5], cols[4],
+            "labelled_count must equal sample_size: {row}"
+        );
+        assert_eq!(cols[6], "0", "skipped_count must be 0 on all-true: {row}");
+        assert_eq!(cols[7], "1.0000", "coverage_ratio must be 1.0000: {row}");
     }
 }
 
@@ -343,7 +382,7 @@ fn test_audit_confidence_tier_gate_fails_on_low_precision_high_tier() {
     // Report still printed (so the operator sees every offender).
     let report: serde_json::Value =
         serde_json::from_str(&stdout).expect("stdout must still carry the JSON report");
-    assert_eq!(report["schema_version"], "1");
+    assert_eq!(report["schema_version"], "2");
 
     // Tier gate error printed to stderr with target percentages and remediation.
     assert!(
@@ -1144,6 +1183,91 @@ fn test_audit_confidence_label_rejects_unknown_schema_version() {
         .failure()
         .stderr(contains("unknown schema_version"))
         .stderr(contains("Re-emit"));
+}
+
+#[test]
+fn test_audit_confidence_label_surfaces_per_group_coverage_when_some_records_skipped() {
+    // Sprint 0004 CP3: report carries skipped_count / labelled_count /
+    // coverage_ratio per row and a top-level coverage_summary. Emit a
+    // sample, label half the records `true` and leave half `null`,
+    // then assert the operator sees both the precision number AND the
+    // coverage gap that contextualises it.
+    let (_dir, root) = setup_indexed_fixture();
+    let sample = root.join("sample.jsonl");
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--emit-sample"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .success();
+
+    let raw = std::fs::read_to_string(&sample).unwrap();
+    let mut out_lines = Vec::new();
+    for (i, l) in raw
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+        .enumerate()
+    {
+        // Even-indexed records get labelled `true`; odd stay null.
+        // This produces non-trivial coverage on every group that holds
+        // at least two records.
+        if i % 2 == 0 {
+            out_lines.push(l.replace("\"label\":null", "\"label\":true"));
+        } else {
+            out_lines.push(l.to_string());
+        }
+    }
+    std::fs::write(&sample, format!("{}\n", out_lines.join("\n"))).unwrap();
+
+    let out = Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--label"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .success();
+    let stdout = String::from_utf8_lossy(&out.get_output().stdout).to_string();
+    let report: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+
+    // coverage_summary surfaces the headline: total > 0, labelled > 0,
+    // skipped > 0, at least one group with coverage.
+    let cs = &report["coverage_summary"];
+    let total = cs["records_total"].as_u64().unwrap();
+    let labelled = cs["records_labelled"].as_u64().unwrap();
+    let skipped = cs["records_skipped"].as_u64().unwrap();
+    assert!(total > 0);
+    assert!(labelled > 0, "expected at least one labelled record");
+    assert!(skipped > 0, "expected at least one skipped record");
+    assert_eq!(labelled + skipped, total);
+    assert!(cs["distinct_groups_with_coverage"].as_u64().unwrap() > 0);
+
+    // Per-row coverage shape: labelled_count + skipped_count > 0; both
+    // counters present; coverage_ratio in [0, 1].
+    let rows = report["report"].as_array().unwrap();
+    assert!(!rows.is_empty());
+    for row in rows {
+        let lc = row["labelled_count"].as_u64().unwrap();
+        let sc = row["skipped_count"].as_u64().unwrap();
+        assert_eq!(lc, row["sample_size"].as_u64().unwrap());
+        let cr = row["coverage_ratio"].as_f64().unwrap();
+        assert!(
+            (0.0..=1.0).contains(&cr),
+            "coverage_ratio out of range: {row}"
+        );
+        if lc == 0 {
+            // Fully-skipped group: precision is null.
+            assert!(row["precision"].is_null(), "expected null precision: {row}");
+            assert_eq!(cr, 0.0);
+        } else {
+            assert!(
+                row["precision"].is_f64(),
+                "expected number precision: {row}"
+            );
+            let expected = lc as f64 / (lc + sc) as f64;
+            assert!((cr - expected).abs() < 1e-9, "coverage_ratio math: {row}");
+        }
+    }
 }
 
 #[test]

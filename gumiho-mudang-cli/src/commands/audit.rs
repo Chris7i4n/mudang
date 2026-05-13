@@ -42,34 +42,6 @@ pub const PRECISION_ONLY_DISCLAIMER: &str =
 pub const SCHEMA_DOC_POINTER: &str =
     "Sample-file schema: docs/AUDIT-LABEL-SCHEMA.md (schema_version \"2\"; \"1\" also accepted on read).";
 
-/// Limitation disclosed in every precision report so the operator never
-/// reads a precision number out of context.
-///
-/// Schema_version "1" surfaces precision per
-/// `(kind, tier, producer, pattern_id)` over the *labelled* records in
-/// each group. It deliberately omits three classes of signal that are
-///design work (see
-/// `BACKLOG.md` § Priority 1 — Self-correction cycle):
-///
-/// 1. **Per-group coverage** — how many records the labeller skipped
-///    (left `label = null`). A precision number with high skip ratio
-///    is opaque; bundled with `skipped_count` / `labelled_count` /
-///    `coverage_ratio` in schema bump "2" (sub-item (h)).
-/// 2. **Richer verdict types** — `target_proposed`, `kind_proposed`,
-///    `confidence_proposed`, `evidence`, `reasoning_text` (sub-item (g)).
-///    Binary `label = true | false` says *whether* Scope was wrong but
-///    not *why* or *what the truth is*; the actionable signal for
-///    closing the self-correction loop is qualitative, not binary.
-/// 3. **Multi-labeller aggregation** — combining LSP, LLM, human, and
-///    hybrid labellers' verdicts over the same edges with policy for
-///    disagreement (sub-item (i)).
-///
-/// This note is the operator-facing acknowledgement that the precision
-/// number on this report is one face of a richer truth surface that has
-/// not yet been built. Read it together with the disclaimer above.
-pub const COVERAGE_LIMITATION_NOTE: &str =
-    "report schema_version \"1\" surfaces precision over labelled records only; per-group coverage, richer verdict types (target/kind/confidence_proposed, evidence, reasoning_text), and multi-labeller aggregation land in schema_version \"2\" — see BACKLOG.md § Priority 1 — Self-correction cycle.";
-
 /// Wire-format schema version emitted by `--emit-sample`. The current
 /// emission version is `"2"` per `docs/AUDIT-LABEL-SCHEMA.md`
 /// § Record schema (sprint 0004 bump).
@@ -83,9 +55,12 @@ pub const SAMPLE_SCHEMA_VERSION: &str = "2";
 pub const ACCEPTED_SAMPLE_SCHEMA_VERSIONS: &[&str] = &["1", "2"];
 
 /// Report-side schema version (distinct from the sample-side contract;
-/// see `docs/AUDIT-LABEL-SCHEMA.md`). Stays at `"1"` until sprint 0004
-/// CP3 adds per-group coverage fields and `coverage_summary`.
-pub const REPORT_SCHEMA_VERSION: &str = "1";
+/// see `docs/AUDIT-LABEL-SCHEMA.md`). Bumped to `"2"` in sprint 0004 CP3
+/// alongside the per-row coverage fields (`labelled_count`,
+/// `skipped_count`, `coverage_ratio`) and the top-level
+/// `coverage_summary` object. The bump also retires
+/// `coverage_limitation_note` — the gap it disclosed closes here.
+pub const REPORT_SCHEMA_VERSION: &str = "2";
 
 /// Minimum precision the **high** tier must hit, per R8 acceptance
 /// (`docs/ENFORCEMENT-MAP.md` § R8). The CI gate enforces this:
@@ -189,46 +164,88 @@ impl SampleRecord {
 /// One row of the precision report — emitted as one element of the
 /// JSON `report` array and as one TSV row.
 ///
-/// Columns mirror the pre-Phase-D ambiguity #4 resolution:
-/// `(kind, tier, producer, pattern_id, sample_size, correct_count, precision)`.
-/// `tier` is the same string as the sample record's `confidence` field
-/// (`"high"` / `"medium"` / `"low"`); the report uses the *tier-target*
-/// vocabulary because R8's tier targets are stated against the tier
-/// name, not against the bare confidence stamp.
+/// Columns (post-sprint-0004 v2 shape):
+/// `(kind, tier, producer, pattern_id, sample_size, labelled_count,
+/// skipped_count, coverage_ratio, correct_count, precision)`.
+/// `labelled_count` is an explicit alias for `sample_size`; both ship
+/// side-by-side so the report is self-documenting next to
+/// `skipped_count` — an operator no longer has to mentally compute the
+/// total. `tier` is the same string as the sample record's `confidence`
+/// field (`"high"` / `"medium"` / `"low"`); the report uses the
+/// *tier-target* vocabulary because R8's tier targets are stated
+/// against the tier name, not against the bare confidence stamp.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ReportRow {
     pub kind: String,
     pub tier: String,
     pub producer: String,
     pub pattern_id: String,
+    /// Number of labelled records in this group (`label = true | false`).
+    /// Equal to `labelled_count`; kept for backward shape compatibility
+    /// with downstream tooling that already reads `sample_size`. The
+    /// precision denominator.
     pub sample_size: usize,
+    /// Explicit alias for `sample_size`. Side-by-side with
+    /// `skipped_count` so the row reads self-documenting.
+    pub labelled_count: usize,
+    /// Number of records in this group whose label was `null`. With
+    /// `labelled_count` this gives the full coverage picture per group.
+    pub skipped_count: usize,
+    /// `labelled_count / (labelled_count + skipped_count)`. Always in
+    /// `[0.0, 1.0]`. `0.0` when every record in this group was skipped
+    /// (in which case `precision` is `None`).
+    pub coverage_ratio: f64,
+    /// Number of labelled records the labeller marked `true`.
     pub correct_count: usize,
-    /// `correct_count / sample_size`, clamped at f64 precision.
-    /// Always in `[0.0, 1.0]`.
-    pub precision: f64,
+    /// `correct_count / sample_size`. `None` when `sample_size == 0`
+    /// (every record in this group was skipped — no precision is
+    /// measurable). Otherwise always in `[0.0, 1.0]`.
+    pub precision: Option<f64>,
+}
+
+/// Top-level coverage summary for a precision report.
+///
+/// Surfaces the labelling-coverage shape across **all** sampled records
+/// (not just the ones that contributed to a precision number). Lets an
+/// operator answer two questions at a glance:
+///
+/// 1. How much of the sample got actually labelled? (`records_labelled
+///    / records_total`)
+/// 2. How many groups have zero coverage? (`distinct_groups_fully_skipped`)
+///
+/// `distinct_groups_with_coverage` counts groups with at least one
+/// labelled record (precision computable). `distinct_groups_fully_skipped`
+/// counts groups present in the sample where every record was skipped
+/// (precision = None on the row).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CoverageSummary {
+    pub records_total: usize,
+    pub records_labelled: usize,
+    pub records_skipped: usize,
+    pub distinct_groups_with_coverage: usize,
+    pub distinct_groups_fully_skipped: usize,
 }
 
 /// Full precision report — the top-level shape emitted by
 /// `scope audit confidence --label --format json`.
 ///
 /// The `schema_version` is the report-side contract (distinct from the
-/// sample-side contract in `docs/AUDIT-LABEL-SCHEMA.md`, though both
-/// happen to be locked at "1" today). `disclaimer` is the verbatim
-/// precision-only framing — see [`PRECISION_ONLY_DISCLAIMER`].
-/// `sample_schema_doc` carries the inline pointer to the sample-file
-/// contract so external labeller authors (LLM / LSP / hybrid) can
-/// discover it directly from the report rather than from out-of-band
-/// docs — see [`SCHEMA_DOC_POINTER`] and `docs/AUDIT-LABEL-SCHEMA.md`.
+/// sample-side contract in `docs/AUDIT-LABEL-SCHEMA.md`). Sprint 0004 CP3
+/// bumped this to `"2"`, retiring the `coverage_limitation_note` carve
+/// and adding the structured `coverage_summary` object together with
+/// the per-row `labelled_count` / `skipped_count` / `coverage_ratio`
+/// fields. `disclaimer` is the verbatim precision-only framing — see
+/// [`PRECISION_ONLY_DISCLAIMER`]. `sample_schema_doc` carries the inline
+/// pointer to the sample-file contract so external labeller authors
+/// (LLM / LSP / hybrid) can discover it directly from the report rather
+/// than from out-of-band docs — see [`SCHEMA_DOC_POINTER`] and
+/// `docs/AUDIT-LABEL-SCHEMA.md`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PrecisionReport {
     pub schema_version: String,
     pub disclaimer: String,
     pub sample_schema_doc: String,
-    /// Operator-facing acknowledgement that this `schema_version: "1"`
-    /// report omits per-group coverage, richer verdict types, and
-    /// multi-labeller aggregation. See [`COVERAGE_LIMITATION_NOTE`]
-    /// and `BACKLOG.md` § Priority 1 sub-items (g) + (h) + (i).
-    pub coverage_limitation_note: String,
+    pub coverage_summary: CoverageSummary,
     pub report: Vec<ReportRow>,
 }
 
@@ -379,7 +396,6 @@ fn default_summary(graph: &Graph, args: &ConfidenceArgs) -> Result<()> {
     println!("# scope audit confidence");
     println!("# {PRECISION_ONLY_DISCLAIMER}");
     println!("# {SCHEMA_DOC_POINTER}");
-    println!("# {COVERAGE_LIMITATION_NOTE}");
     println!(
         "# sampled {} edge(s) across {} (kind, confidence) cell(s)",
         sample.len(),
@@ -930,7 +946,11 @@ fn label_pass(
 /// silently accept a tier that was never reviewed against a target.
 pub fn check_tier_gate(report: &PrecisionReport) -> Result<()> {
     use std::fmt::Write as _;
-    let mut failures: Vec<&ReportRow> = Vec::new();
+    // `(row, measured_precision)` — we only fire on rows where a
+    // precision number actually exists. Fully-skipped rows
+    // (`precision = None`) have nothing to enforce against; the
+    // coverage gap is surfaced through `coverage_summary` instead.
+    let mut failures: Vec<(&ReportRow, f64)> = Vec::new();
     for row in &report.report {
         let min = match row.tier.as_str() {
             "high" => HIGH_TIER_MIN,
@@ -944,8 +964,11 @@ pub fn check_tier_gate(report: &PrecisionReport) -> Result<()> {
                 row.pattern_id
             ),
         };
-        if row.precision < min {
-            failures.push(row);
+        let Some(p) = row.precision else {
+            continue;
+        };
+        if p < min {
+            failures.push((row, p));
         }
     }
     if failures.is_empty() {
@@ -959,7 +982,7 @@ pub fn check_tier_gate(report: &PrecisionReport) -> Result<()> {
         HIGH_TIER_MIN * 100.0,
         MEDIUM_TIER_MIN * 100.0
     );
-    for row in &failures {
+    for (row, p) in &failures {
         let min = if row.tier == "high" {
             HIGH_TIER_MIN
         } else {
@@ -972,7 +995,7 @@ pub fn check_tier_gate(report: &PrecisionReport) -> Result<()> {
             row.tier,
             row.producer,
             row.pattern_id,
-            row.precision,
+            p,
             min,
             row.correct_count,
             row.sample_size,
@@ -986,64 +1009,104 @@ pub fn check_tier_gate(report: &PrecisionReport) -> Result<()> {
     Err(anyhow::anyhow!(msg))
 }
 
+/// Per-group accumulator: `(labelled_count, correct_count, skipped_count)`.
+type GroupAcc = (usize, usize, usize);
+
 /// Group records by `(kind, tier, producer, pattern_id)` and compute
-/// precision per group.
+/// precision plus per-group coverage.
 ///
 /// `tier` is taken from each record's `confidence` field — they are the
 /// same string vocabulary (`"high"` / `"medium"` / `"low"`) per the
 /// schema. Group iteration order is sorted (`BTreeMap`) so the report
 /// is byte-for-byte deterministic given the same input.
 ///
-/// Records with `label.is_none()` are **skipped** before accumulation —
-/// per the schema doc's "partial coverage" allowance for LSP-cross-check
-/// labellers that can only classify some edge kinds. The reported
-/// `sample_size` is therefore the number of *labelled* records per group
-/// (the precision denominator); a group whose every record was skipped
-/// does not appear in the report.
+/// `label.is_none()` records are **counted** against this group's
+/// `skipped_count`, not dropped. A group whose every record was skipped
+/// still appears in the report with `precision = None` and
+/// `coverage_ratio = 0.0` — surfacing the coverage gap is the whole
+/// point of the post-bump shape ([`BACKLOG.md` § Priority 1 sub-item
+/// (h)]).
 ///
-/// `precision = correct_count as f64 / sample_size as f64`.
+/// `precision = Some(correct_count as f64 / labelled_count as f64)`
+/// when `labelled_count > 0`; `None` otherwise.
 pub fn compute_precision_report(records: &[SampleRecord]) -> PrecisionReport {
-    let mut groups: BTreeMap<(String, String, String, String), (usize, usize)> = BTreeMap::new();
+    let mut groups: BTreeMap<(String, String, String, String), GroupAcc> = BTreeMap::new();
     for r in records {
-        let label = match r.label {
-            Some(b) => b,
-            None => continue, // partial-coverage skip; not counted in denominator
-        };
         let key = (
             r.kind.clone(),
             r.confidence.clone(),
             r.producer.clone(),
             r.pattern_id.clone(),
         );
-        let entry = groups.entry(key).or_insert((0, 0));
-        entry.0 += 1; // sample_size = labelled records in this group
-        if label {
-            entry.1 += 1; // correct_count
+        let entry = groups.entry(key).or_insert((0, 0, 0));
+        match r.label {
+            Some(true) => {
+                entry.0 += 1; // labelled_count
+                entry.1 += 1; // correct_count
+            }
+            Some(false) => {
+                entry.0 += 1; // labelled_count
+            }
+            None => {
+                entry.2 += 1; // skipped_count
+            }
         }
     }
 
-    let rows = groups
+    let mut records_labelled = 0usize;
+    let mut records_skipped = 0usize;
+    let mut distinct_groups_with_coverage = 0usize;
+    let mut distinct_groups_fully_skipped = 0usize;
+
+    let rows: Vec<ReportRow> = groups
         .into_iter()
-        .filter(|(_, (n, _))| *n > 0)
-        .map(|((kind, tier, producer, pattern_id), (n, k))| {
-            let precision = k as f64 / n as f64;
-            ReportRow {
-                kind,
-                tier,
-                producer,
-                pattern_id,
-                sample_size: n,
-                correct_count: k,
-                precision,
-            }
-        })
+        .map(
+            |((kind, tier, producer, pattern_id), (labelled, correct, skipped))| {
+                records_labelled += labelled;
+                records_skipped += skipped;
+                if labelled > 0 {
+                    distinct_groups_with_coverage += 1;
+                } else {
+                    distinct_groups_fully_skipped += 1;
+                }
+                let denom = labelled + skipped;
+                // denom > 0 always — a group cannot exist with zero records;
+                // it materialised because at least one record fell into it.
+                let coverage_ratio = labelled as f64 / denom as f64;
+                let precision = if labelled > 0 {
+                    Some(correct as f64 / labelled as f64)
+                } else {
+                    None
+                };
+                ReportRow {
+                    kind,
+                    tier,
+                    producer,
+                    pattern_id,
+                    sample_size: labelled,
+                    labelled_count: labelled,
+                    skipped_count: skipped,
+                    coverage_ratio,
+                    correct_count: correct,
+                    precision,
+                }
+            },
+        )
         .collect();
+
+    let coverage_summary = CoverageSummary {
+        records_total: records_labelled + records_skipped,
+        records_labelled,
+        records_skipped,
+        distinct_groups_with_coverage,
+        distinct_groups_fully_skipped,
+    };
 
     PrecisionReport {
         schema_version: REPORT_SCHEMA_VERSION.to_string(),
         disclaimer: PRECISION_ONLY_DISCLAIMER.to_string(),
         sample_schema_doc: SCHEMA_DOC_POINTER.to_string(),
-        coverage_limitation_note: COVERAGE_LIMITATION_NOTE.to_string(),
+        coverage_summary,
         report: rows,
     }
 }
@@ -1055,10 +1118,13 @@ pub fn compute_precision_report(records: &[SampleRecord]) -> PrecisionReport {
 /// `serde_json::to_writer_pretty` streams without an intermediate
 /// `Value`.
 ///
-/// TSV: a single header line (`kind\ttier\t...\tprecision`) then one
-/// row per `ReportRow`. Precision is rendered with four decimal places
-/// — enough resolution to distinguish 0.95 from 0.9499 (the tier
-/// boundary) without flooding shell output with float noise.
+/// TSV: 3-line `#`-prefixed preamble (disclaimer, sample-file schema
+/// pointer, coverage-summary line) then a header then one row per
+/// `ReportRow`. Precision is rendered with four decimal places — enough
+/// resolution to distinguish 0.95 from 0.9499 (the tier boundary)
+/// without flooding shell output with float noise. Fully-skipped rows
+/// (`precision = None`) render an empty cell so awk/cut/Miller can
+/// pattern-match the missing-precision case via `$N == ""`.
 pub fn write_report<W: Write>(
     report: &PrecisionReport,
     format: ReportFormat,
@@ -1071,32 +1137,48 @@ pub fn write_report<W: Write>(
         }
         ReportFormat::Tsv => {
             // Preamble: `#`-prefixed comments carrying the disclaimer,
-            // sample-file schema doc pointer, and coverage-limitation
-            // note. Standard TSV consumers (awk / cut / Miller /
-            // csvkit) either ignore `#` lines via a `--comment` flag
-            // or can be teed through `grep -v '^#'` before parsing.
-            // Both surfaces (JSON top-level fields, TSV comment
-            // preamble) carry the same three notes so external
-            // labeller authors discover the full contract — including
-            // the schema "1" limitation — from either format.
+            // sample-file schema doc pointer, and the structured
+            // coverage_summary line. Both surfaces (JSON
+            // `coverage_summary` object, TSV preamble line) carry the
+            // same numbers so the operator gets the full coverage
+            // picture from either format. Standard TSV consumers
+            // (awk / cut / Miller / csvkit) either ignore `#` lines
+            // via a `--comment` flag or can be teed through
+            // `grep -v '^#'` before parsing.
             writeln!(out, "# {}", report.disclaimer)?;
             writeln!(out, "# {}", report.sample_schema_doc)?;
-            writeln!(out, "# {}", report.coverage_limitation_note)?;
+            let cs = &report.coverage_summary;
             writeln!(
                 out,
-                "kind\ttier\tproducer\tpattern_id\tsample_size\tcorrect_count\tprecision"
+                "# coverage_summary: total={} labelled={} skipped={} groups_with_coverage={} groups_fully_skipped={}",
+                cs.records_total,
+                cs.records_labelled,
+                cs.records_skipped,
+                cs.distinct_groups_with_coverage,
+                cs.distinct_groups_fully_skipped,
+            )?;
+            writeln!(
+                out,
+                "kind\ttier\tproducer\tpattern_id\tsample_size\tlabelled_count\tskipped_count\tcoverage_ratio\tcorrect_count\tprecision"
             )?;
             for row in &report.report {
+                let precision_cell = match row.precision {
+                    Some(p) => format!("{p:.4}"),
+                    None => String::new(),
+                };
                 writeln!(
                     out,
-                    "{}\t{}\t{}\t{}\t{}\t{}\t{:.4}",
+                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:.4}\t{}\t{}",
                     row.kind,
                     row.tier,
                     row.producer,
                     row.pattern_id,
                     row.sample_size,
+                    row.labelled_count,
+                    row.skipped_count,
+                    row.coverage_ratio,
                     row.correct_count,
-                    row.precision,
+                    precision_cell,
                 )?;
             }
         }
@@ -1463,11 +1545,11 @@ mod tests {
     }
 
     #[test]
-    fn report_schema_version_constant_at_one() {
-        // CP3 (sprint 0004 sub-item (h)) bumps to "2" together with
-        // the per-group coverage surface; until then the report shape
-        // is unchanged and the version stays "1".
-        assert_eq!(REPORT_SCHEMA_VERSION, "1");
+    fn report_schema_version_constant_at_two() {
+        // CP3 (sprint 0004 sub-item (h)) bumps the report version to
+        // "2" together with the per-group coverage surface (labelled /
+        // skipped / coverage_ratio per row + coverage_summary top-level).
+        assert_eq!(REPORT_SCHEMA_VERSION, "2");
     }
 
     // -- Chunk 5: precision report + JSON / TSV writers --
@@ -1480,6 +1562,27 @@ mod tests {
         pattern_id: &str,
         label: bool,
     ) -> SampleRecord {
+        record(edge_id, kind, confidence, producer, pattern_id, Some(label))
+    }
+
+    fn skipped(
+        edge_id: i64,
+        kind: &str,
+        confidence: &str,
+        producer: &str,
+        pattern_id: &str,
+    ) -> SampleRecord {
+        record(edge_id, kind, confidence, producer, pattern_id, None)
+    }
+
+    fn record(
+        edge_id: i64,
+        kind: &str,
+        confidence: &str,
+        producer: &str,
+        pattern_id: &str,
+        label: Option<bool>,
+    ) -> SampleRecord {
         SampleRecord {
             schema_version: SAMPLE_SCHEMA_VERSION.to_string(),
             edge_id: edge_id.to_string(),
@@ -1491,7 +1594,7 @@ mod tests {
             to: format!("t{edge_id}"),
             source_snippet: String::new(),
             lang_version: None,
-            label: Some(label),
+            label,
             evidence: None,
             target_proposed: None,
             kind_proposed: None,
@@ -1512,18 +1615,20 @@ mod tests {
             labelled(5, "imports", "medium", "rust", "rust.imports.use", false),
         ];
         let report = compute_precision_report(&records);
-        assert_eq!(report.schema_version, "1");
+        assert_eq!(report.schema_version, "2");
         assert_eq!(report.report.len(), 3);
 
-        // Find each group; assert math.
         let g1 = report
             .report
             .iter()
             .find(|r| r.pattern_id == "rust.calls.method")
             .unwrap();
         assert_eq!(g1.sample_size, 3);
+        assert_eq!(g1.labelled_count, 3);
+        assert_eq!(g1.skipped_count, 0);
         assert_eq!(g1.correct_count, 2);
-        assert!((g1.precision - 2.0 / 3.0).abs() < 1e-9);
+        assert_eq!(g1.coverage_ratio, 1.0);
+        assert!((g1.precision.unwrap() - 2.0 / 3.0).abs() < 1e-9);
 
         let g2 = report
             .report
@@ -1531,8 +1636,11 @@ mod tests {
             .find(|r| r.pattern_id == "rust.calls.fn")
             .unwrap();
         assert_eq!(g2.sample_size, 1);
+        assert_eq!(g2.labelled_count, 1);
+        assert_eq!(g2.skipped_count, 0);
         assert_eq!(g2.correct_count, 1);
-        assert_eq!(g2.precision, 1.0);
+        assert_eq!(g2.coverage_ratio, 1.0);
+        assert_eq!(g2.precision, Some(1.0));
 
         let g3 = report
             .report
@@ -1540,8 +1648,84 @@ mod tests {
             .find(|r| r.pattern_id == "rust.imports.use")
             .unwrap();
         assert_eq!(g3.sample_size, 1);
+        assert_eq!(g3.labelled_count, 1);
+        assert_eq!(g3.skipped_count, 0);
         assert_eq!(g3.correct_count, 0);
-        assert_eq!(g3.precision, 0.0);
+        assert_eq!(g3.precision, Some(0.0));
+
+        // Fully-labelled corpus: coverage_summary is the trivial case
+        // (records_total = records_labelled, no skipped, no fully-skipped
+        // groups). The non-trivial cases live in the dedicated tests
+        // below.
+        let cs = &report.coverage_summary;
+        assert_eq!(cs.records_total, 5);
+        assert_eq!(cs.records_labelled, 5);
+        assert_eq!(cs.records_skipped, 0);
+        assert_eq!(cs.distinct_groups_with_coverage, 3);
+        assert_eq!(cs.distinct_groups_fully_skipped, 0);
+    }
+
+    #[test]
+    fn precision_report_groups_count_skipped_records_per_group() {
+        // A group with a mix of labelled and skipped records:
+        // - labelled_count tracks `label != null`
+        // - skipped_count tracks `label == null`
+        // - coverage_ratio = labelled / (labelled + skipped)
+        // - precision uses only labelled records as the denominator
+        let records = vec![
+            labelled(1, "calls", "high", "rust", "p1", true),
+            labelled(2, "calls", "high", "rust", "p1", true),
+            skipped(3, "calls", "high", "rust", "p1"),
+            skipped(4, "calls", "high", "rust", "p1"),
+        ];
+        let report = compute_precision_report(&records);
+        let g = &report.report[0];
+        assert_eq!(g.labelled_count, 2);
+        assert_eq!(g.skipped_count, 2);
+        assert_eq!(g.coverage_ratio, 0.5);
+        assert_eq!(g.precision, Some(1.0));
+        assert_eq!(g.correct_count, 2);
+
+        let cs = &report.coverage_summary;
+        assert_eq!(cs.records_total, 4);
+        assert_eq!(cs.records_labelled, 2);
+        assert_eq!(cs.records_skipped, 2);
+        assert_eq!(cs.distinct_groups_with_coverage, 1);
+        assert_eq!(cs.distinct_groups_fully_skipped, 0);
+    }
+
+    #[test]
+    fn precision_report_emits_fully_skipped_groups_with_precision_none() {
+        // A group with zero labelled records still appears in the
+        // report — the operator must see the coverage gap. Precision is
+        // None (no measurement possible); coverage_ratio is 0.0;
+        // distinct_groups_fully_skipped counts the group.
+        let records = vec![
+            skipped(1, "calls", "high", "rust", "p_skip"),
+            skipped(2, "calls", "high", "rust", "p_skip"),
+            labelled(3, "imports", "medium", "rust", "p_ok", true),
+        ];
+        let report = compute_precision_report(&records);
+        assert_eq!(report.report.len(), 2);
+
+        let skip_row = report
+            .report
+            .iter()
+            .find(|r| r.pattern_id == "p_skip")
+            .unwrap();
+        assert_eq!(skip_row.labelled_count, 0);
+        assert_eq!(skip_row.skipped_count, 2);
+        assert_eq!(skip_row.sample_size, 0);
+        assert_eq!(skip_row.coverage_ratio, 0.0);
+        assert_eq!(skip_row.precision, None);
+        assert_eq!(skip_row.correct_count, 0);
+
+        let cs = &report.coverage_summary;
+        assert_eq!(cs.records_total, 3);
+        assert_eq!(cs.records_labelled, 1);
+        assert_eq!(cs.records_skipped, 2);
+        assert_eq!(cs.distinct_groups_with_coverage, 1);
+        assert_eq!(cs.distinct_groups_fully_skipped, 1);
     }
 
     #[test]
@@ -1576,31 +1760,86 @@ mod tests {
         assert_eq!(report.disclaimer, PRECISION_ONLY_DISCLAIMER);
     }
 
+    fn make_row(
+        kind: &str,
+        tier: &str,
+        producer: &str,
+        pattern_id: &str,
+        labelled: usize,
+        skipped: usize,
+        correct: usize,
+    ) -> ReportRow {
+        let total = labelled + skipped;
+        let coverage_ratio = if total == 0 {
+            0.0
+        } else {
+            labelled as f64 / total as f64
+        };
+        let precision = if labelled > 0 {
+            Some(correct as f64 / labelled as f64)
+        } else {
+            None
+        };
+        ReportRow {
+            kind: kind.to_string(),
+            tier: tier.to_string(),
+            producer: producer.to_string(),
+            pattern_id: pattern_id.to_string(),
+            sample_size: labelled,
+            labelled_count: labelled,
+            skipped_count: skipped,
+            coverage_ratio,
+            correct_count: correct,
+            precision,
+        }
+    }
+
+    fn make_summary(
+        records_total: usize,
+        records_labelled: usize,
+        records_skipped: usize,
+        groups_cov: usize,
+        groups_skip: usize,
+    ) -> CoverageSummary {
+        CoverageSummary {
+            records_total,
+            records_labelled,
+            records_skipped,
+            distinct_groups_with_coverage: groups_cov,
+            distinct_groups_fully_skipped: groups_skip,
+        }
+    }
+
     #[test]
     fn write_report_json_carries_schema_disclaimer_rows() {
         let report = PrecisionReport {
-            schema_version: "1".to_string(),
+            schema_version: "2".to_string(),
             disclaimer: PRECISION_ONLY_DISCLAIMER.to_string(),
             sample_schema_doc: SCHEMA_DOC_POINTER.to_string(),
-            coverage_limitation_note: COVERAGE_LIMITATION_NOTE.to_string(),
-            report: vec![ReportRow {
-                kind: "calls".to_string(),
-                tier: "high".to_string(),
-                producer: "rust".to_string(),
-                pattern_id: "rust.calls.method".to_string(),
-                sample_size: 30,
-                correct_count: 29,
-                precision: 29.0 / 30.0,
-            }],
+            coverage_summary: make_summary(30, 30, 0, 1, 0),
+            report: vec![make_row(
+                "calls",
+                "high",
+                "rust",
+                "rust.calls.method",
+                30,
+                0,
+                29,
+            )],
         };
         let mut buf = Vec::new();
         write_report(&report, ReportFormat::Json, &mut buf).unwrap();
         let s = String::from_utf8(buf).unwrap();
-        assert!(s.contains("\"schema_version\": \"1\""));
+        assert!(s.contains("\"schema_version\": \"2\""));
         assert!(s.contains(PRECISION_ONLY_DISCLAIMER));
         assert!(s.contains("\"sample_size\": 30"));
+        assert!(s.contains("\"labelled_count\": 30"));
+        assert!(s.contains("\"skipped_count\": 0"));
+        assert!(s.contains("\"coverage_ratio\":"));
         assert!(s.contains("\"correct_count\": 29"));
         assert!(s.contains("\"precision\":"));
+        assert!(s.contains("\"coverage_summary\""));
+        assert!(s.contains("\"records_total\": 30"));
         // Pretty-printed: contains a newline (not a single-line blob).
         assert!(s.contains('\n'));
     }
@@ -1608,29 +1847,13 @@ mod tests {
     #[test]
     fn write_report_tsv_has_header_and_one_row_per_group() {
         let report = PrecisionReport {
-            schema_version: "1".to_string(),
+            schema_version: "2".to_string(),
             disclaimer: PRECISION_ONLY_DISCLAIMER.to_string(),
             sample_schema_doc: SCHEMA_DOC_POINTER.to_string(),
-            coverage_limitation_note: COVERAGE_LIMITATION_NOTE.to_string(),
+            coverage_summary: make_summary(42, 42, 0, 2, 0),
             report: vec![
-                ReportRow {
-                    kind: "calls".to_string(),
-                    tier: "high".to_string(),
-                    producer: "rust".to_string(),
-                    pattern_id: "rust.calls.method".to_string(),
-                    sample_size: 30,
-                    correct_count: 29,
-                    precision: 29.0 / 30.0,
-                },
-                ReportRow {
-                    kind: "imports".to_string(),
-                    tier: "medium".to_string(),
-                    producer: "python".to_string(),
-                    pattern_id: "p.imports.from".to_string(),
-                    sample_size: 12,
-                    correct_count: 9,
-                    precision: 0.75,
-                },
+                make_row("calls", "high", "rust", "rust.calls.method", 30, 0, 29),
+                make_row("imports", "medium", "python", "p.imports.from", 12, 0, 9),
             ],
         };
         let mut buf = Vec::new();
@@ -1638,23 +1861,53 @@ mod tests {
         let s = String::from_utf8(buf).unwrap();
         let lines: Vec<_> = s.lines().collect();
         // 3 preamble (`#` disclaimer + `#` schema-doc pointer + `#`
-        // coverage-limitation note) + 1 header + 2 rows.
+        // coverage-summary) + 1 header + 2 rows.
         assert_eq!(lines.len(), 6);
         assert_eq!(lines[0], format!("# {PRECISION_ONLY_DISCLAIMER}"));
         assert_eq!(lines[1], format!("# {SCHEMA_DOC_POINTER}"));
-        assert_eq!(lines[2], format!("# {COVERAGE_LIMITATION_NOTE}"));
+        assert_eq!(
+            lines[2],
+            "# coverage_summary: total=42 labelled=42 skipped=0 groups_with_coverage=2 groups_fully_skipped=0"
+        );
         assert_eq!(
             lines[3],
-            "kind\ttier\tproducer\tpattern_id\tsample_size\tcorrect_count\tprecision"
+            "kind\ttier\tproducer\tpattern_id\tsample_size\tlabelled_count\tskipped_count\tcoverage_ratio\tcorrect_count\tprecision"
         );
         assert_eq!(
             lines[4],
-            "calls\thigh\trust\trust.calls.method\t30\t29\t0.9667"
+            "calls\thigh\trust\trust.calls.method\t30\t30\t0\t1.0000\t29\t0.9667"
         );
         assert_eq!(
             lines[5],
-            "imports\tmedium\tpython\tp.imports.from\t12\t9\t0.7500"
+            "imports\tmedium\tpython\tp.imports.from\t12\t12\t0\t1.0000\t9\t0.7500"
         );
+    }
+
+    #[test]
+    fn write_report_tsv_renders_empty_cell_for_skipped_only_groups() {
+        // Fully-skipped group: precision = None. TSV cell must be
+        // empty so `awk -F'\t' '$10 == ""'` matches the
+        // missing-precision case cleanly.
+        let report = PrecisionReport {
+            schema_version: "2".to_string(),
+            disclaimer: PRECISION_ONLY_DISCLAIMER.to_string(),
+            sample_schema_doc: SCHEMA_DOC_POINTER.to_string(),
+            coverage_summary: make_summary(2, 0, 2, 0, 1),
+            report: vec![make_row("calls", "high", "rust", "p_skip", 0, 2, 0)],
+        };
+        let mut buf = Vec::new();
+        write_report(&report, ReportFormat::Tsv, &mut buf).unwrap();
+        let s = String::from_utf8(buf).unwrap();
+        let last = s.lines().last().unwrap();
+        // 10 columns: trailing cell is empty (line ends with the
+        // `0\t` for correct_count then nothing).
+        assert!(
+            last.ends_with("\t0\t"),
+            "fully-skipped row must end with empty precision cell: {last:?}"
+        );
+        let cols: Vec<&str> = last.split('\t').collect();
+        assert_eq!(cols.len(), 10);
+        assert_eq!(cols[9], "");
     }
 
     #[test]
@@ -1686,33 +1939,54 @@ mod tests {
     }
 
     #[test]
-    fn write_report_carries_coverage_limitation_note_on_both_surfaces() {
-        // The coverage-limitation note is the operator-facing
-        // acknowledgement that `schema_version: "1"` omits per-group
-        // coverage, richer verdict types, and multi-labeller
-        // aggregation. It must appear on both JSON and TSV surfaces
-        // so any consumer reads it as part of the report header.
-        let report = compute_precision_report(&[]);
-        // JSON: top-level field present.
+    fn write_report_carries_coverage_summary_on_both_surfaces() {
+        // The coverage_summary is the operator-facing headline that
+        // contextualises every precision number. It must appear on both
+        // JSON (top-level object) and TSV (preamble line) so any
+        // consumer reads it as part of the report header.
+        let records = vec![
+            labelled(1, "calls", "high", "rust", "p1", true),
+            labelled(2, "calls", "high", "rust", "p1", true),
+            skipped(3, "calls", "high", "rust", "p1"),
+            skipped(4, "imports", "medium", "rust", "p_skip"),
+        ];
+        let report = compute_precision_report(&records);
         let mut buf = Vec::new();
         write_report(&report, ReportFormat::Json, &mut buf).unwrap();
         let json = String::from_utf8(buf).unwrap();
-        assert!(json.contains("\"coverage_limitation_note\""));
-        assert!(json.contains("BACKLOG.md"));
-        // TSV: third preamble line is the note.
+        assert!(json.contains("\"coverage_summary\""));
+        assert!(json.contains("\"records_total\": 4"));
+        assert!(json.contains("\"records_labelled\": 2"));
+        assert!(json.contains("\"records_skipped\": 2"));
+        assert!(json.contains("\"distinct_groups_with_coverage\": 1"));
+        assert!(json.contains("\"distinct_groups_fully_skipped\": 1"));
         let mut buf = Vec::new();
         write_report(&report, ReportFormat::Tsv, &mut buf).unwrap();
         let tsv = String::from_utf8(buf).unwrap();
         let third = tsv.lines().nth(2).unwrap();
-        assert_eq!(third, format!("# {COVERAGE_LIMITATION_NOTE}"));
+        assert!(
+            third.starts_with("# coverage_summary:"),
+            "third preamble line must carry coverage_summary: {third:?}"
+        );
+        assert!(third.contains("total=4"));
+        assert!(third.contains("labelled=2"));
+        assert!(third.contains("skipped=2"));
+        assert!(third.contains("groups_with_coverage=1"));
+        assert!(third.contains("groups_fully_skipped=1"));
     }
 
     #[test]
-    fn precision_report_carries_coverage_limitation_note() {
+    fn precision_report_carries_coverage_summary() {
+        // Empty input: all summary counters zero. The struct still
+        // ships on the report so external consumers can parse a
+        // well-shaped object regardless of input.
         let report = compute_precision_report(&[]);
-        assert_eq!(report.coverage_limitation_note, COVERAGE_LIMITATION_NOTE);
-        assert!(report.coverage_limitation_note.contains("schema_version"));
-        assert!(report.coverage_limitation_note.contains("BACKLOG.md"));
+        let cs = &report.coverage_summary;
+        assert_eq!(cs.records_total, 0);
+        assert_eq!(cs.records_labelled, 0);
+        assert_eq!(cs.records_skipped, 0);
+        assert_eq!(cs.distinct_groups_with_coverage, 0);
+        assert_eq!(cs.distinct_groups_fully_skipped, 0);
     }
 
     #[test]
@@ -1727,24 +2001,16 @@ mod tests {
 
     fn report_with_rows(rows: Vec<ReportRow>) -> PrecisionReport {
         PrecisionReport {
-            schema_version: "1".to_string(),
+            schema_version: REPORT_SCHEMA_VERSION.to_string(),
             disclaimer: PRECISION_ONLY_DISCLAIMER.to_string(),
             sample_schema_doc: SCHEMA_DOC_POINTER.to_string(),
-            coverage_limitation_note: COVERAGE_LIMITATION_NOTE.to_string(),
+            coverage_summary: make_summary(0, 0, 0, 0, 0),
             report: rows,
         }
     }
 
     fn row(kind: &str, tier: &str, pattern_id: &str, n: usize, k: usize) -> ReportRow {
-        ReportRow {
-            kind: kind.to_string(),
-            tier: tier.to_string(),
-            producer: "rust".to_string(),
-            pattern_id: pattern_id.to_string(),
-            sample_size: n,
-            correct_count: k,
-            precision: if n == 0 { 0.0 } else { k as f64 / n as f64 },
-        }
+        make_row(kind, tier, "rust", pattern_id, n, 0, k)
     }
 
     #[test]
@@ -1821,29 +2087,13 @@ mod tests {
         // Picks values either side of the high-tier 0.95 boundary so a
         // future format-string change that loses resolution fails here.
         let report = PrecisionReport {
-            schema_version: "1".to_string(),
+            schema_version: REPORT_SCHEMA_VERSION.to_string(),
             disclaimer: PRECISION_ONLY_DISCLAIMER.to_string(),
             sample_schema_doc: SCHEMA_DOC_POINTER.to_string(),
-            coverage_limitation_note: COVERAGE_LIMITATION_NOTE.to_string(),
+            coverage_summary: make_summary(10200, 10200, 0, 2, 0),
             report: vec![
-                ReportRow {
-                    kind: "calls".to_string(),
-                    tier: "high".to_string(),
-                    producer: "rust".to_string(),
-                    pattern_id: "p1".to_string(),
-                    sample_size: 200,
-                    correct_count: 190, // 0.9500
-                    precision: 190.0 / 200.0,
-                },
-                ReportRow {
-                    kind: "calls".to_string(),
-                    tier: "high".to_string(),
-                    producer: "rust".to_string(),
-                    pattern_id: "p2".to_string(),
-                    sample_size: 10000,
-                    correct_count: 9499, // 0.9499
-                    precision: 9499.0 / 10000.0,
-                },
+                make_row("calls", "high", "rust", "p1", 200, 0, 190), // 0.9500
+                make_row("calls", "high", "rust", "p2", 10000, 0, 9499), // 0.9499
             ],
         };
         let mut buf = Vec::new();
