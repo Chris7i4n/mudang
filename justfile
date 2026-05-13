@@ -68,7 +68,7 @@ gate: fmt-check clippy test
 # this recipe.
 
 # Run every active architecture gate.
-gate-refactor: ci-edge-sealed test-builder test-typestate ci-context-shape ci-no-fs ci-dispatch ci-trait-shape ci-no-spawn ci-no-network ci-immutable ci-no-framework-scm ci-patterns ci-output-schema audit-confidence test-malformed gate-charter
+gate-refactor: ci-edge-sealed test-builder test-typestate ci-context-shape ci-no-fs ci-dispatch ci-trait-shape ci-no-spawn ci-no-network ci-immutable ci-no-framework-scm ci-patterns ci-output-schema audit-confidence test-malformed gate-charter gate-doc-sync
 
 ci-edge-sealed:
     ./scripts/grep_edge_sealed.sh
@@ -149,6 +149,17 @@ test-malformed:
 # the source of truth.
 gate-charter:
     ./scripts/gate_charter.sh
+
+# Doc-sync gate (R13).
+#
+# Refuses every drift shape between named code surfaces and named
+# governing-doc passages. Each check targets ONE drift shape, modelled
+# on the gate_charter.sh narrow-grep pattern. Later sprints in
+# Priority 1 (BACKLOG.md § Priority 1 — Self-correction cycle) extend
+# this script per SELF-CORRECTION-CYCLE.md § "Extending the doc-sync
+# gate".
+gate-doc-sync:
+    ./scripts/gate_doc_sync.sh
 
 # --- Install ---
 

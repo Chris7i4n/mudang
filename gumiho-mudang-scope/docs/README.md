@@ -17,6 +17,9 @@ If you are landing here to **contribute code**, start at [`../CONTRIBUTING.md`](
 
 - **`GLOSSARY.md`** — central term definitions across all docs (types, traits, processes, subcommands, classes of constraint).
 - **`CI-GATES.md`** — single source of truth for every CI gate the architecture enforces. Each gate maps to an R-entry in `ENFORCEMENT-MAP.md`; the `justfile` recipes mirror this doc.
+- **`SELF-CORRECTION-CYCLE.md`** — closed-loop pipeline that converts R8 audit signal into automated extractor improvement. Owns the contract surfaces, mandatory human review gate, rollback path, and the extension protocol for the doc-sync gate ([`ENFORCEMENT-MAP.md` § R13](ENFORCEMENT-MAP.md)). Source of truth for the loop shape used by [`BACKLOG.md` § Priority 1](BACKLOG.md#priority-1--self-correction-cycle) sprints 0001–0009.
+- **`SELF-CORRECTION-STATE.md`** — state-tracking doc for the Priority 1 initiative. Reporting hook target for sprints 0001–0009 per [`sprints/README.md` § 4](sprints/README.md#4-reporting-hooks).
+- **`AUDIT-LABEL-SCHEMA.md`** — JSONL contract surface for `scope audit confidence --emit-sample` / `--label` (current `schema_version: "1"`; bumped to `"2"` in sprint 0004).
 
 ## Static reference
 

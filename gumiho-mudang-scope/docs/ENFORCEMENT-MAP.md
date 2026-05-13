@@ -223,7 +223,7 @@ Each entry below has: **ID, rules it enforces, durable contract, where to find i
   - **Output format**: default `--format json` carrying `schema_version`, `disclaimer`, `sample_schema_doc`, `report[]`. `--format tsv` is a convenience view.
   - **JSONL sample schema** (full doc in [`AUDIT-LABEL-SCHEMA.md`](AUDIT-LABEL-SCHEMA.md)): `schema_version: "1"`, fields `edge_id`, `kind`, `confidence`, `producer`, `pattern_id`, `from`, `to`, `source_snippet`, `lang_version`, `label`. `lang_version` is reserved-for-future; emits always `null`. Bump to `"2"` is scheduled in [`BACKLOG.md` § Priority 1 sub-item (g)](BACKLOG.md#priority-1--self-correction-cycle).
   - **What R8 measures and what it does not**: precision only. **Not recall** — a predicate that simply stops matching emits zero rows and zero rows are not sampleable. Recall regressions caught by integration-test fixtures with expected edge counts (snapshot via `insta`).
-- **Where in the tree**: `gumiho-mudang-cli/src/commands/audit.rs` (subcommand surface — extraction to `scope-audit` sub-crate queued in [`BACKLOG.md` § Priority 3 — Layering audit](BACKLOG.md#priority-3--layering-audit-thin-cli-fat-library)); `scope-graph/src/audit.rs` (`AuditEdgeRow`, `AuditFreshness`, `check_audit_freshness`); `scope-core/tests/fixtures/reference/<lang>/audit-samples/` (committed labelled corpus).
+- **Where in the tree**: `gumiho-mudang-cli/src/commands/audit.rs` (subcommand surface — extraction to `scope-audit` sub-crate queued in [`BACKLOG.md` § Priority 3 — Layering audit](BACKLOG.md#priority-3--layering-audit-thin-cli-fat-library)); `gumiho-mudang-scope/scope-graph/src/graph.rs` (`AuditEdgeRow`, `AuditFreshness`, `check_audit_freshness`); `scope-core/tests/fixtures/reference/<lang>/audit-samples/` (committed labelled corpus).
 - **CI gates**: Confidence audit (`just audit-confidence` runs the integration suite).
 
 ### R9 — Immutable source guarantee
@@ -238,7 +238,7 @@ Each entry below has: **ID, rules it enforces, durable contract, where to find i
 - **Enforces**: E1.
 - **Durable contract**:
   - Every `--json` CLI path emits `JsonOutput<TypedView>` with zero `serde_json::json!()` macro sites and zero `serde_json::Value` ad-hoc trees in `gumiho-mudang-cli/src/{commands,output}`.
-  - Every plain-text renderer is `impl fmt::Display` on a typed view struct in `output/formatter.rs`. Zero `pub fn print_*` free functions; zero residual `println!` / `eprintln!` outside `Display` bodies.
+  - Every plain-text renderer is `impl fmt::Display` on a typed view struct in `gumiho-mudang-cli/src/output/formatter.rs`. Zero `pub fn print_*` free functions; zero residual `println!` / `eprintln!` outside `Display` bodies.
   - Banned field names on output structs: `error`, `warning`, `diagnostic`, `is_valid`, `lint`, `correctness`.
 - **Where in the tree**: `gumiho-mudang-cli/src/output/formatter.rs`; `gumiho-mudang-cli/src/output/schema/`; `gumiho-mudang-cli/src/commands/*.rs`.
 - **CI gates**: Output schema audit (`audit_output_schema.sh`).
@@ -259,6 +259,19 @@ Each entry below has: **ID, rules it enforces, durable contract, where to find i
   - The only legitimate `Command::new("scope")` in the workspace lives in `gumiho-mudang-cli/src/commands/setup.rs` — outside the audit scope by path filter.
 - **Honest limit**: trait-shape audit catches obvious names but not a helper named `compute_X_for_Y` that performs the same forbidden work. The process-spawn denylist catches literal `Command::new(` introductions but not a runtime-resolved `Command::new(env::var("CC")?)`. This is why A1–A3 + B2 + "no compiler/interpreter invocation" are `detectable`, not `mechanical`. [R8](#r8--confidence-audit-subcommand) is the symptom-side safety net.
 - **Where in the tree**: `scripts/audit_trait_shape.sh`, `scripts/audit_no_spawn.sh`, `scripts/audit_no_network.sh`.
+
+### R13 — Doc-↔-code drift gate
+
+- **Enforces**: doc-↔-code synchronisation across the governing-doc layer ([`sprints/README.md` § 7.5](sprints/README.md#75-enforcement-map-update) refinement discipline — mechanical half). Originally introduced by the Priority 1 self-correction initiative ([`BACKLOG.md` § Priority 1 — Self-correction cycle](BACKLOG.md#priority-1--self-correction-cycle)); general-purpose for any future pair of (named doc value, named code value) that must match.
+- **Durable contract**: `scripts/gate_doc_sync.sh` — narrow-grep gate. Initial checks shipped in sprint 0001:
+  - **enforcement-map-paths** — every `` `<path>.{rs,sh,sql,toml,md}` `` cited in `ENFORCEMENT-MAP.md` resolves on disk.
+  - **ci-gates-recipes** — every `CI-GATES.md` row marked `active` has its `just <recipe>` defined in the root `justfile`.
+  - **doc-relative-links** — every `](relative-path)` markdown link under `gumiho-mudang-scope/docs/` resolves on disk (http(s) + anchor-only links skipped).
+  - **cycle-docs-indexed** — `SELF-CORRECTION-CYCLE.md` and `SELF-CORRECTION-STATE.md`, when present, are referenced from `gumiho-mudang-scope/docs/README.md`.
+- **Honest limit**: catches **drift between named code surfaces and named doc passages**, not semantic drift ("the doc says X is fast; the code is slow"), not missing documentation for a code surface (R8 / § 7.5 reviewer discipline), and not out-of-band rule amendments ([`sprints/README.md` § 3](sprints/README.md#3-ambiguity-protocol--consult-the-human-amend-the-source-doc)).
+- **Extension protocol**: later sprints in Priority 1 add **one** new `check_<short_name>` function per drift shape they introduce. See [`SELF-CORRECTION-CYCLE.md` § Extending the doc-sync gate](SELF-CORRECTION-CYCLE.md#extending-the-doc-sync-gate) for the sprint-by-sprint table and the function-template recipe. Each addition is a refinement (per [`sprints/README.md` § 7.5](sprints/README.md#75-enforcement-map-update)) of this R-entry, not a new R-entry.
+- **Where in the tree**: `scripts/gate_doc_sync.sh`, `justfile` recipe `gate-doc-sync` (called by `gate-refactor`).
+- **CI gates**: `Doc-sync` row in [`CI-GATES.md`](CI-GATES.md), `just gate-doc-sync`.
 
 ---
 
