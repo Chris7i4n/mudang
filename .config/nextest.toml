@@ -1,0 +1,44 @@
+# nextest profile configuration. Each named profile is selectable via
+# `cargo nextest run --profile <name>`. The justfile recipes (see
+# `../justfile`) bind to these names:
+#
+#   just test          -> cargo test --workspace (cargo built-in, not nextest)
+#   just test-fast     -> nextest --profile dev-fast
+#
+# CI workflows pass `--profile ci`. The `dev` profile is declared for
+# ad-hoc `cargo nextest run --profile dev` invocations. The single
+# source of truth for what each gate runs is
+# `gumiho-mudang-scope/docs/CI-GATES.md`; this file only configures
+# how nextest invokes the test binaries.
+
+[profile.default]
+# Baseline used when no `--profile` flag is passed. Fail-fast on first
+# failure to keep the inner loop tight; show failing output inline.
+fail-fast = true
+failure-output = "immediate-final"
+slow-timeout = { period = "30s", terminate-after = 3 }
+
+[profile.dev]
+# Explicit alias for the inner loop. Same shape as `default`; declared
+# so `--profile dev` resolves without surprise.
+fail-fast = true
+failure-output = "immediate-final"
+slow-timeout = { period = "30s", terminate-after = 3 }
+
+[profile.dev-fast]
+# Aggressive fail-fast for the tightest possible compile-test loop.
+# Trims output and final-status detail to reduce noise.
+fail-fast = true
+status-level = "fail"
+final-status-level = "slow"
+failure-output = "immediate-final"
+slow-timeout = { period = "30s", terminate-after = 3 }
+
+[profile.ci]
+# Full sweep for CI. Reports every failure (no fail-fast), retries
+# transient failures with exponential backoff, and tolerates slower
+# fixtures than the dev profiles.
+fail-fast = false
+retries = { backoff = "exponential", count = 2, delay = "1s" }
+slow-timeout = { period = "60s", terminate-after = 5 }
+failure-output = "immediate-final"

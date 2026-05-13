@@ -37,12 +37,14 @@ test:
 test-fast:
     cargo nextest run --workspace --profile dev-fast
 
-test-changed:
-    cargo nextest run --workspace --changed-since main --profile dev
-
-# Per-crate convenience.
+# Per-crate convenience. Targets each scope sub-crate directly because
+# `gumiho-mudang-scope` is a façade (re-exports only) and owns zero
+# tests of its own — `cargo test -p gumiho-mudang-scope` alone builds
+# the sub-crates as deps but does not execute their integration tests.
+# The façade is included so its compilation stays validated against the
+# sub-crate public surface it re-exports.
 test-scope:
-    cargo test -p gumiho-mudang-scope
+    cargo test -p gumiho-mudang-scope -p scope-core -p scope-graph -p scope-index -p scope-search -p scope-workspace
 
 test-lsp:
     cargo test -p gumiho-mudang-lsp
@@ -161,7 +163,7 @@ uninstall:
 # --- Tooling ---
 
 tools-install:
-    cargo install cargo-nextest cargo-deny --locked
+    cargo install cargo-nextest cargo-deny cargo-insta --locked
 
 # --- Cleanup ---
 

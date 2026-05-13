@@ -21,9 +21,19 @@ gumiho-mudang-lsp/        # semantic oracle: LSP manager, capabilities, lifecycl
 gumiho-mudang-cli/        # binary "mudang": user-facing commands, routing, cache
 ```
 
-## Status
-
-Skeleton. Migration of code from `scope` and `gumiho-lsp` pending.
-
-
 Each `gumiho-*` is a self-contained project. The prefix names what the project is **for** within the spirit's ecosystem — not a hierarchy.
+
+## Install
+
+```bash
+just install              # installs the `mudang` binary into ~/.cargo/bin
+mudang --help
+```
+
+`just` recipes for build / test / install / uninstall live in [`justfile`](justfile). The CI-gate recipes (`just gate`, `just gate-refactor`) are canonical contributor tooling — see [`gumiho-mudang-scope/CONTRIBUTING.md`](gumiho-mudang-scope/CONTRIBUTING.md).
+
+## Reading the architecture
+
+- [`gumiho-mudang-scope/docs/README.md`](gumiho-mudang-scope/docs/README.md) — entry point for the scope architecture (charter, enforcement map, playbooks, sprints, CI gates, glossary). Start here for any structural question about the syntactic engine.
+- [`gumiho-mudang-scope/CONTRIBUTING.md`](gumiho-mudang-scope/CONTRIBUTING.md) — contributor on-ramp; threads the governing docs with prereqs, pre-commit checklist, snapshot workflow, fixture-corpus pointers, change → test mapping, sprint methodology, and codex review setup.
+- [`docs/README.md`](docs/README.md) — repo-wide cross-cutting docs (LSP composition, edit layer, notify API, substrate, architecture overview).

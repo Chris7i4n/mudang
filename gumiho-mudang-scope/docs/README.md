@@ -2,6 +2,8 @@
 
 Entry point for the docs tree. If this is your first time, read in this order.
 
+If you are landing here to **contribute code**, start at [`../CONTRIBUTING.md`](../CONTRIBUTING.md). It threads the governing docs together with prereqs, pre-commit checklist, snapshot workflow, fixture-corpus pointers, and the change → test mapping.
+
 ## Reading order (governing docs)
 
 1. **`CHARTER.md`** — what Scope is, what it is not, hard limits, soft expansion zone, per-language IN/OUT. Permanent constraints; revisions require explicit charter-amendment commits per CHARTER §11.
@@ -69,6 +71,7 @@ The architecture is stable. Every CI gate listed in `CI-GATES.md` is `active`; `
 
 ## Outside this directory
 
+- [`../CONTRIBUTING.md`](../CONTRIBUTING.md) — contributor on-ramp; threads the governing docs with setup, pre-commit checklist, snapshot workflow, fixture corpora, and the change → test mapping.
 - `README.md` (repo root) — install, CLI surface, quickstart.
 - `Cargo.toml` — pinned tree-sitter grammars and crate dependencies.
 - `scope-graph/src/sql/schema.sql` — current schema (R0 shape).
