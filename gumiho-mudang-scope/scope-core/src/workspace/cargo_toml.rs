@@ -4,6 +4,18 @@
 //! and `[dependencies]` + `[dev-dependencies]` entries. Workspace
 //! members and virtual manifests are out of scope at this layer —
 //! a workspace `Cargo.toml` is parsed by its members' own manifests.
+//!
+//! **C2 boundary**: the C2 enforcement surface is the plugin-facing
+//! trait `LanguageWorkspaceContext` (see
+//! `crate::workspace_context`), not this reader. `edition` and
+//! `rust-version` are absent from the trait — CI gate
+//! `audit_context_shape.sh` (R4) refuses any method whose name
+//! suggests them, so language plugins cannot reach those fields
+//! through any plugin-side path. This reader lives indexer-side and
+//! may expose `edition` / `rust-version` extraction functions for
+//! indexer-side consumers (R8 audit emit per `BACKLOG.md` §
+//! Priority 1 sub-item (d)); plugins never reach those functions
+//! because they receive the trait, not this module.
 
 use std::fs;
 use std::path::Path;

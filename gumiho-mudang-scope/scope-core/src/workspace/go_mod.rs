@@ -5,9 +5,17 @@
 //! - `require <path> <version>` — single-line require.
 //! - `require ( ... )` — multi-line require block.
 //!
-//! The `go <version>` directive is **not exposed**; reading the
-//! language version is a C2 violation. The CI gate
-//! `audit_context_shape.sh` prevents adding such an accessor.
+//! **C2 boundary**: the C2 enforcement surface is the plugin-facing
+//! trait `LanguageWorkspaceContext` (see
+//! `crate::workspace_context`), not this reader. The trait has no
+//! `go_directive` accessor — CI gate `audit_context_shape.sh` (R4)
+//! refuses any method whose name suggests one, so language plugins
+//! cannot reach the `go <version>` directive through any plugin-side
+//! path. This reader lives indexer-side and may expose a
+//! `go <version>` extraction function for indexer-side consumers
+//! (R8 audit emit per `BACKLOG.md` § Priority 1 sub-item (d));
+//! plugins never reach it because they receive the trait, not this
+//! module.
 //!
 //! Format reference: <https://go.dev/ref/mod#go-mod-file>.
 

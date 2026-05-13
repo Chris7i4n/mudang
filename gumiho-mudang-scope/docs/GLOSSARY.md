@@ -51,7 +51,7 @@ When a term collides with a Rust crate name (`semver`, `tree-sitter`), the entry
 
 | Term | Definition | Source |
 |---|---|---|
-| `LanguageWorkspaceContext` | Trait visible to language plugins; deliberately omits version-coupled fields (mechanical safeguard for C2) | R4 |
+| `LanguageWorkspaceContext` | Trait visible to language plugins; deliberately omits version-coupled fields (mechanical safeguard for C2). The C2 line is **at this trait**, not at the workspace readers — readers in `scope-core/src/workspace/*.rs` live indexer-side and may expose version-extraction free functions for indexer-side consumers (R8 audit emit per sprint 0003 (d)) per the R4 indexer-side carveout | R4 |
 | `FrameworkWorkspaceContext` | Trait visible to framework plugins; extends `LanguageWorkspaceContext` with `framework_versions()` and `lockfile()` | R4 |
 | `WorkspaceContext` | Historical name; replaced by the R4 split. Do not introduce new uses | R4 |
 

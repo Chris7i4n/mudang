@@ -37,7 +37,7 @@ Pattern catalog (per `queries/go/edges.scm`):
 - **B2** (no runtime / dynamic resolution): **mechanically enforced by R12** — `scripts/audit_trait_shape.sh` forbids `fn evaluate_*`.
 - **B3**: trivially compliant — tree-sitter parser recovery scanner active.
 - **C1** (no macro expansion): **mechanically enforced by R11** — the trait-shape audit forbids `fn expand_*`. Go has no macros; the rule's enforcement layer applies uniformly across languages.
-- **C2** (no version-specific compiler-quirk modelling): **mechanically enforced after R4**. `LanguageWorkspaceContext` has no `go_directive` accessor; reading it from the language layer is a compile error.
+- **C2** (no version-specific compiler-quirk modelling): **mechanically enforced on the plugin-facing trait surface**. `LanguageWorkspaceContext` has no `go_directive` accessor; reading it from the language layer is a compile error, pinned by `audit_context_shape.sh`. The `go_mod` reader at `gumiho-mudang-scope/scope-core/src/workspace/go_mod.rs` lives **indexer-side** behind that trait boundary; per the R4 indexer-side carveout it may expose a `go <version>` extraction function that indexer-side consumers — the R8 audit emit's `lang_version` field, shipped in sprint 0003 (d) — call directly. Plugins never reach that function; the C2 line stays at the trait, not at the reader.
 - **D1**: trivially compliant.
 - **D2** (no best-guess fallback resolution): **mechanically enforced after R3**. Extractor emits `RawEdge` with `Confidence::Medium`; resolver assigns `status`; Ambiguous emits one row per candidate; `confidence` preserved verbatim.
 - **D3** (no symbol-id collision resolution by guessing): mechanically enforced via R0 + R3.

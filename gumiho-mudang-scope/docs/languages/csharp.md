@@ -43,7 +43,7 @@ Pattern catalog (per `queries/csharp/edges.scm`):
 - **B2** (no runtime / dynamic resolution): **mechanically enforced by R12** — `scripts/audit_trait_shape.sh` forbids `fn evaluate_*`. C# `dynamic` dispatch is captured by syntactic position only.
 - **B3**: trivially compliant — tree-sitter parser recovery scanner active.
 - **C1** (no macro / template expansion): **mechanically enforced by R11** — the same trait-shape audit forbids `fn expand_*`. C# has no macro system; the rule's enforcement layer applies uniformly across languages.
-- **C2** (no version-specific compiler-quirk modelling): **mechanically enforced after R4**.
+- **C2** (no version-specific compiler-quirk modelling): **mechanically enforced on the plugin-facing trait surface** — no `TargetFramework` accessor in `LanguageWorkspaceContext`, pinned by `audit_context_shape.sh`. The `.csproj` reader added in sprint 0003 lives **indexer-side** behind that trait boundary; per the R4 indexer-side carveout it may expose a `<TargetFramework>` extraction function that indexer-side consumers — the R8 audit emit's `lang_version` field, shipped in sprint 0003 (d) — call directly. Plugins never reach that function; the C2 line stays at the trait, not at the reader.
 - **D1**: trivially compliant.
 - **D2** (no best-guess fallback resolution): **mechanically enforced after R3**.
 - **D3** (no symbol-id collision resolution by guessing): mechanically enforced via R0 + R3.

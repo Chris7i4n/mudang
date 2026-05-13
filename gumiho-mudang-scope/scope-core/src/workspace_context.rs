@@ -109,12 +109,23 @@ pub struct Lockfile {
 
 /// Visible to per-language extractors (R2).
 ///
-/// **Does not** expose `edition`, `target`, `python_requires`,
-/// `go_directive`, `tsconfig_target`, `framework_versions`. Adding such
-/// a method is a charter-amendment-grade change per
-/// `ENFORCEMENT-MAP.md` § R4. CI gate
+/// **The C2 boundary is this trait surface, not the workspace readers.**
+/// `LanguageWorkspaceContext` exposes no version accessor — `edition`,
+/// `target`, `python_requires`, `go_directive`, `tsconfig_target`,
+/// `framework_versions` are absent here, and CI gate
 /// `scripts/audit_context_shape.sh` (`just ci-context-shape`) refuses
-/// any method whose name suggests these fields.
+/// any method whose name suggests them. Adding such a method is a
+/// charter-amendment-grade change per `ENFORCEMENT-MAP.md` § R4.
+///
+/// Readers in `scope-core/src/workspace/*.rs` live **indexer-side** and
+/// may expose version-extraction free functions (e.g.
+/// `extract_edition(content)`). Those functions are not part of this
+/// trait, so language plugins cannot reach them: plugins receive the
+/// trait, not the reader module. Indexer-side consumers (R8 audit
+/// emit per `BACKLOG.md` § Priority 1 sub-item (d)) call them
+/// directly. This split — trait = C2 enforcement; reader =
+/// indexer-side carveout — is documented in `LANGUAGE-PLAYBOOK.md`
+/// Step 4 C2 and `ENFORCEMENT-MAP.md` § R4.
 pub trait LanguageWorkspaceContext: Send + Sync {
     /// Package that owns the given file, if any. Returns `None` for
     /// files outside any declared package (loose scripts, fixtures).

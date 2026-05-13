@@ -1,11 +1,20 @@
 //! `tsconfig.json` reader.
 //!
 //! Extracts `compilerOptions.paths` and `compilerOptions.baseUrl` to
-//! seed `ModuleLayout`. The reader does **not** expose `target`,
-//! `module`, `lib`, or any other version-coupled field — those would
-//! tempt a C2 violation if surfaced via `LanguageWorkspaceContext`.
-//! The CI gate `audit_context_shape.sh` (R4) ensures the trait surface
-//! never grows such an accessor.
+//! seed `ModuleLayout`.
+//!
+//! **C2 boundary**: the C2 enforcement surface is the plugin-facing
+//! trait `LanguageWorkspaceContext` (see
+//! `crate::workspace_context`), not this reader. `target`, `module`,
+//! `lib`, and any other version-coupled field are absent from the
+//! trait — CI gate `audit_context_shape.sh` (R4) refuses any method
+//! whose name suggests them, so language plugins cannot reach those
+//! fields through any plugin-side path. This reader lives
+//! indexer-side and may expose `target` extraction (and similar
+//! version-coupled fields) for indexer-side consumers (R8 audit
+//! emit per `BACKLOG.md` § Priority 1 sub-item (d)); plugins never
+//! reach those functions because they receive the trait, not this
+//! module.
 
 use std::collections::BTreeMap;
 use std::fs;

@@ -5,6 +5,18 @@
 //! `project.optional-dependencies`, `tool.poetry.dependencies`, and
 //! `tool.poetry.dev-dependencies`. Resolved versions live in
 //! `poetry.lock` — out of scope for this reader.
+//!
+//! **C2 boundary**: the C2 enforcement surface is the plugin-facing
+//! trait `LanguageWorkspaceContext` (see
+//! `crate::workspace_context`), not this reader. `python_requires`
+//! is absent from the trait — CI gate `audit_context_shape.sh` (R4)
+//! refuses any method whose name suggests it, so language plugins
+//! cannot reach the Python-version range through any plugin-side
+//! path. This reader lives indexer-side and may expose
+//! `requires-python` extraction for indexer-side consumers (R8
+//! audit emit per `BACKLOG.md` § Priority 1 sub-item (d)); plugins
+//! never reach that function because they receive the trait, not
+//! this module.
 
 use std::collections::BTreeMap;
 use std::fs;
