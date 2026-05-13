@@ -84,6 +84,26 @@ pub fn parse_go_mod(content: &str) -> Result<Package> {
     })
 }
 
+/// Indexer-side carveout (R4): extract the `go <version>` directive
+/// from a `go.mod` string. Returns `None` when absent (rare in
+/// practice — every modern `go.mod` carries one). Walks line-by-line
+/// like `parse_go_mod` to share the comment-stripping behaviour;
+/// stops at the first matching line.
+///
+/// **Not part of `LanguageWorkspaceContext`** — see module doc-comment.
+pub fn extract_go_directive(content: &str) -> Option<String> {
+    for raw_line in content.lines() {
+        let line = strip_line_comment(raw_line).trim();
+        if let Some(rest) = line.strip_prefix("go ") {
+            let version = rest.trim();
+            if !version.is_empty() {
+                return Some(version.to_string());
+            }
+        }
+    }
+    None
+}
+
 fn parse_require_entry(line: &str) -> Option<Dependency> {
     // Go's `// indirect` marker means the dependency is not directly
     // imported by this module — NOT that it is test/dev-only. Don't
@@ -178,5 +198,29 @@ require (
         let pkg = parse_go_mod(content).unwrap();
         assert_eq!(pkg.dependencies.len(), 1);
         assert_eq!(pkg.dependencies[0].version_req, "v1.2.3");
+    }
+
+    #[test]
+    fn extracts_go_directive_major_minor() {
+        let content = "module x\n\ngo 1.22\n";
+        assert_eq!(extract_go_directive(content).as_deref(), Some("1.22"));
+    }
+
+    #[test]
+    fn extracts_go_directive_major_minor_patch() {
+        let content = "module x\ngo 1.21.5\n";
+        assert_eq!(extract_go_directive(content).as_deref(), Some("1.21.5"));
+    }
+
+    #[test]
+    fn extracts_go_directive_strips_trailing_comment() {
+        let content = "module x\ngo 1.22 // pinned\n";
+        assert_eq!(extract_go_directive(content).as_deref(), Some("1.22"));
+    }
+
+    #[test]
+    fn extracts_go_directive_returns_none_when_absent() {
+        let content = "module x\n\nrequire github.com/foo/bar v1.0.0\n";
+        assert_eq!(extract_go_directive(content), None);
     }
 }

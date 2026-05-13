@@ -24,6 +24,7 @@ pub mod gemfile_lock;
 pub mod go_mod;
 pub mod package_json;
 pub mod pyproject_toml;
+pub mod setup_py;
 pub mod tsconfig_json;
 
 pub use cargo_toml::{parse_cargo_toml, read_cargo_toml};

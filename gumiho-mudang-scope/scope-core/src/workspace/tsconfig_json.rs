@@ -39,6 +39,18 @@ struct CompilerOptions {
     paths: BTreeMap<String, Vec<String>>,
 }
 
+#[derive(Deserialize, Default)]
+struct VersionManifest {
+    #[serde(rename = "compilerOptions", default)]
+    compiler_options: Option<VersionCompilerOptions>,
+}
+
+#[derive(Deserialize, Default)]
+struct VersionCompilerOptions {
+    #[serde(default)]
+    target: Option<String>,
+}
+
 /// Read and parse a `tsconfig.json` at `path`.
 pub fn read_tsconfig_json(path: &Path) -> Result<ModuleLayout> {
     let content = fs::read_to_string(path)
@@ -70,6 +82,23 @@ pub fn parse_tsconfig_json(content: &str, base_dir: &Path) -> Result<ModuleLayou
     }
 
     Ok(ModuleLayout { modules })
+}
+
+/// Indexer-side carveout (R4): extract `compilerOptions.target` from a
+/// `tsconfig.json` string. Returns the raw value verbatim (e.g.
+/// `"es2022"`, `"ES2017"`, `"esnext"`); case-folding is the caller's
+/// concern. Returns `None` when absent or when the file fails to
+/// parse.
+///
+/// Comments are stripped via the same JSONC pass as
+/// `parse_tsconfig_json` so a `target` declared after a `// ...`
+/// line is still recognised.
+///
+/// **Not part of `LanguageWorkspaceContext`** — see module doc-comment.
+pub fn extract_tsconfig_target(content: &str) -> Option<String> {
+    let stripped = strip_jsonc_comments(content);
+    let manifest: VersionManifest = serde_json::from_str(&stripped).ok()?;
+    manifest.compiler_options.and_then(|opts| opts.target)
 }
 
 /// Strip `//` and `/* ... */` comments — tsconfig.json is JSONC, not
@@ -160,5 +189,45 @@ mod tests {
     fn handles_empty_config() {
         let layout = parse_tsconfig_json("{}", Path::new("/repo")).unwrap();
         assert!(layout.modules.is_empty());
+    }
+
+    #[test]
+    fn extracts_target_when_present() {
+        let content = r#"{
+            "compilerOptions": {
+                "target": "es2022"
+            }
+        }"#;
+        assert_eq!(extract_tsconfig_target(content).as_deref(), Some("es2022"));
+    }
+
+    #[test]
+    fn extracts_target_after_comments() {
+        let content = r#"{
+            // primary project tsconfig
+            "compilerOptions": {
+                /* multi-line
+                   block */
+                "target": "ES2017",
+                "baseUrl": "./src"
+            }
+        }"#;
+        assert_eq!(extract_tsconfig_target(content).as_deref(), Some("ES2017"));
+    }
+
+    #[test]
+    fn extracts_target_returns_none_when_absent() {
+        let content = r#"{
+            "compilerOptions": {
+                "baseUrl": "./src"
+            }
+        }"#;
+        assert_eq!(extract_tsconfig_target(content), None);
+    }
+
+    #[test]
+    fn extracts_target_returns_none_on_malformed_json() {
+        let content = "this is not json {{{";
+        assert_eq!(extract_tsconfig_target(content), None);
     }
 }

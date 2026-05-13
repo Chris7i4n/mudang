@@ -61,6 +61,32 @@ struct PoetrySection {
     dev_dependencies: BTreeMap<String, toml::Value>,
 }
 
+#[derive(Deserialize, Default)]
+struct VersionManifest {
+    #[serde(default)]
+    project: Option<VersionProject>,
+    #[serde(default)]
+    tool: Option<VersionTool>,
+}
+
+#[derive(Deserialize, Default)]
+struct VersionProject {
+    #[serde(default, rename = "requires-python")]
+    requires_python: Option<String>,
+}
+
+#[derive(Deserialize, Default)]
+struct VersionTool {
+    #[serde(default)]
+    poetry: Option<VersionPoetry>,
+}
+
+#[derive(Deserialize, Default)]
+struct VersionPoetry {
+    #[serde(default)]
+    dependencies: BTreeMap<String, toml::Value>,
+}
+
 /// Read and parse a `pyproject.toml` at `path`.
 pub fn read_pyproject_toml(path: &Path) -> Result<Package> {
     let content = fs::read_to_string(path)
@@ -147,6 +173,38 @@ fn parse_pep508_dep(spec: &str, dev_only: bool) -> Dependency {
     }
 }
 
+/// Indexer-side carveout (R4): extract the Python version constraint
+/// from a `pyproject.toml` string. Tries (in order):
+///
+/// 1. `[project].requires-python` (PEP 621) — e.g. `">=3.10"`.
+/// 2. `[tool.poetry.dependencies].python` (Poetry) — e.g. `"^3.10"`.
+///
+/// Returns `None` when neither is present. The string is the raw
+/// version requirement; the caller is responsible for normalising
+/// (the R8 audit emit stores the raw spec verbatim for
+/// `lang_version`).
+///
+/// **Not part of `LanguageWorkspaceContext`** — see module doc-comment.
+pub fn extract_requires_python(content: &str) -> Option<String> {
+    let manifest: VersionManifest = toml::from_str(content).ok()?;
+    if let Some(project) = manifest.project {
+        if let Some(req) = project.requires_python {
+            return Some(req);
+        }
+    }
+    if let Some(tool) = manifest.tool {
+        if let Some(poetry) = tool.poetry {
+            if let Some(python_value) = poetry.dependencies.get("python") {
+                let spec = poetry_version_string(python_value);
+                if !spec.is_empty() {
+                    return Some(spec);
+                }
+            }
+        }
+    }
+    None
+}
+
 fn poetry_version_string(value: &toml::Value) -> String {
     match value {
         toml::Value::String(s) => s.clone(),
@@ -212,5 +270,57 @@ mod tests {
             .unwrap();
         assert_eq!(pytest.version_req, "^7.0");
         assert!(pytest.dev_only);
+    }
+
+    #[test]
+    fn extracts_requires_python_pep621() {
+        let content = r#"
+            [project]
+            name = "x"
+            requires-python = ">=3.10"
+        "#;
+        assert_eq!(extract_requires_python(content).as_deref(), Some(">=3.10"));
+    }
+
+    #[test]
+    fn extracts_requires_python_poetry() {
+        let content = r#"
+            [tool.poetry]
+            name = "x"
+
+            [tool.poetry.dependencies]
+            python = "^3.10"
+        "#;
+        assert_eq!(extract_requires_python(content).as_deref(), Some("^3.10"));
+    }
+
+    #[test]
+    fn extracts_requires_python_poetry_table_form() {
+        let content = r#"
+            [tool.poetry.dependencies]
+            python = { version = "^3.11" }
+        "#;
+        assert_eq!(extract_requires_python(content).as_deref(), Some("^3.11"));
+    }
+
+    #[test]
+    fn extracts_requires_python_prefers_pep621_over_poetry() {
+        let content = r#"
+            [project]
+            requires-python = ">=3.12"
+
+            [tool.poetry.dependencies]
+            python = "^3.10"
+        "#;
+        assert_eq!(extract_requires_python(content).as_deref(), Some(">=3.12"));
+    }
+
+    #[test]
+    fn extracts_requires_python_returns_none_when_absent() {
+        let content = r#"
+            [project]
+            name = "x"
+        "#;
+        assert_eq!(extract_requires_python(content), None);
     }
 }

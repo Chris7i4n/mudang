@@ -39,6 +39,18 @@ struct PackageSection {
     name: String,
 }
 
+#[derive(Deserialize)]
+struct VersionSection {
+    edition: Option<String>,
+    #[serde(rename = "rust-version")]
+    rust_version: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct VersionManifest {
+    package: Option<VersionSection>,
+}
+
 /// Read and parse a `Cargo.toml` at `path`.
 pub fn read_cargo_toml(path: &Path) -> Result<Package> {
     let content = fs::read_to_string(path)
@@ -80,6 +92,29 @@ pub fn parse_cargo_toml(content: &str) -> Result<Package> {
         root: Default::default(),
         dependencies,
     })
+}
+
+/// Indexer-side carveout (R4): extract the `[package].edition` value
+/// from a `Cargo.toml` string. Returns `None` when the manifest is a
+/// virtual workspace (no `[package]` section) or omits `edition`
+/// (Rust defaults to `"2015"` in that case; we surface `None` to
+/// distinguish "absent" from "declared" — the R8 emit caller decides
+/// the default).
+///
+/// **Not part of `LanguageWorkspaceContext`** — see module doc-comment.
+pub fn extract_edition(content: &str) -> Option<String> {
+    let manifest: VersionManifest = toml::from_str(content).ok()?;
+    manifest.package.and_then(|p| p.edition)
+}
+
+/// Indexer-side carveout (R4): extract `[package].rust-version` from a
+/// `Cargo.toml` string. Returns `None` when absent. The value is the
+/// minimum supported Rust toolchain (MSRV); orthogonal to `edition`.
+///
+/// **Not part of `LanguageWorkspaceContext`** — see module doc-comment.
+pub fn extract_rust_version(content: &str) -> Option<String> {
+    let manifest: VersionManifest = toml::from_str(content).ok()?;
+    manifest.package.and_then(|p| p.rust_version)
 }
 
 fn extract_version(value: &toml::Value) -> String {
@@ -138,5 +173,60 @@ mod tests {
         let pkg = parse_cargo_toml(content).unwrap();
         assert_eq!(pkg.name, "<workspace>");
         assert!(pkg.dependencies.is_empty());
+    }
+
+    #[test]
+    fn extracts_edition_when_present() {
+        let content = r#"
+            [package]
+            name = "x"
+            edition = "2021"
+        "#;
+        assert_eq!(extract_edition(content).as_deref(), Some("2021"));
+    }
+
+    #[test]
+    fn extracts_edition_returns_none_when_omitted() {
+        let content = r#"
+            [package]
+            name = "x"
+        "#;
+        assert_eq!(extract_edition(content), None);
+    }
+
+    #[test]
+    fn extracts_edition_returns_none_for_virtual_workspace() {
+        let content = r#"
+            [workspace]
+            members = ["a"]
+        "#;
+        assert_eq!(extract_edition(content), None);
+    }
+
+    #[test]
+    fn extracts_rust_version_when_present() {
+        let content = r#"
+            [package]
+            name = "x"
+            rust-version = "1.75"
+        "#;
+        assert_eq!(extract_rust_version(content).as_deref(), Some("1.75"));
+    }
+
+    #[test]
+    fn extracts_rust_version_returns_none_when_omitted() {
+        let content = r#"
+            [package]
+            name = "x"
+            edition = "2021"
+        "#;
+        assert_eq!(extract_rust_version(content), None);
+    }
+
+    #[test]
+    fn extraction_returns_none_on_malformed_toml() {
+        let content = "this is not valid TOML [[[";
+        assert_eq!(extract_edition(content), None);
+        assert_eq!(extract_rust_version(content), None);
     }
 }
