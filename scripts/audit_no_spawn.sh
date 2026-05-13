@@ -25,7 +25,7 @@
 #
 # Alias-import detection: `use std::process::Command as <Alias>;` is
 # matched directly so introducing an alias does not bypass the gate.
-# The codex sprint-0004 review surfaced this as a P2 bypass.
+# The review surfaced this as a P2 bypass.
 #
 # Per ENFORCEMENT-MAP.md § R12, CHARTER.md § 5, and
 # CI-GATES.md § Allowlist convention.
@@ -116,7 +116,7 @@ preprocessed=$(
 #   - `process::Command` — qualified type reference
 #   - `std::process::Command` — fully qualified type reference
 #   - `process::{...Command...}` — grouped import (collapsed by the
-#     preprocessor; the codex sprint-0004 round-5 review caught this
+#     preprocessor; the review caught this
 #     missing arm)
 #   - `Command as <Alias>` — alias declaration (after preprocessing,
 #     this catches grouped + bare forms uniformly)

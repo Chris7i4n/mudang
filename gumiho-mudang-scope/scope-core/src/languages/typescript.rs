@@ -109,7 +109,7 @@ pub fn extract_metadata(node: &tree_sitter::Node, source: &str, kind: &str) -> R
     // above handles the first case; the prev-sibling walk below handles
     // the second.
     //
-    // Ownership rule (mirrors the chunk-3b codex-fix for Rust
+    // Ownership rule (mirrors the fix for Rust
     // `attribute_item`): only **contiguous** preceding `decorator`
     // siblings attach to this node. Comment siblings (`comment`) are
     // transparent. The walk stops at the first sibling whose kind is
@@ -237,9 +237,8 @@ mod ts_decorator_tests {
 
     #[test]
     fn sibling_decorators_do_not_bleed_across_methods() {
-        // Regression test for the codex-review P1 #2 fix. Each method must
-        // see only the decorators belonging to it; the undecorated `c()` must
-        // see none.
+        // Regression test: each method must see only the decorators
+        // belonging to it; the undecorated `c()` must see none.
         let source = r#"class C {
   @Get("/a")
   a() {}

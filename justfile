@@ -107,9 +107,9 @@ ci-patterns:
 ci-output-schema:
     ./scripts/audit_output_schema.sh
 
-# R8 (sprint 0007) — Confidence audit subcommand regression gate.
+# R8 — Confidence audit subcommand regression gate.
 #
-# Runs the integration suite that exercises every chunk-4-to-6 surface:
+# Runs the integration suite that exercises every surface:
 # JSONL emit shape, --label parsing, SHA-256 drift gate, schema_version
 # rejection, --emit-sample/--label mutex, tier gate pass + fail, JSON +
 # TSV report shape. This is the *mechanical regression* gate — wiring
@@ -146,7 +146,7 @@ test-malformed:
 # deprecation-alias parameter, etc. Charter § 2 (single-operator
 # posture) + § 3 invariant 8 (no backward-compatibility shims) are
 # the source of truth; this script is the mechanical successor to
-# the chunk-2 manual grep pass.
+# the manual grep baseline.
 gate-charter:
     ./scripts/gate_charter.sh
 

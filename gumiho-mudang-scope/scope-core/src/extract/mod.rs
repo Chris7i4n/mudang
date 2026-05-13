@@ -96,10 +96,9 @@ pub struct RawCaptures {
     /// One entry per query match. Each `CapturedMatch` groups the
     /// captures that fired together for a single tree-sitter query
     /// match (along with its `pattern_index` and the pre-resolved
-    /// `enclosing_scope_id`). The chunk-7 migration moved away from
-    /// the chunk-1 flat `Vec<Capture>` shape because the extractor
-    /// dispatches per-match: a single match defining `@imported_name`
-    /// + `@source` needs both captures together.
+    /// `enclosing_scope_id`). Per-match grouping is required because
+    /// the extractor dispatches per-match: a single match defining
+    /// `@imported_name` + `@source` needs both captures together.
     pub matches: Vec<CapturedMatch>,
 
     /// Declared metadata for symbols the plugin saw — decorator args,
@@ -124,10 +123,9 @@ pub struct RawCaptures {
 /// A single tree-sitter query match: a pattern fired and produced one
 /// or more captures.
 ///
-/// The chunk-7 migration introduced this struct as the per-match
-/// grouping that the extractor dispatches on. `pattern_index` is the
-/// `usize` returned by tree-sitter's `QueryMatch::pattern_index` and
-/// identifies which pattern in `queries/<lang>/edges.scm` fired.
+/// `pattern_index` is the `usize` returned by tree-sitter's
+/// `QueryMatch::pattern_index` and identifies which pattern in
+/// `queries/<lang>/edges.scm` fired.
 /// `enclosing_scope_id` is the resolved-from-the-AST scope the parser
 /// computed (smallest captured node → walked up to nearest
 /// function-like / class-like ancestor); `None` for module-level
@@ -288,10 +286,10 @@ pub fn extract_edges(lang: LanguageId, file_path: &str, captures: &RawCaptures) 
 
 /// Find the last `Capture` in `captures` whose `name` matches `name`.
 ///
-/// Uses `rfind` to mimic the pre-chunk-7 `HashMap` last-write-wins
-/// semantics: when a pattern has multiple captures sharing one name
-/// (rare but possible for repeated children), the final occurrence
-/// in source/pattern order wins. Edge-equivalence with the legacy
+/// Uses `rfind` for `HashMap`-style last-write-wins semantics: when
+/// a pattern has multiple captures sharing one name (rare but
+/// possible for repeated children), the final occurrence in
+/// source/pattern order wins. Edge-equivalence with the legacy
 /// `HashMap` path depends on this.
 pub fn find_capture<'a>(captures: &'a [Capture], name: &str) -> Option<&'a Capture> {
     captures.iter().rfind(|c| c.name == name)

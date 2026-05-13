@@ -4,7 +4,7 @@
 # Rule (CI-GATES.md):
 #   "`Edge {` literal outside core::graph compiles" fails the gate.
 #
-# Post-sprint-0000 layout: the edge types (`RawEdge`, `InsertableEdge`,
+# Sub-crate layout: the edge types (`RawEdge`, `InsertableEdge`,
 # and the historical `Edge = RawEdge` alias) live in scope-core. Their
 # fields are `pub(crate)`, so external struct-literal construction is
 # already a compile error; this script is the belt-and-suspenders grep

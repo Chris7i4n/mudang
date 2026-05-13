@@ -14,7 +14,7 @@
 # Mechanism: source-text grep over `use` declarations and qualified
 # references, after multi-line `use ... { ... };` blocks are collapsed
 # to a single logical line by `awk` preprocessing. The multi-line
-# grouped-import bypass that the codex sprint-0004 review flagged is
+# grouped-import bypass that the review flagged is
 # closed by this preprocessing — the matching is identical to a raw
 # grep, but operates on the collapsed corpus.
 #

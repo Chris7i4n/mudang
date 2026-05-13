@@ -35,7 +35,7 @@ done
 
 # Forbidden tokens. `&mut Source` matches `&mut SourceFile`, `&mut SourceMap`,
 # as well as path-qualified forms like `&mut crate::SourceFile` and
-# `&mut source::SourceMap` — the codex sprint-0004 round-3 review flagged
+# `&mut source::SourceMap` — the review flagged
 # unqualified-only matching as a bypass. `tree_sitter::Tree` is the
 # fully-qualified path; `Tree` alone is also matched but only in `&mut Tree`
 # (not e.g. `Vec<Tree>` or unrelated `MyTree`).

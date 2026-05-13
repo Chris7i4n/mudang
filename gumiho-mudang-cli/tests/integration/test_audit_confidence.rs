@@ -301,7 +301,7 @@ fn test_audit_confidence_tier_gate_fails_on_low_precision_high_tier() {
 
 #[test]
 fn test_audit_confidence_label_rejects_unparseable_edge_id() {
-    // Codex round-1 P1 regression: --label must NOT silently drop
+    // --label must NOT silently drop
     // records whose `edge_id` is not a parseable i64. Before the fix,
     // such records were excluded from the drift gate (via
     // filter_map(|r| r.edge_id.parse::<i64>().ok())) but still entered
@@ -355,7 +355,7 @@ fn test_audit_confidence_label_rejects_unparseable_edge_id() {
 
 #[test]
 fn test_audit_confidence_label_rejects_unknown_edge_id() {
-    // Codex round-1 P1 regression (second arm): --label must NOT
+    // Second arm: --label must NOT
     // silently drop records whose `edge_id` parses as i64 but no
     // longer exists in the current index. Before the fix, such
     // records bypassed the drift gate while still contributing to
@@ -408,9 +408,9 @@ fn test_audit_confidence_label_rejects_unknown_edge_id() {
 
 #[test]
 fn test_audit_confidence_label_rejects_tampered_confidence_field() {
-    // Codex round-2 P2 regression: --label must NOT pass tier gate when
+    // --label must NOT pass tier gate when
     // the labeller rewrites `confidence` (or other report-key fields)
-    // while preserving a valid edge_id. Codex scenario: a buggy
+    // while preserving a valid edge_id. Scenario: a buggy
     // labeller flips `confidence: high -> low` would silently route
     // the row into the low-tier (no minimum) and the run would pass
     // even though the indexed edge actually belongs to the high tier
@@ -529,7 +529,7 @@ fn test_audit_confidence_label_rejects_tampered_lang_version() {
 
 #[test]
 fn test_audit_confidence_label_rejects_records_missing_label_field() {
-    // Codex round-6 P2: `serde` deserializes a missing `label` key
+    // Regression: `serde` deserializes a missing `label` key
     // identically to `label: null` — both become `Option::None`. The
     // schema doc names `label` as required (with value null / true /
     // false), so a labeller bug that drops the key entirely should
@@ -548,7 +548,7 @@ fn test_audit_confidence_label_rejects_records_missing_label_field() {
 
     // Remove the `label` field from the first record entirely (not
     // just set to null). This is the "labeller serializer drops nulls"
-    // scenario the codex finding describes.
+    // scenario the scenario describes.
     let raw = std::fs::read_to_string(&sample).unwrap();
     let mut out_lines = Vec::new();
     let mut stripped = false;
@@ -626,7 +626,7 @@ fn test_audit_confidence_label_rejects_records_missing_lang_version_field() {
 
 #[test]
 fn test_audit_confidence_default_no_flags_succeeds_with_usage_hint() {
-    // Codex round-5 P3: the documented `scope audit confidence`
+    // Regression: the documented `scope audit confidence`
     // no-flag invocation must succeed and surface usage instructions,
     // not bail with a stale chunk-plan pointer.
     let (_dir, root) = setup_indexed_fixture();
@@ -663,7 +663,7 @@ fn test_audit_confidence_default_no_flags_succeeds_with_usage_hint() {
 
 #[test]
 fn test_audit_confidence_source_drift_surfaces_drift_error_not_tamper() {
-    // Codex round-5 P2: when a source file changes between emit and
+    // Regression: when a source file changes between emit and
     // label, the diagnosis must be source drift with `scope index`
     // remediation, NOT sample tamper with re-emit remediation. The
     // bug was that the tamper gate ran before the drift gate and
@@ -691,7 +691,7 @@ fn test_audit_confidence_source_drift_surfaces_drift_error_not_tamper() {
     std::fs::write(&sample, format!("{labelled}\n")).unwrap();
 
     // Edit a source file in the working tree (NOT the sample file).
-    // This is exactly the case codex flagged: source drift between
+    // This is exactly the source-drift case: source drift between
     // emit and label.
     let service = root.join("src/payments/service.ts");
     let original = std::fs::read_to_string(&service).unwrap();
@@ -722,7 +722,7 @@ fn test_audit_confidence_source_drift_surfaces_drift_error_not_tamper() {
 
 #[test]
 fn test_audit_confidence_label_rejects_tampered_from_field() {
-    // Codex round-4 P2: labeller alters `from` while keeping a valid
+    // Regression: labeller alters `from` while keeping a valid
     // edge_id. The labeller then judged a different edge but report
     // credits the indexed one.
     let (_dir, root) = setup_indexed_fixture();
@@ -773,7 +773,7 @@ fn test_audit_confidence_label_rejects_tampered_from_field() {
 
 #[test]
 fn test_audit_confidence_label_rejects_tampered_to_field() {
-    // Codex round-4 P2 (second axis): labeller alters `to`.
+    // Regression (second axis): labeller alters `to`.
     let (_dir, root) = setup_indexed_fixture();
     let sample = root.join("sample.jsonl");
 
@@ -820,7 +820,7 @@ fn test_audit_confidence_label_rejects_tampered_to_field() {
 
 #[test]
 fn test_audit_confidence_label_rejects_tampered_source_snippet() {
-    // Codex round-4 P2 (third axis): labeller alters `source_snippet`.
+    // Regression (third axis): labeller alters `source_snippet`.
     // The labeller saw text the indexer never emitted; verdict applies
     // to a fake context.
     let (_dir, root) = setup_indexed_fixture();
@@ -872,7 +872,7 @@ fn test_audit_confidence_label_rejects_tampered_source_snippet() {
 
 #[test]
 fn test_audit_confidence_label_rejects_all_null_labels() {
-    // Codex round-3 P2-2 resolution: --label *tolerates* partial coverage
+    // Resolution: --label *tolerates* partial coverage
     // per the schema doc, but a sample where no record at all has been
     // labelled means no labelling has happened; that case still aborts.
     let (_dir, root) = setup_indexed_fixture();
@@ -900,12 +900,12 @@ fn test_audit_confidence_label_rejects_all_null_labels() {
 
 #[test]
 fn test_audit_confidence_label_tolerates_partial_coverage() {
-    // Codex round-3 P2-2: per AUDIT-LABEL-SCHEMA.md the LSP cross-check
+    // Regression: per AUDIT-LABEL-SCHEMA.md the LSP cross-check
     // labeller leaves records it cannot classify as `label:null`. The
-    // doc explicitly says "--label tolerates partial coverage". The
-    // chunk-5 hard-rejection was wrong; the resolution drops null
-    // records from group accumulation so the precision denominator is
-    // honest (= number of labelled records per group).
+    // doc explicitly says "--label tolerates partial coverage". A
+    // hard-rejection of nulls would contradict that; the active code
+    // drops null records from group accumulation so the precision
+    // denominator is honest (= number of labelled records per group).
     let (_dir, root) = setup_indexed_fixture();
     let sample = root.join("sample.jsonl");
 
@@ -958,7 +958,7 @@ fn test_audit_confidence_label_tolerates_partial_coverage() {
 
 #[test]
 fn test_audit_confidence_emit_refuses_to_overwrite_existing_file() {
-    // Codex round-3 P2-1: --emit-sample pointed at an indexed source
+    // Regression: --emit-sample pointed at an indexed source
     // path previously truncated the working tree (File::create) and
     // would then emit empty / wrong source_snippets for edges in that
     // file. Fix: refuse to overwrite anything at the destination.
@@ -982,7 +982,7 @@ fn test_audit_confidence_emit_refuses_to_overwrite_existing_file() {
 
 #[test]
 fn test_audit_confidence_label_rejects_duplicate_edge_ids() {
-    // Codex round-3 P2-3: duplicate edge_id in JSONL collapsed in the
+    // Regression: duplicate edge_id in JSONL collapsed in the
     // freshness set but still double-counted in the precision report.
     let (_dir, root) = setup_indexed_fixture();
     let sample = root.join("sample.jsonl");

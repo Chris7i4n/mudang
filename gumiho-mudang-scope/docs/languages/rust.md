@@ -8,7 +8,7 @@
 - **Maturity assessment**: stable. Upstream cadence is moderate, breaking changes are rare in the surface this plugin uses.
 - **Known grammar gaps**:
   - `macro_rules!` bodies are opaque under tree-sitter — content inside `macro_rules!` is captured as a token tree, not a parsed expression. The plugin records a `plugin_skip:rust:unparseable_macro_body` skipped range for any unparseable body (R& will exercise this).
-  - `attribute_item` attaches as a PRECEDING SIBLING of the item node, not as a direct child — relevant to the `annotations` metadata population (handled by the chunk-3b sibling walk in `scope-core/src/languages/rust_lang.rs::extract_metadata`).
+  - `attribute_item` attaches as a PRECEDING SIBLING of the item node, not as a direct child — relevant to the `annotations` metadata population (handled by the sibling walk in `scope-core/src/languages/rust_lang.rs::extract_metadata`).
 
 ## Depth target
 
@@ -52,7 +52,7 @@ R-move shorthand: [R0](../ENFORCEMENT-MAP.md#r0--schema-closures), [R1](../ENFOR
 - **B1** (no flow analysis): discipline-only per the universal class-3 list.
 - **B2** (no runtime / dynamic resolution): **mechanically enforced by R12** — `scripts/audit_trait_shape.sh` forbids `fn evaluate_*`. Rust has no runtime dispatch surface for the plugin to model.
 - **B3** (no assumption of valid syntax): tree-sitter parser-recovery scanner emits `tree_sitter_error:syntax_error` / `tree_sitter_error:missing_node` skipped ranges; plugin never panics. R6 harness is the enforcement gate.
-- **C1** (no macro expansion): **mechanically enforced by R11** — `scripts/audit_trait_shape.sh` forbids `fn expand_*` in the scanned plugin / extractor paths; combined with the chunk-7 extractor closure (the extractor is the only `EdgeKind`-aware site and has no expander entry point), expansion is unreachable from the plugin layer. At the data level: `macro_invocation` captures only the macro name (`@macro_name`); the body is not walked. `macro_rules!` bodies are recorded as plugin skips. Macro symbols (`kind: macro`) and `calls.macro` / `calls.macro.scoped` edges land per R0 / R2.
+- **C1** (no macro expansion): **mechanically enforced by R11** — `scripts/audit_trait_shape.sh` forbids `fn expand_*` in the scanned plugin / extractor paths; combined with the extractor closure (the extractor is the only `EdgeKind`-aware site and has no expander entry point), expansion is unreachable from the plugin layer. At the data level: `macro_invocation` captures only the macro name (`@macro_name`); the body is not walked. `macro_rules!` bodies are recorded as plugin skips. Macro symbols (`kind: macro`) and `calls.macro` / `calls.macro.scoped` edges land per R0 / R2.
 - **C2** (no version-specific compiler-quirk modelling): **mechanically enforced after R4**. `LanguageWorkspaceContext` (the language-facing context trait) has no accessor for `edition`; reading it from the language layer is a compile error. The `cargo_toml` reader inside `scope-core/src/workspace/` belongs to the indexer-side context, not the plugin-side, and `audit_context_shape.sh` (active CI gate) pins this.
 - **D1** (no cross-file resolution beyond config): trivially compliant — resolution is R3's job, not the extractor's.
 - **D2** (no best-guess fallback resolution): **mechanically enforced after R3**. The extractor emits a `RawEdge` with the candidate name and a `confidence` value derived from pattern precision (`Confidence::Medium` for the syntactic patterns above). The R3 resolver (`scope-graph::resolve::Resolver`) sets `status='Resolved' | 'Ambiguous' | 'Dangling'` based on the symbols-table lookup outcome; on `Ambiguous` it emits one row per candidate target (`R3 acceptance bullet 3`). The extractor's `confidence` passes through `verbatim` (R3 acceptance bullet 4), and `confidence` × `status` are orthogonal columns. There is no code path that downgrades `Confidence` or picks a single candidate during resolution.
@@ -70,7 +70,7 @@ No `NEEDS REVIEW` outstanding for D2 / D3 / E2 / F1.
 ## Known gotchas
 
 1. `is_likely_generic_param` filters single-uppercase-letter type references because tree-sitter-rust uses `type_identifier` for both generic param names and concrete types. Trade-off: ~24% precision win on `references_type` against the vanishingly rare real one-letter Rust type.
-2. `attribute_item` is a PRECEDING SIBLING of the item, not a direct child; the chunk-3b sibling-walk implementation is correct. A future grammar bump that changes attachment will require updating `scope-core/src/languages/rust_lang.rs::extract_metadata`.
+2. `attribute_item` is a PRECEDING SIBLING of the item, not a direct child; the sibling-walk implementation handles this correctly. A future grammar bump that changes attachment will require updating `scope-core/src/languages/rust_lang.rs::extract_metadata`.
 3. `impl Trait for Type` requires walking the parsed tree (not the edges query) because the extractor needs symbol-list lookup for `from_id` resolution. `scope-core/src/extract/rust_lang.rs::extract_rust_trait_impl_edges` owns this.
 
 ## Test fixtures

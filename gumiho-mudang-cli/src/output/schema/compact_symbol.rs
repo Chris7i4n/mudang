@@ -21,7 +21,7 @@ pub struct CompactSymbol<'a> {
     /// Type signature where available. Serialises as JSON `null` when
     /// the symbol has no signature — the before R10 `serde_json::json!()`
     /// output always emitted the key, so the typed shape preserves the
-    /// same wire contract (codex P1).
+    /// same wire contract .
     pub signature: Option<&'a str>,
     /// File path, forward-slash normalized.
     pub file_path: &'a str,

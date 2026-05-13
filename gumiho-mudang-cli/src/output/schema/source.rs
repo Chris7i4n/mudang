@@ -11,7 +11,7 @@ pub struct SourceView<'a> {
     pub line_start: u32,
     pub line_end: u32,
     /// Type signature where available. Serialises as JSON `null` when
-    /// absent (before R10 wire-shape compat; codex P1).
+    /// absent (before R10 wire-shape compat).
     pub signature: Option<&'a str>,
     pub source: String,
 }

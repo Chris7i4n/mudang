@@ -62,7 +62,7 @@ pub struct FieldView<'a> {
     /// Field name.
     pub name: &'a str,
     /// Type signature where available. Serialises as JSON `null` when
-    /// absent (before R10 wire-shape compat; codex P1).
+    /// absent (before R10 wire-shape compat).
     pub signature: Option<&'a str>,
     /// First line of the field declaration.
     pub line_start: u32,
@@ -84,8 +84,7 @@ pub struct EnumVariantView<'a> {
     /// Variant name.
     pub name: &'a str,
     /// Variant signature (parameters, payload) where available.
-    /// Serialises as JSON `null` when absent (before R10 wire-shape compat;
-    /// codex P1).
+    /// Serialises as JSON `null` when absent.
     pub signature: Option<&'a str>,
     /// First line of the variant.
     pub line_start: u32,

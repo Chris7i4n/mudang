@@ -47,7 +47,7 @@ Pattern catalog (per `queries/typescript/edges.scm`):
 - **D2** (no best-guess fallback resolution): **mechanically enforced after R3**. Extractor emits `RawEdge` with `Confidence::Medium`; resolver assigns `status` in `{Resolved, Ambiguous, Dangling}`; Ambiguous emits one row per candidate; `confidence` preserved verbatim.
 - **D3** (no symbol-id collision resolution by guessing): mechanically enforced via R0 surrogate `edge_id` PK + R3 multi-row `Ambiguous`.
 - **E1**: trivially compliant.
-- **E2** (no metadata interpretation in plugin): **mechanically enforced by R2**. Plugin returns `RawCaptures`; `decorators` reserved key carries `{name, args_text?}` verbatim from class-member and class-level decorators. The chunk-3b codex-review fix-up (commit 733b16c) deleted the parent-walk fallback that was bleeding sibling decorators across methods. `annotations` and `template_calls` keys are **omitted** (no AST surface in `LANGUAGE_TYPESCRIPT`).
+- **E2** (no metadata interpretation in plugin): **mechanically enforced by R2**. Plugin returns `RawCaptures`; `decorators` reserved key carries `{name, args_text?}` verbatim from class-member and class-level decorators. Decorator capture uses the direct-child + preceding-sibling walk; a parent-walk fallback would bleed sibling decorators across methods. `annotations` and `template_calls` keys are **omitted** (no AST surface in `LANGUAGE_TYPESCRIPT`).
 - **E3**: trivially compliant.
 - **F1** (no multi-pass semantic analysis in plugin): **mechanically enforced by R3**.
 - **F2** (no write-back to source): **mechanically enforced by R9** — `scripts/audit_immutable.sh` forbids `&mut` on source-related types at the plugin / extractor surface.
@@ -58,7 +58,7 @@ No `NEEDS REVIEW` outstanding for D2 / D3 / E2 / F1.
 
 ## Known gotchas
 
-1. Decorator capture uses tree-sitter-typescript's direct-child walk only. The parent-walk fallback was deleted in commit 733b16c after codex (gpt-5.5) flagged that `class C { @A a(); @B b(); c() }` incorrectly assigned all decorators to all three methods.
+1. Decorator capture uses tree-sitter-typescript's direct-child walk only. The parent-walk fallback was deleted in commit 733b16c after the review flagged that `class C { @A a(); @B b(); c() }` incorrectly assigned all decorators to all three methods.
 2. The grammar's `LANGUAGE_TYPESCRIPT` variant does not parse JSX; this is intentional per the depth target.
 
 ## Test fixtures

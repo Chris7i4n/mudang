@@ -2,7 +2,7 @@
 
 - **Status:** shipped
 - **Decision:** decompose the current monolithic `gumiho-mudang-scope` crate into focused sub-crates so the AST edit crate (phase E) and the composer (phase C) can depend only on what they need.
-- **Tracking:** the decomposition closed; all acceptance criteria demonstrated (workspace builds, `cargo test --workspace` green — 456 tests across 43 suites, `cargo doc` builds per crate, `scope-core` has zero sibling-sub-crate dependencies, 1:1 public surface re-exported through the façade). Codex review: PASS, no blockers.
+- **Tracking:** the decomposition closed; all acceptance criteria demonstrated (workspace builds, `cargo test --workspace` green — 456 tests across 43 suites, `cargo doc` builds per crate, `scope-core` has zero sibling-sub-crate dependencies, 1:1 public surface re-exported through the façade).
 
 ## Decision
 

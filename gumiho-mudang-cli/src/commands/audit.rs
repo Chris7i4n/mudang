@@ -372,7 +372,7 @@ fn emit_sample(
     enforce_freshness(graph, project_root, &sample)?;
 
     // Refuse to clobber an existing file at the sample destination
-    // (codex round 3 P2-1): the previous `File::create` would have
+    // : the previous `File::create` would have
     // truncated any pre-existing file at `out_path` — including an
     // indexed source file the operator misnamed. Snippets for other
     // edges in that file would then read the truncated content and
@@ -446,7 +446,7 @@ fn label_pass(
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
         }
-        // Pre-typed key-presence check (post-codex P2 round 6, generalised
+        // Pre-typed key-presence check (generalised
         // to every required field in round 8). Per
         // `docs/AUDIT-LABEL-SCHEMA.md` every field on a `schema_version:
         // "1"` record is required-with-value (null is a valid value for
@@ -524,11 +524,10 @@ fn label_pass(
 
     // Partial labelling: `label=null` records are *skipped*, not rejected.
     //
-    // Codex round 3 P2-2 surfaced a contradiction between the chunk-5
-    // hard-rejection of nulls and the documented LSP-cross-check
-    // labeller flow in `docs/AUDIT-LABEL-SCHEMA.md` (which explicitly
-    // says "leave undecided; --label tolerates partial coverage" for
-    // edge kinds the LSP cannot classify).
+    // A hard-rejection of nulls would contradict the documented
+    // LSP-cross-check labeller flow in `docs/AUDIT-LABEL-SCHEMA.md`
+    // (which explicitly says "leave undecided; --label tolerates
+    // partial coverage" for edge kinds the LSP cannot classify).
     //
     // Resolution: tolerate partial coverage, but stay honest about the
     // denominator. `compute_precision_report` filters records with
@@ -555,7 +554,7 @@ fn label_pass(
         );
     }
 
-    // edge_id integrity gate (post-codex P1 round 1): every record's
+    // edge_id integrity gate : every record's
     // `edge_id` must (a) parse as i64 — the on-wire representation per
     // docs/AUDIT-LABEL-SCHEMA.md is a string solely for JSON-number-
     // safety reasons but the underlying DB column is `i64` — and
@@ -576,7 +575,7 @@ fn label_pass(
     // Duplicate-detection map: edge_id -> Vec<line_no>. Any entry with
     // len > 1 is a duplicate, which would otherwise collapse in the
     // `parsed_ids` set but still double-count in the precision report
-    // (codex round 3 P2-3).
+    // .
     let mut by_id: BTreeMap<i64, Vec<usize>> = BTreeMap::new();
     for (line_no, record) in &records {
         match record.edge_id.parse::<i64>() {
@@ -650,8 +649,8 @@ fn label_pass(
         return Err(anyhow::anyhow!(msg));
     }
 
-    // Source-drift gate runs BEFORE the tamper gate (post-codex P2
-    // round 5): if a source file changed or was deleted between
+    // Source-drift gate runs BEFORE the tamper gate: if a source
+    // file changed or was deleted between
     // `--emit-sample` and `--label`, the tamper gate would re-derive
     // the source_snippet from the now-different file and report a
     // sample-tamper error with re-emit remediation, when the *correct*
@@ -667,7 +666,7 @@ fn label_pass(
         .collect();
     enforce_freshness(graph, project_root, &referenced_rows)?;
 
-    // Report-key + endpoint + snippet tamper gate (post-codex P2 round 2,
+    // Report-key + endpoint + snippet tamper gate (after the round,
     // extended in round 4 to cover `from` / `to` / `source_snippet`).
     // The precision report groups rows by (kind, tier, producer,
     // pattern_id); the labeller READS `from` / `to` / `source_snippet`
@@ -750,7 +749,7 @@ fn label_pass(
                 expected_snippet,
             ));
         }
-        // `lang_version` field (codex round 7 P2): the schema's
+        // `lang_version` field : the schema's
         // reserved per-project lang_version slot. Sprint 0007 always
         // emits `null` (the seven per-language detectors land
         // atomically — Priority 1 sub-item (d)). The

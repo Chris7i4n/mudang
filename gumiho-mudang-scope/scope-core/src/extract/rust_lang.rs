@@ -172,7 +172,7 @@ fn is_likely_generic_param(name: &str) -> bool {
 
 /// Extract `implements` edges from Rust `impl Trait for Type` blocks.
 ///
-/// Relocated from `parser.rs` codex-review fix-up: R2 keeps
+/// Relocated from `parser.rs` R2 keeps
 /// EdgeKind selection inside the extractor. Walks the parsed tree for
 /// `impl_item` nodes that have a `trait` field and emits one `implements`
 /// `RawEdge` per such block, resolving the `from_id` against the previously

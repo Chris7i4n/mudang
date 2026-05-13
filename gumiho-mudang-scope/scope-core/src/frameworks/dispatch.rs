@@ -38,9 +38,9 @@ use crate::workspace_context::FrameworkWorkspaceContext;
 /// happens to match a Ruby symbol id will not reach a Ruby-only
 /// framework). Bare-name `to_id` targets stay accessible because the
 /// rule does not require `to_id` membership; the resolver later
-/// promotes unresolved bare names to `Dangling`. Sprint 0005 codex
-/// review (round 1) tightened this from the looser
-/// `from ∈ kept ∨ to ∈ kept` form that the original draft used.
+/// promotes unresolved bare names to `Dangling`. The rule is tighter
+/// than the looser `from ∈ kept ∨ to ∈ kept` form — a draft of that
+/// shape leaked cross-language matches.
 ///
 /// A plugin whose `Detection.detected` is `false`, or whose
 /// `applies_to_languages` is empty when `detected: true` (a R5
@@ -188,7 +188,7 @@ mod tests {
         assert_eq!(kept[0].id, "ruby_one");
     }
 
-    // Codex review regression: edge keep-rule must reject
+    // Regression: edge keep-rule must reject
     // edges emitted by a non-target language even when the to-endpoint
     // happens to point at a target-language symbol. The old OR form
     // (`from ∈ kept ∨ to ∈ kept`) leaked a Python `extends` edge to a

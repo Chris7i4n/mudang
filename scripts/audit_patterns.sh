@@ -5,7 +5,7 @@
 #   Every `Pattern { ... }` struct literal under
 #   `scope-core/src/frameworks/` and `scope-core/tests/synthetic_framework/`
 #   must have a non-empty `id`, an `available_in`, and a `predicate`
-#   slot. Empty `id` is the bypass codex sprint-0005 reviewers flagged;
+#   slot. Empty `id` is the bypass reviewers flagged;
 #   missing `available_in` defaults to a build-time error (the field is
 #   non-Option), so the gate only checks for empty literals.
 #
