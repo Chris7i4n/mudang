@@ -49,7 +49,11 @@ Bump the audit-sample JSONL `schema_version` from `"1"` to `"2"` across three co
 - [ ] Indices created: `(edge_id, audit_id)` and `(labeller_id, audit_id)`.
 - [ ] Sibling auditor-immutability rule enforced: `--label` writes to `edge_audit_history` only; **never** mutates `edges` / `symbols` / `file_hashes`. New CI gate or audit script enforces this.
 - [ ] [`AUDIT-LABEL-SCHEMA.md` § Auditor immutability rule](../AUDIT-LABEL-SCHEMA.md#auditor-immutability-rule) gains the writable-namespace paragraph.
-- [ ] New subcommand `scope audit history` implemented (read-side surface): per-edge timeline, per-pattern_id precision-over-time, per-labeller agreement matrix.
+- [ ] New subcommand `scope audit history` implemented (read-side surface), three forms — drill-down workflow over the new table:
+  - **`scope audit history`** (no subcommand) — default aggregate dashboard: headline (latest `audit_id`, overall precision, `records_total`); top-N patterns regressing (precision delta vs previous audit); top-N edges flapping (most `correct↔incorrect` label flips across audits).
+  - **`scope audit history edge <edge_id>`** — drill: chronological label timeline for one edge (columns: `audit_id`, `labelled_at`, `labeller_id`, `label`, `target_proposed`, `kind_proposed`, `confidence_proposed`).
+  - **`scope audit history pattern <pattern_id>`** — drill: precision-over-time for one pattern plus the edges currently labelled `incorrect` driving the regression.
+  - **Deferred to sprint 0006** under sub-item (i): `scope audit history labeller <id>` and `scope audit history agreement-matrix`. Rationale: charter single-operator posture (CHARTER §3 invariant 1) — a single human labeller renders both views sparse-to-empty until multi-labeller pipelines exist. Both views logged in [`BACKLOG.md` § Priority 1 (j)](../BACKLOG.md#priority-1--self-correction-cycle) so the surface is not lost; sprint 0006 picks them up alongside (i)'s aggregation policy where cross-labeller density makes them meaningful.
 
 ### Implementation deliverables (cross-cutting)
 
@@ -64,7 +68,7 @@ Bump the audit-sample JSONL `schema_version` from `"1"` to `"2"` across three co
 ## Ambiguities resolved before this sprint opens
 
 - **Single namespace name** — `edge_audit_history` per BACKLOG (j) ("or analogous"). If a clash with an existing schema name emerges, halt and choose on `main` first.
-- **`scope audit history` flag surface** — confirm in plan before implementation; BACKLOG (j) names the subcommand only.
+- **`scope audit history` flag surface** — confirmed before sprint open. Subcommand-per-view layout chosen over flat flags (extensibility for view-specific `--since`, `--limit`, `--json`; mutually-exclusive flags would force ad-hoc validation otherwise). Three views ship in sprint 0004 (default dashboard + `edge <id>` + `pattern <id>`); two views (`labeller <id>` + `agreement-matrix`) defer to sprint 0006 (i) under single-operator-posture reasoning. Decision logged in [`BACKLOG.md` § Priority 1 (j)](../BACKLOG.md#priority-1--self-correction-cycle) and [`BACKLOG.md` § Priority 1 (i)](../BACKLOG.md#priority-1--self-correction-cycle); commit `<docs-amend-hash>` on `main`.
 - **Retention policy** — BACKLOG (j) says "accumulates indefinitely; eviction is a future sprint". No eviction this sprint.
 
 ---

@@ -45,6 +45,10 @@ Specify and implement the aggregation surface for realistic multi-labeller pipel
 - [ ] Aggregation policy is configurable via runner-side config (TOML or CLI flags on the aggregator).
 - [ ] Test fixture: three labellers (LSP/LLM/human) disagreeing on the same `edge_id`; assert correct aggregation output under each documented policy.
 - [ ] Disagreement diagnostics: a counter or per-record flag visible in the precision report so an operator can see "N edges with cross-labeller disagreement this audit".
+- [ ] **`scope audit history` views deferred from sprint 0004** (sub-item (j) read-side surface; deferred under single-operator-posture reasoning, picked up here where multi-labeller density makes them meaningful):
+  - [ ] **`scope audit history labeller <id>`** — chronological label timeline for one `labeller_id` (all edges that labeller weighed in on, across audits). Columns: `audit_id`, `labelled_at`, `edge_id`, `pattern_id`, `label`, `target_proposed`, `kind_proposed`, `confidence_proposed`. Useful for spot-checking a labeller's behaviour drift over time.
+  - [ ] **`scope audit history agreement-matrix`** — NxN matrix where cell `(i, j)` = percentage of `(edge_id, audit_id)` tuples where labeller `i` and labeller `j` produced the same `label`. Drives this sprint's disagreement-diagnostics signal — surfaces outlier labellers before aggregation policy chooses a default.
+  - Rationale logged in [`BACKLOG.md` § Priority 1 (j)](../BACKLOG.md#priority-1--self-correction-cycle) and [`BACKLOG.md` § Priority 1 (i)](../BACKLOG.md#priority-1--self-correction-cycle); sprint 0004 plan's `Ambiguities resolved` section records the deferral.
 
 ---
 
