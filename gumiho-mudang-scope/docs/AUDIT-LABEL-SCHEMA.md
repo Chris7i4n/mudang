@@ -48,7 +48,7 @@ Each line is a JSON object with the following fields:
 
 ### Reserved-for-future fields
 
-Today's `schema_version: "1"` does **not** define additional fields. The binary `label: bool | null` verdict is **minimum-viable for the plug-point only** — sufficient to demonstrate the contract and exercise the audit pipeline, but information-poor for closing the self-correction loop. A labeller that can only say *"yes / no / I don't know"* leaves the operator (and the patch suggester) with no diagnostic signal: *"wrong"* gives no fix direction, *"skipped"* gives no truth-claim. Richer **qualitative verdict types** — the auditor saying *"Scope claimed X, here is the evidence that Y is the truth"* — are the actionable signal and ship together in `schema_version: "2"`, designed by [`POST-REFACTOR-PLAN.md` § Priority 1 — Self-correction cycle](POST-REFACTOR-PLAN.md#priority-1-immediately-post-refactor--self-correction-cycle) sub-item (g):
+Today's `schema_version: "1"` does **not** define additional fields. The binary `label: bool | null` verdict is **minimum-viable for the plug-point only** — sufficient to demonstrate the contract and exercise the audit pipeline, but information-poor for closing the self-correction loop. A labeller that can only say *"yes / no / I don't know"* leaves the operator (and the patch suggester) with no diagnostic signal: *"wrong"* gives no fix direction, *"skipped"* gives no truth-claim. Richer **qualitative verdict types** — the auditor saying *"Scope claimed X, here is the evidence that Y is the truth"* — are the actionable signal and ship together in `schema_version: "2"`, designed by [`BACKLOG.md` § Priority 1 — Self-correction cycle](BACKLOG.md#priority-1--self-correction-cycle) sub-item (g):
 
 - `evidence` (`object | null`) — labeller-supplied structured evidence behind the verdict. Schema is labeller-defined; conventional keys: `{"resolver": "rust-analyzer", "target_uri": "...", "definition_range": [...]}` for LSP cross-check; `{"model": "claude-sonnet-4-6", "reasoning": "...", "prompt_hash": "..."}` for LLM. The auditor records the *how*, not just the *what*.
 - `target_proposed` (`string | null`) — labeller's correction for `to`. *"Scope said `to = foo::bar`; I see this call resolves to `foo::baz` instead."* Feeds the patch suggester to localise the extractor bug.
@@ -58,7 +58,7 @@ Today's `schema_version: "1"` does **not** define additional fields. The binary 
 - `labeller_id` (`string | null`) — identifier of which labeller produced this verdict, for multi-labeller aggregation (Priority 1 sub-item (i)). Conventional values: `"lsp:rust-analyzer"`, `"llm:claude-sonnet-4-6"`, `"human:<initials>"`.
 - `lang_version_evidence` (`string | null`) — for distinguishing detected vs declared version.
 
-None of these ship in `schema_version: "1"`. Adding any of them is a `schema_version` bump to `"2"` with a migration note here. The bump is bundled with the Priority 1 actuator work because the schema is one of three coupled surfaces (record-side fields here, report-side coverage fields documented inline in `gumiho-mudang-cli/src/commands/audit.rs`, DB audit-history persistence in [`POST-REFACTOR-PLAN.md` § Priority 1 sub-item (j)](POST-REFACTOR-PLAN.md#priority-1-immediately-post-refactor--self-correction-cycle)).
+None of these ship in `schema_version: "1"`. Adding any of them is a `schema_version` bump to `"2"` with a migration note here. The bump is bundled with the Priority 1 actuator work because the schema is one of three coupled surfaces (record-side fields here, report-side coverage fields documented inline in `gumiho-mudang-cli/src/commands/audit.rs`, DB audit-history persistence in [`BACKLOG.md` § Priority 1 sub-item (j)](BACKLOG.md#priority-1--self-correction-cycle)).
 
 ---
 
@@ -80,7 +80,7 @@ None of these ship in `schema_version: "1"`. Adding any of them is a `schema_ver
 
 ## External labeller examples
 
-These are reference shapes only — none ship inside Scope. They live external to this repository in a future labeller crate ecosystem (see [`POST-REFACTOR-PLAN.md` § Priority 1 — Self-correction cycle](POST-REFACTOR-PLAN.md#priority-1-immediately-post-refactor--self-correction-cycle)).
+These are reference shapes only — none ship inside Scope. They live external to this repository in a future labeller crate ecosystem (see [`BACKLOG.md` § Priority 1 — Self-correction cycle](BACKLOG.md#priority-1--self-correction-cycle)).
 
 ### Human labeller
 
@@ -155,7 +155,7 @@ The rule is **mechanically enforced**, not procedural. Both `--emit-sample` and 
 
 Justification for the hard lock (rather than a soft warning + opt-out flag):
 
-- **No legitimate case found** where comparing an indexed snapshot against drifted current source produces a meaningful audit signal. *"Want to see what the extractor said a month ago"* is archaeology, not an audit of accuracy; *"CI runs faster without re-index"* is the performance-over-honesty anti-pattern [`POST-REFACTOR-PLAN.md` § Priority 2 — Honesty audit](POST-REFACTOR-PLAN.md#priority-2-immediately-post-refactor--honesty-audit-eliminate-non-essential-approximations) explicitly forbids.
+- **No legitimate case found** where comparing an indexed snapshot against drifted current source produces a meaningful audit signal. *"Want to see what the extractor said a month ago"* is archaeology, not an audit of accuracy; *"CI runs faster without re-index"* is the performance-over-honesty anti-pattern [`BACKLOG.md` § Priority 2 — Honesty audit](BACKLOG.md#priority-2--honesty-audit-eliminate-non-essential-approximations) explicitly forbids.
 - **`mtime` drift without content drift** (file copied between machines, `git checkout` that touches mtime) is handled correctly by content-hash comparison — hash matches, audit proceeds. This is the only "looks like drift but isn't" case, and SHA-256 disambiguates it without a flag.
 
 The SHA-256 check runs lazily: only the files referenced by the sample's edges are re-hashed, not the whole index (a typical N=30 sample touches ~10-30 distinct files). The cost is well under the time the labelling step itself takes.
@@ -175,4 +175,4 @@ The sample corpus grows over time. Old samples are not deleted unless the underl
 ## Where this fits
 
 - R8 is **the sensor**. This schema is **its serialisation contract**.
-- The full self-correction loop — labellers, continuous CI re-audit, per-PR precision diff, ML-driven extractor patch suggestion — lives in [`POST-REFACTOR-PLAN.md` § Priority 1](POST-REFACTOR-PLAN.md#priority-1-immediately-post-refactor--self-correction-cycle). The schema documented here is the foundation that makes the loop pluggable.
+- The full self-correction loop — labellers, continuous CI re-audit, per-PR precision diff, ML-driven extractor patch suggestion — lives in [`BACKLOG.md` § Priority 1](BACKLOG.md#priority-1--self-correction-cycle). The schema documented here is the foundation that makes the loop pluggable.

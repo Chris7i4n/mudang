@@ -1,4 +1,4 @@
-//! Python edge extraction (R2 — sprint 0003, chunk 2 + chunk 7).
+//! Python edge extraction (R2).
 //!
 //! Relocated from `crate::languages::python`; per-language modules
 //! retain only capture / metadata / docstring concerns. The extractor is

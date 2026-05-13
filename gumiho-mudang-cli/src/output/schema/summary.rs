@@ -29,7 +29,7 @@ pub struct SymbolSummary<'a> {
     pub line_start: u32,
     pub line_end: u32,
     /// Type signature where available. Serialises as JSON `null` when
-    /// absent (pre-R10 wire-shape compat; codex P1, sprint 0006).
+    /// absent (before R10 wire-shape compat; codex P1).
     pub signature: Option<&'a str>,
     pub callers: usize,
     pub outgoing_calls: usize,

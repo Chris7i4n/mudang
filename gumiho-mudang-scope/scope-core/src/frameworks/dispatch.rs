@@ -188,7 +188,7 @@ mod tests {
         assert_eq!(kept[0].id, "ruby_one");
     }
 
-    // Codex sprint 0005 round-1 regression: edge keep-rule must reject
+    // Codex review regression: edge keep-rule must reject
     // edges emitted by a non-target language even when the to-endpoint
     // happens to point at a target-language symbol. The old OR form
     // (`from ∈ kept ∨ to ∈ kept`) leaked a Python `extends` edge to a

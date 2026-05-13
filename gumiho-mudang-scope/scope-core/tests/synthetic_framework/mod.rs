@@ -1,9 +1,9 @@
-//! Synthetic framework for R5 integration tests (sprint 0005).
+//! Synthetic framework for R5 integration tests.
 //!
 //! Exercises the `FrameworkPlugin` trait surface without committing
 //! scope to maintain any real-world framework. Sprint 0005 ships only
 //! infrastructure; concrete framework adoption follows
-//! `FRAMEWORK-PLAYBOOK.md` post-refactor.
+//! `FRAMEWORK-PLAYBOOK.md` later.
 //!
 //! The synthetic recognises symbols with a specific decorator marker
 //! in their metadata (the R0 reserved key `decorators`) and emits
@@ -13,7 +13,7 @@
 //! gate; an `unknown_version_policy()` variant is selected by the
 //! plugin's constructor argument.
 //!
-//! See sprint 0005 ambiguity #1 resolution in
+//! See ambiguity resolution resolution in
 //! `ENFORCEMENT-MAP.md` § R5 → "Synthetic test framework
 //! location" for why this lives under `tests/` rather than
 //! `src/frameworks/_test/`.

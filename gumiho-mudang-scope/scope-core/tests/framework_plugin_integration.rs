@@ -1,4 +1,4 @@
-//! R5 acceptance — synthetic-framework integration tests (sprint 0005).
+//! R5 acceptance — synthetic-framework integration tests.
 //!
 //! Exercises every R5 acceptance bullet without committing scope to
 //! any real-world framework:
@@ -13,7 +13,7 @@
 //! Bypasses `Indexer::index_full` deliberately. R5 ships the
 //! `scope_core::frameworks::dispatch::run_frameworks` helper as the
 //! cross-language pre-filter; the indexer wires the seam when real
-//! frameworks adopt post-refactor (see comment block at the
+//! frameworks adopt later (see comment block at the
 //! framework-dispatch site in `scope-index::indexer`). Until then,
 //! tests call the helper directly.
 

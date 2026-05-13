@@ -7,7 +7,7 @@
 //! accepts only `InsertableEdge` via the sealed `Insertable` trait.
 //!
 //! `InsertableEdge` and `Insertable` deliberately live in
-//! `scope-graph::resolve`, not here — sprint 0003 chunk 6 moved them
+//! `scope-graph::resolve`, not here moved them
 //! out of `scope-core` so the resolver-only construction site is
 //! module-private to `scope_graph::resolve`. See
 //! `docs/ENFORCEMENT-MAP.md` § R3 ("Resolver location") and
@@ -298,7 +298,7 @@ impl RawEdge {
     /// `InsertableEdge`, all sharing the original
     /// `(from_id, kind, confidence, producer, pattern_id)` but pointing
     /// at distinct candidate `to_id`s. Not for use outside resolver
-    /// code paths (R3, sprint 0003).
+    /// code paths (R3).
     pub fn with_to_id(mut self, to_id: impl Into<String>) -> Self {
         self.to_id = to_id.into();
         self
@@ -306,7 +306,7 @@ impl RawEdge {
 }
 
 // `InsertableEdge` and `Insertable` live in `scope-graph::resolve`
-// (R3, sprint 0003 chunk 6 migration). Constructor is module-private
+// (R3 migration). Constructor is module-private
 // to the resolver — the compile-fail CI gate in
 // `scope-graph/tests/compile_fail/typestate/` enforces it
 // mechanically.

@@ -8,10 +8,9 @@
 #   interpreter, violating CHARTER.md § 5 "No compiler/interpreter
 #   invocation" and R12's hard-limit detection layer.
 #
-# Path filter (post-sprint-0000 sub-crate layout):
+# Path filter (sub-crate layout):
 #   - gumiho-mudang-scope/scope-core/src/languages/
-#   - gumiho-mudang-scope/scope-core/src/frameworks/  (when sprint 0005
-#     introduces it)
+#   - gumiho-mudang-scope/scope-core/src/frameworks/
 #   - gumiho-mudang-scope/scope-core/src/parser.rs
 #   - gumiho-mudang-scope/scope-core/src/extract/
 #   - gumiho-mudang-scope/scope-graph/src/resolve/

@@ -12,15 +12,15 @@ The architecture is stable and every bullet below holds:
 - Every active language plugin's `docs/languages/<name>.md` has zero `NEEDS REVIEW` entries.
 - `scope audit confidence` runs against the reference fixture corpus.
 - CI gates active: malformed-source (R6), trait-shape audit + spawn-denylist (R12), immutable-source (R9), plus every other gate in [`CI-GATES.md`](CI-GATES.md).
-- Full benchmark suite shows < 10% regression from pre-refactor baseline.
+- Full benchmark suite holds within the 10% regression budget.
 
 Items below are ordered by priority. Each respects its own per-item gate stated under "Gate to start".
 
 ---
 
-## Priority 1 (immediately post-refactor) — Self-correction cycle
+## Priority 1 — Self-correction cycle
 
-R8 (sprint 0007) ships the **sensor**: `scope audit confidence` measures per-`(producer, pattern_id)` precision against a labelled fixture corpus and fails the build when any tier is below target. The JSONL sample format ([`AUDIT-LABEL-SCHEMA.md`](AUDIT-LABEL-SCHEMA.md)) is the contract that lets any external labeller (LLM, LSP cross-check, hybrid) plug in.
+R8 ships the **sensor**: `scope audit confidence` measures per-`(producer, pattern_id)` precision against a labelled fixture corpus and fails the build when any tier is below target. The JSONL sample format ([`AUDIT-LABEL-SCHEMA.md`](AUDIT-LABEL-SCHEMA.md)) is the contract that lets any external labeller (LLM, LSP cross-check, hybrid) plug in.
 
 R8 alone does **not** close the loop. When a tier falls below target, a human still has to read the labelled samples, find the failing pattern, and patch the extractor by hand. The next index run then emits corrected edges (existing persisted edges are not retroactively fixed — `wipe-and-reindex` per CHARTER §2 is the migration path).
 
@@ -83,7 +83,7 @@ Eligibility holds (architecture closed). R8 ships the sensor; the reference fixt
 
 ---
 
-## Priority 2 (immediately post-refactor) — Honesty audit: eliminate non-essential approximations
+## Priority 2 — Honesty audit: eliminate non-essential approximations
 
 ### Principle (charter-grade)
 
@@ -107,7 +107,7 @@ This principle has been implicit throughout every refactor sprint (Charter, R-mo
 
 - **(a) Charter-grade audit.** Walk every R-move acceptance bullet, every schema comment, every doc rationale. Flag every use of the words *cap*, *truncate*, *limit*, *approximate*, *sample*, *heuristic*, *good enough*, *common case*, *roughly*. For each: is the trade-off justified by a hard runtime constraint (panic / OOM / won't-run)? If yes — leave it and surface the constraint verbatim in the doc. If no — queue for fix.
 - **(b) Code-grade audit.** Grep every workspace crate for `const .*: usize = ` whose name contains `CAP`, `LIMIT`, `MAX`, `TRUNC`, `BUDGET`, `THRESHOLD`, or that is followed by truncation / sampling / fallback logic. Same triage as (a).
-- **(c) Drop the R0 `args_text` 2 KB cap** (known offender above) **and bump the audit-sample JSONL `schema_version` from `"1"` to `"2"` adding a `producer_captured_args: string | null` field**. The two changes ship together because they are the same fidelity move from two angles: (c.i) the schema bump exposes what the extractor actually captured at index time as a first-class column in the JSONL sample, so an external labeller can compare current source against the index-time capture side-by-side instead of squinting at `args_text` through R8's source-file fallback; (c.ii) dropping the cap makes that index-time capture actually faithful (under the 2 KB cap, `producer_captured_args` would carry the truncated stub and inherit the lie). Bundled, the post-refactor Scope ships the auditor a complete two-source comparison: current source via `source_snippet`, index-time capture via `producer_captured_args`. One commit, charter-grade amendment on `main`:
+- **(c) Drop the R0 `args_text` 2 KB cap** (known offender above) **and bump the audit-sample JSONL `schema_version` from `"1"` to `"2"` adding a `producer_captured_args: string | null` field**. The two changes ship together because they are the same fidelity move from two angles: (c.i) the schema bump exposes what the extractor actually captured at index time as a first-class column in the JSONL sample, so an external labeller can compare current source against the index-time capture side-by-side instead of squinting at `args_text` through R8's source-file fallback; (c.ii) dropping the cap makes that index-time capture actually faithful (under the 2 KB cap, `producer_captured_args` would carry the truncated stub and inherit the lie). Bundled, the later Scope ships the auditor a complete two-source comparison: current source via `source_snippet`, index-time capture via `producer_captured_args`. One commit, charter-grade amendment on `main`:
   - Delete `ARGS_TEXT_CAP_BYTES`, `TRUNCATION_MARKER`, and the truncation logic in `scope-core/src/edge.rs`.
   - Delete the matching unit test (currently asserts the truncation byte length).
   - Update the schema comment in `scope-graph/src/sql/schema.sql` (drop "capped at 2 KB / truncation marker" text).
@@ -127,7 +127,7 @@ Priority 1's labelling pipeline reads `source_snippet` directly from the source 
 
 ---
 
-## Priority 3 (immediately post-refactor) — Layering audit: thin CLI, fat library
+## Priority 3 — Layering audit: thin CLI, fat library
 
 ### Principle
 
@@ -137,7 +137,7 @@ The split tracks the same charter discipline as the R-moves: each surface has on
 
 ### Known offender (Priority 3 sprint opens here)
 
-- **`gumiho-mudang-cli/src/commands/audit.rs` (~1400 LOC after sprint 0007)** — R8's entire engine lives in the CLI: `sample_stratified` + `xorshift64` PRNG (the sampling algorithm), `SampleRecord` + `PrecisionReport` + `ReportRow` + `ReportFormat` (the schema-versioned wire formats), `compute_precision_report` (the precision math), `write_report` (JSON + TSV serialisation), `check_tier_gate` + `HIGH_TIER_MIN` / `MEDIUM_TIER_MIN` (the mechanical invariant), `enforce_freshness` + `drift_error` + `read_source_snippet` (the auditor-immutability machinery). Every one of those surfaces is library-grade. The CLI's job is to parse `--emit-sample` / `--label` / `--format` and call the library; it currently does **the entire R8 implementation**. A future LSP / web-service / batch-CI host that wants to invoke R8 cannot today without pulling `gumiho-mudang-cli` as a dependency, which violates the charter §4 layering map (`gumiho-mudang-cli` depends on the engine, never the other way).
+- **`gumiho-mudang-cli/src/commands/audit.rs` (~1400 LOC after the architecture)** — R8's entire engine lives in the CLI: `sample_stratified` + `xorshift64` PRNG (the sampling algorithm), `SampleRecord` + `PrecisionReport` + `ReportRow` + `ReportFormat` (the schema-versioned wire formats), `compute_precision_report` (the precision math), `write_report` (JSON + TSV serialisation), `check_tier_gate` + `HIGH_TIER_MIN` / `MEDIUM_TIER_MIN` (the mechanical invariant), `enforce_freshness` + `drift_error` + `read_source_snippet` (the auditor-immutability machinery). Every one of those surfaces is library-grade. The CLI's job is to parse `--emit-sample` / `--label` / `--format` and call the library; it currently does **the entire R8 implementation**. A future LSP / web-service / batch-CI host that wants to invoke R8 cannot today without pulling `gumiho-mudang-cli` as a dependency, which violates the charter §4 layering map (`gumiho-mudang-cli` depends on the engine, never the other way).
 
 ### Sub-items
 
@@ -152,28 +152,28 @@ The split tracks the same charter discipline as the R-moves: each surface has on
 - **(b) Decide sub-crate vs. module.** A new sibling crate (`scope-audit`) matches the existing sub-crate split (R-move terminology — see `gumiho-mudang-scope/src/lib.rs` façade). A module under `scope-core::audit` is one fewer crate to compile. The trade-off is dependency direction: `scope-audit` would want `scope-graph` (`Graph`, `AuditEdgeRow`, `AuditFreshness`); a module under `scope-core` would force an upward dependency `scope-core → scope-graph` that does not exist today. Sibling sub-crate is the cleaner answer; the dispatch convenience of a module loses to the dependency-graph clarity. Confirm in the sprint plan.
 - **(c) Reduce `commands/audit.rs` to dispatch only.** The CLI module retains: the `AuditArgs` / `AuditCommands` / `ConfidenceArgs` / `ReportFormat` (the **clap surface**, which is unavoidably CLI-grade); the `run(args, project_root)` entry point; the three subcommand-flow stubs (`run_confidence` → `default_summary` / `emit_sample` / `label_pass`) that call into `scope-audit` and print results. Target post-extraction size: under 200 LOC.
 - **(d) Migrate the integration test suite.** `gumiho-mudang-cli/tests/integration/test_audit_confidence.rs` stays in the CLI (it exercises the CLI surface end-to-end), but the unit-test block currently inside `commands/audit.rs` migrates to `scope-audit` as a module test — the assertions test the engine, not the CLI.
-- **(e) Audit every other CLI command for the same offender pattern.** Each `gumiho-mudang-cli/src/commands/*.rs` whose body exceeds the dispatch + formatting envelope is queued for the same extraction. Candidates spot-checked at sprint-0007 close: `index.rs` (large indexer driver), `flow.rs` / `trace.rs` (graph traversal lives in the CLI), `setup.rs` (process spawn lives in the CLI). Triage and queue them as further Priority 3 sub-items; do not bundle all of them into one sprint.
+- **(e) Audit every other CLI command for the same offender pattern.** Each `gumiho-mudang-cli/src/commands/*.rs` whose body exceeds the dispatch + formatting envelope is queued for the same extraction. Known candidates: `index.rs` (large indexer driver), `flow.rs` / `trace.rs` (graph traversal lives in the CLI), `setup.rs` (process spawn lives in the CLI). Triage and queue them as further Priority 3 sub-items; do not bundle all of them into one sprint.
 
 ### Gate to start
 
 Eligibility holds. Runs in parallel with Priority 1 and Priority 2 — independent surface.
 
-### Why this is **not** absorbed by the refactor
+### Why layering lives here, not in an R-entry
 
 The crate decomposition carved up `scope-core` / `scope-graph` / `scope-index` / `scope-search` / `scope-workspace` but did not retouch `gumiho-mudang-cli`. R8 is the first R-entry that grew a substantial engine; nothing in the R-entry catalogue forced the engine into the CLI, the implementation simply landed there because the CLI was the most obvious place to keep momentum. The honesty principle (Priority 2) applies here too in a different shape: *the layering on the box does not match the layering in the code*. Priority 3 corrects that.
 
 ---
 
-## Cross-cutting items (charter §6 soft-expansion zone, not absorbed by refactor)
+## Cross-cutting items (charter §6 soft-expansion zone)
 
-The architecture already absorbed several soft-expansion items into its R-entries (resolution pass → R3, domain edge kinds → R0, config-file readers → R4, confidence/provenance metadata → R0, decorator/annotation argument capture → R0 + R5). The items below are the **remainder**: they sit in the soft-expansion zone and remain new work against the current architecture.
+Several soft-expansion items live inside the architecture already (resolution pass → R3, domain edge kinds → R0, config-file readers → R4, confidence/provenance metadata → R0, decorator/annotation argument capture → R0 + R5). The items below are the **remainder**: they sit in the soft-expansion zone and remain new work against the current architecture.
 
 - **Re-export resolution.** `pub use` chain following (Rust), `export * from` / `export {x} from` (TypeScript), `__all__` (Python), via static text. Lives in the resolver layer (R3) — the per-language re-export rules are new work against the current architecture.
 - **Doc-comment chain merging.** `///` chains and `//!` inner docs (Rust), JSDoc multi-line (TS), `"""` blocks (Python). Improves docstring quality without semantic work.
 - **Cross-project edges (`scope link`).** Mono-repo and microservice graphs as a single queryable index. Already on the roadmap per CHARTER §6.
 - **Vector embeddings for `scope find`.** Semantic search by intent over name + doc + path + callers. CHARTER §6 names this.
 - **Time-travel queries (`scope query @sha`).** Per-commit indices for PR review and historical impact analysis. CHARTER §6 names this; cost-tier `high`.
-- **`.scm` query expansion** for additional symbol kinds (e.g., `mod` declarations as kind=module, `macro_rules!` definitions as kind=macro, JSX components as kind=… — extensions beyond the universal set already covered by the refactor).
+- **`.scm` query expansion** for additional symbol kinds (e.g., `mod` declarations as kind=module, `macro_rules!` definitions as kind=macro, JSX components as kind=… — extensions beyond the universal set already covered by the R-entries in `ENFORCEMENT-MAP.md`).
 
 Order is set by separate triggers, not by this document.
 
@@ -237,16 +237,16 @@ Each framework adoption ships independently per `FRAMEWORK-PLAYBOOK.md` Step 5 (
 
 ---
 
-## Items already absorbed by the refactor (do not re-plan)
+## Items already in the architecture (do not re-plan)
 
 Cross-references so a future reader does not duplicate work:
 
 - **Resolution pass with confidence/status** — covered by R0 (schema) + R1 (builder) + R3 (typestate pipeline).
-- **Domain edge kinds** — covered by R0 (whitelist additions: 31 net-new = `contains` universal + 30 domain across R0 baseline + Tier 1 + Tier 2 + Tier 3; final whitelist 38).
+- **Domain edge kinds** — covered by R0 (final whitelist 38: 8 universal + 30 domain across R0 baseline + Tier 1 + Tier 2 + Tier 3).
 - **Call-site argument capture** (`edges.args_text`) — covered by R0; consumed by framework predicates (R5) and downstream cross-language stitching.
 - **Config-file readers / WorkspaceContext** — covered by R4 (split into LanguageWorkspaceContext / FrameworkWorkspaceContext).
 - **Symbol metadata structured fields** (decorators, annotations, template_calls) — covered by R0 (schema doc) + R5 (framework consumption).
-- **Stable cross-session symbol IDs** — already shipped pre-refactor (`src/core/parser.rs:220`); maintained, not re-planned.
+- **Stable cross-session symbol IDs** — `src/core/parser.rs:220` carries the implementation; maintained, not re-planned.
 
 ---
 
@@ -260,13 +260,13 @@ Recorded so they are not lost; their triggers are insufficient today.
 - **Byte-level lossy file reading** for invalid UTF-8 (`ENFORCEMENT-MAP.md` R6 known limitation; separate initiative with its own trigger).
 - **`scope audit coverage`** subcommand for recall-side detection (separate from R8; trigger-deferred).
 - **`.js` / `.jsx` indexing** via cheap path (extend `LanguageId::TypeScript.extensions()` arm) or strict path (new `JavaScript` variant of `LanguageId` — `scope-core/src/languages/id.rs`) — governed by `LANGUAGE-PLAYBOOK.md` adoption flow when triggers prove the need.
-- **Optional symbol-kind renames** (`const` → `constant`, `type` → `type_alias`) — deferred to a post-R0 follow-up migration; not a blocker.
+- **Optional symbol-kind renames** (`const` → `constant`, `type` → `type_alias`) — deferred to a R0 follow-up migration; not a blocker.
 
 ---
 
 ## Amendment rule
 
-- Adding an item to "Cross-cutting" or "Per-language depth": commit message `docs(post-refactor): queue <item>` with one-paragraph rationale.
-- Promoting an item from "deliberately deferred" to a queue: requires triggers logged in the matching trigger file + decision entry; commit message `docs(post-refactor): promote <item>`.
-- Removing an item: commit message `docs(post-refactor): remove <item>` with one-paragraph rationale.
+- Adding an item to "Cross-cutting" or "Per-language depth": commit message `docs(backlog): queue <item>` with one-paragraph rationale.
+- Promoting an item from "deliberately deferred" to a queue: requires triggers logged in the matching trigger file + decision entry; commit message `docs(backlog): promote <item>`.
+- Removing an item: commit message `docs(backlog): remove <item>` with one-paragraph rationale.
 - Reordering within a queue is not amendment-controlled; ordering is set by triggers and ROI as items mature.

@@ -21,7 +21,7 @@ Two concrete things the typed boundary unlocks:
 
 - No crate currently exports Scope's output structs as a public API. R10 landed them as `pub(crate)` (or workspace-internal) inside `gumiho-mudang-cli`. A later sprint can lift them into a shared crate (`gumiho-mudang-scope-output`?) if a real consumer materialises.
 - No `ts-rs` / `typeshare` derive is wired. The Rust-side types are the contract; binding generation is opt-in by the consumer when a real composition use case appears.
-- The composition layer itself is queued in `gumiho-mudang-scope/docs/POST-REFACTOR-PLAN.md`; `gumiho-mudang-scope/docs/SCOPE-LSP-COMPOSITION.md` § 5.4 owns the design.
+- The composition layer itself is queued in `gumiho-mudang-scope/docs/BACKLOG.md`; `gumiho-mudang-scope/docs/SCOPE-LSP-COMPOSITION.md` § 5.4 owns the design.
 
 ## When the door opens
 

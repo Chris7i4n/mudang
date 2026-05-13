@@ -1,4 +1,4 @@
-//! Rust edge extraction (R2 — sprint 0003, chunk 2 + chunk 7).
+//! Rust edge extraction (R2).
 //!
 //! Relocated from `crate::languages::rust_lang`; per-language modules
 //! retain only capture / metadata / docstring concerns. The extractor is
@@ -172,7 +172,7 @@ fn is_likely_generic_param(name: &str) -> bool {
 
 /// Extract `implements` edges from Rust `impl Trait for Type` blocks.
 ///
-/// Relocated from `parser.rs` in sprint 0003 codex-review fix-up: R2 keeps
+/// Relocated from `parser.rs` codex-review fix-up: R2 keeps
 /// EdgeKind selection inside the extractor. Walks the parsed tree for
 /// `impl_item` nodes that have a `trait` field and emits one `implements`
 /// `RawEdge` per such block, resolving the `from_id` against the previously

@@ -3,7 +3,7 @@
 - **Status:** **ABSORBED** by `gumiho-mudang-scope/docs/ENFORCEMENT-MAP.md` R0. Every recommendation in this TODO (38-kind whitelist, 4-kind concurrency split, `green_thread_spawn` rename, `edges.args_text` column with Mitigations 1+2) landed as part of R0's durable contract.
 - **Original request:** reopen scope's R0 whitelist before R0 shipped.
 - **Decision:** the 14 net-new edge kinds proposed by R0 cover the first-tier patterns of common stacks but leave production-critical patterns (middleware, validation, error handlers, websocket, client-side routing, auth guards, async task spawn naming) on `calls` generic, where scope's value-add over LSP collapses.
-- **Tracking:** implementation landed via the architectural refactor; this file remains the historical rationale.
+- **Tracking:** implementation landed via the architecture; this file remains the historical rationale.
 
 > **Reader note.** This document is kept for the audit trail — it captures the *why* behind R0's final whitelist. Cross-references to this file are historical rationale only; the live contract is R0 in `ENFORCEMENT-MAP.md`.
 
@@ -22,10 +22,10 @@ Patterns that fall into the generic `calls` edge force consumers to re-derive st
 - **scope-side**: `gumiho-mudang-scope/docs/ENFORCEMENT-MAP.md` R0 whitelist + matching migration. The decision is scope's; this TODO is mudang's recorded position arguing for the expansion.
 - **mudang-side**: every composition case that depends on filtering by edge kind (Case T `triggers`, Case M `api-surface`, Case X `find-tests`, Case J `flow`, Case W `xref-monorepo`) gets richer when the kind list distinguishes middleware from handler, validation from data, auth-guard from route, etc.
 
-At the time this was written, it was a **pre-R0 amendment** request,
-not a post-R0 follow-up. That request is now resolved: the final R0
+At the time this was written, it was a **before R0 amendment** request,
+not a R0 follow-up. That request is now resolved: the final R0
 target state carries the 38-kind whitelist, so implementation tracking
-lives in sprint 0001.
+lives.
 
 ---
 
@@ -502,7 +502,7 @@ Per-phase estimate vs current scope:
 | Storage | +1–3 % on DB size (NULL ≈ 1 byte; ~30 bytes/call average) |
 | Row read overhead | <1 % |
 
-Combined with R0's other additions: 5–12 % regression vs pre-refactor
+Combined with R0's other additions: 5–12 % regression vs the pre-R0
 baseline. `ENFORCEMENT-MAP.md` accepts < 10 %. Args_text
 contribution alone is well under the gate; the **risk is the sum**.
 Mitigations below bring args_text contribution to < 3 %.
@@ -605,7 +605,7 @@ Splitting `args_text` into a follow-up migration after R0 means:
 
 Folding the column into R0 is one migration, one schema-version
 bump (0 → 1), and the whole Tier 1+2 work can begin at the same
-post-R0 moment.
+R0 moment.
 
 ---
 
@@ -668,9 +668,8 @@ With Tier 1 + Tier 2 kinds in R0, the following composition cases gain real powe
    resolver-skip mitigations described above, is part of R0's schema
    target state.
 
-3. Phase A's implementation tracking is sprint 0001, not a separate
-   TODO or follow-up issue. Mudang's composer work waits for R0 to ship
-   on `main`.
+3. Phase A's implementation tracking lives in git history, not a
+   separate TODO or follow-up issue.
 
 4. This file is retained as audit rationale for why R0's whitelist is
    broader than the initial 14-kind proposal.

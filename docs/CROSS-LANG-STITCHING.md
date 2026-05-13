@@ -56,7 +56,7 @@ It does **not** specify:
   territory and is excluded from mudang's reach by design);
 - runtime call tracing (out of scope, not a static analysis concern);
 - cross-repository stitching (deferred behind `scope link`; see
-  `POST-REFACTOR-PLAN.md`).
+  `BACKLOG.md`).
 
 ---
 
@@ -395,7 +395,7 @@ stitcher task.
 - Runtime call confirmation. Static stitching only; no instrumentation,
   no traces.
 - Cross-repository / cross-`.mudang/` stitching. Deferred until
-  `scope link` ships per `POST-REFACTOR-PLAN.md`.
+  `scope link` ships per `BACKLOG.md`.
 - Schema-level diff (this is `mudang health` / `mudang verify`
   territory).
 - Symbol rename across the stitched boundary. Phase E edit layer +

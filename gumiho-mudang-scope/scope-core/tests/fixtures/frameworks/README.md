@@ -5,7 +5,7 @@ Sprint 0005 (R5) infrastructure fixtures.
 ## Layout
 
 - `_pre_filter/{python,ruby}/` — cross-language pre-filter test
-  corpus. Path resolved by sprint 0005 ambiguity #2 (see
+  corpus. Path resolved by ambiguity resolution (see
   `ENFORCEMENT-MAP.md` § R5 → "Cross-language fixture
   location"). Underscore prefix denotes test-infrastructure-only.
 - `synthetic/` — synthetic framework fixtures. Per-version subtrees
@@ -21,6 +21,6 @@ unit under test; language-plugin metadata population is sprint
 0003's R2, already covered by per-language test corpora.
 
 End-to-end fixtures will be added when a concrete framework adopts
-post-refactor per `FRAMEWORK-PLAYBOOK.md`. Until then the directory
+later per `FRAMEWORK-PLAYBOOK.md`. Until then the directory
 layout exists so future sprints have a documented place to land
 fixtures.

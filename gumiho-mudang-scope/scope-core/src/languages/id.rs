@@ -123,7 +123,7 @@ impl LanguageId {
     ///
     /// Currently unused by the indexer (extension dispatch covers every
     /// indexed file). Reserved for the cheap-path detection extension
-    /// noted in POST-REFACTOR-PLAN.md.
+    /// noted in BACKLOG.md.
     pub const fn shebangs(self) -> &'static [&'static str] {
         match self {
             Self::Python => &["python", "python3"],
@@ -326,7 +326,7 @@ impl LanguageId {
     }
 
     /// Per R4, `ctx` carries typed workspace state. Phase B plugins ignore
-    /// it; R2 (sprint 0003) wires the first real consumer (Python package
+    /// it; R2 wires the first real consumer (Python package
     /// resolution via `__init__.py`).
     pub fn extract_metadata(
         self,

@@ -1,8 +1,8 @@
-/// Integration tests for `scope audit confidence` (R8 / sprint 0007).
+/// Integration tests for `scope audit confidence` (R8).
 ///
-/// Chunk 4 surface: `--emit-sample <PATH>` writes a JSONL sample,
-/// `--label <PATH>` reads it back. Both flows hard-abort on source
-/// drift (auditor immutability rule — see
+/// Surface: `--emit-sample <PATH>` writes a JSONL sample, `--label
+/// <PATH>` reads it back. Both flows hard-abort on source drift
+/// (auditor immutability rule — see
 /// `gumiho-mudang-scope/docs/AUDIT-LABEL-SCHEMA.md`).
 use assert_cmd::Command;
 use predicates::str::contains;
@@ -176,9 +176,9 @@ fn test_audit_confidence_label_format_tsv() {
         .success();
     let stdout = String::from_utf8_lossy(&out.get_output().stdout).to_string();
 
-    // Preamble (chunk 8 + sprint-0007 codex round 3 follow-up): three
-    // `#`-prefixed lines carrying the precision-only disclaimer, the
-    // sample-file schema pointer, and the coverage-limitation note.
+    // Preamble: three `#`-prefixed lines carrying the precision-only
+    // disclaimer, the sample-file schema pointer, and the
+    // coverage-limitation note.
     let mut lines = stdout.lines();
     let p1 = lines.next().expect("preamble line 1");
     let p2 = lines.next().expect("preamble line 2");
@@ -195,8 +195,8 @@ fn test_audit_confidence_label_format_tsv() {
         "second preamble line must point to the sample-file schema doc: {p2:?}"
     );
     assert!(
-        p3.contains("POST-REFACTOR-PLAN.md"),
-        "third preamble line must point to the post-refactor plan: {p3:?}"
+        p3.contains("BACKLOG.md"),
+        "third preamble line must point to `BACKLOG.md`: {p3:?}"
     );
 
     let header = lines.next().expect("header line");
@@ -476,11 +476,11 @@ fn test_audit_confidence_label_rejects_tampered_confidence_field() {
 
 #[test]
 fn test_audit_confidence_label_rejects_tampered_lang_version() {
-    // Codex round-7 P2: `lang_version` is the last non-`label` field
-    // the tamper gate did not check. Sprint 0007 always emits `null`
-    // (the seven per-language detectors land atomically post-refactor
-    // per POST-REFACTOR-PLAN.md § Priority 1 sub-item (d)). A
-    // labeller rewriting it to any other value is sample tamper.
+    // `lang_version` is the last non-`label` field the tamper gate
+    // checks. Always emitted as `null` today (the seven per-language
+    // detectors land atomically per `BACKLOG.md` § Priority 1 sub-item
+    // (d)). A labeller rewriting it to any other value is sample
+    // tamper.
     let (_dir, root) = setup_indexed_fixture();
     let sample = root.join("sample.jsonl");
 
@@ -581,11 +581,10 @@ fn test_audit_confidence_label_rejects_records_missing_label_field() {
 
 #[test]
 fn test_audit_confidence_label_rejects_records_missing_lang_version_field() {
-    // Codex round-8 P3: same shape as round 6 but for the other
-    // Option-typed required field. A labeller that drops nulls
-    // would omit `lang_version` (always null on emit in sprint 0007)
-    // and produce JSONL that violates the schema_version "1"
-    // required-fields contract.
+    // Same shape as the previous tamper test but for the other
+    // Option-typed required field. A labeller that drops nulls would
+    // omit `lang_version` (always null on emit) and produce JSONL
+    // that violates the schema_version "1" required-fields contract.
     let (_dir, root) = setup_indexed_fixture();
     let sample = root.join("sample.jsonl");
 
@@ -657,8 +656,8 @@ fn test_audit_confidence_default_no_flags_succeeds_with_usage_hint() {
         "missing tier-target summary"
     );
     assert!(
-        !stdout.contains("chunks 5-6") && !stdout.contains("land in sprint 0007"),
-        "stale chunk-plan pointer must be gone: {stdout}"
+        !stdout.contains("chunks 5-6") && !stdout.contains("land in sprint"),
+        "stale planning pointer must be gone: {stdout}"
     );
 }
 

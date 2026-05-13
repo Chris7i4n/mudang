@@ -100,5 +100,5 @@ All of the following hold simultaneously:
 ## Out of scope for this sprint
 
 - Future sprints' R-moves / deliverables — name them explicitly.
-- Anything queued for after the larger initiative closes (e.g. a post-refactor / post-milestone plan doc).
+- Anything queued for after the larger initiative closes (e.g. a later / post-milestone plan doc).
 - Anything that requires charter / playbook amendment — those go through the explicit amendment channels each governing document defines.

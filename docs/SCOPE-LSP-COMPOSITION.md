@@ -66,7 +66,7 @@ surfaces, each optimised for a different kind of question.
 |---------|---------|------------|---------|
 | α — **Graph** | SQLite (`symbols`, `edges`) | exact lookup, recursive CTE | refs, impact, deps, trace, flow, sketch, summary |
 | β — **FTS** | SQLite FTS5 (`symbols_fts`) | keyword BM25 | `find` (current) |
-| γ — **Vector** | LanceDB (post-refactor) | ANN cosine | `find --semantic` (post-refactor) |
+| γ — **Vector** | LanceDB | ANN cosine | `find --semantic` |
 
 The composition layer treats Scope as one engine, but routing decisions
 within Scope choose among α/β/γ based on query shape:
@@ -153,7 +153,7 @@ it and the resulting composition level.
 | Trait bound satisfaction (`T: Send + Sync` chain) | `textDocument/implementation` + hover | 2 (enrich rdeps) | LSP traverses constraint chain |
 | Inferred return type when annotation missing (`fn foo() { ... -> i32 }` with no `-> i32`) | `textDocument/inlayHint` | 2 (enrich `sketch`) | Annotated with `(inferred)` provenance |
 | Macro body content (after expansion) | rust-analyzer `experimental/expandMacro` | 3 | Outside charter; pass-through only |
-| Re-export chain (`pub use crate::a::b::C`) crossing files | `textDocument/definition` follows the chain | 1 + 2 | Scope post-refactor handles trivial cases; LSP nails the chain |
+| Re-export chain (`pub use crate::a::b::C`) crossing files | `textDocument/definition` follows the chain | 1 + 2 | Scope handles trivial cases; LSP nails the chain |
 | Cross-file dynamic dispatch (`Box<dyn Trait>.method()` → concrete impl reachable at call site) | `textDocument/implementation` from the trait method | 2 | Scope cannot; LSP enumerates impls |
 | Blanket impls (`impl<T: Foo> Bar for T`) | `textDocument/implementation` | 2 | Scope reads only literal `impl Bar for Type` |
 | Conditional types TS (`T extends U ? A : B`) | `hover` | 3 | tsserver evaluates |
@@ -408,7 +408,7 @@ FTS5 BM25 over `name | signature | docstring | path | callers …`.
 Hits things named `handle*Auth*Error*` or whose docstring contains
 "authentication" — keyword-driven.
 
-**Level 0 + post-refactor vector embeddings (still no LSP)**
+**Level 0 +vector embeddings (still no LSP)**
 
 ONNX-produced vectors stored in LanceDB. Cosine similarity to the
 query embedding. Catches `validateToken`, `verifySession`,
@@ -471,7 +471,7 @@ User goal: see the body of a macro invocation.
 
 **Level 3 — LSP pass-through (rust-analyzer only)**
 
-Scope indexes macro definitions as `kind=macro` (post-R0) and macro
+Scope indexes macro definitions as `kind=macro` (R0) and macro
 invocations as `references` edges. It never expands. For expansion,
 mudang routes to rust-analyzer's `experimental/expandMacro` and
 returns the expanded source verbatim.
@@ -723,7 +723,7 @@ SELECT e.* FROM edges e
 ```
 
 The exact column types and DDL ship in the enrichment sprint (out of
-scope for sprint 0003). This section locks the **shape contract** —
+scope for the architecture). This section locks the **shape contract** —
 separate table, tool name as data, scope's `edges` rows never mutated
 by enrichment.
 
@@ -796,7 +796,7 @@ def compose_merge(query):
 Primary tuple: `(file, line, column, target_id_or_name)`.
 
 When `column` is absent in Scope's edge metadata (most current edges
-pre-R0), the key falls back to `(file, line, target_name)`. Post-R0
+before R0), the key falls back to `(file, line, target_name)`. Post-R0
 schema upgrade adds `column` where tree-sitter captured it, sharpening
 dedupe and reducing false merges.
 
@@ -1050,7 +1050,7 @@ behaves consistently in both:
   by `gumiho-mudang-lsp`'s own milestones.
 - **Not a guarantee that every query exists today.** Many of the
   example commands in Section 4 (`mudang type-at`, `mudang refs
-  --semantic`, `mudang rename`) are post-refactor work, queued behind
+  --semantic`, `mudang rename`) arefuture work, queued behind
   Scope's Phase E acceptance and behind a separate
   `gumiho-mudang-lsp` rollout plan.
 
@@ -1244,7 +1244,7 @@ drift:
 ```
 
 Flow:
-1. Sample N edges weighted by confidence tier (post-R0/R8).
+1. Sample N edges weighted by confidence tier (R0/R8).
 2. For each, `textDocument/definition` at the edge's call site.
 3. Compare LSP's location to Scope's resolved `to_id`.
 4. Emit confirmed / drift / dropped histogram.
@@ -1346,7 +1346,7 @@ total deprecated usages: 23
 Flow:
 1. Scope identifies deprecated symbols via metadata (`#[deprecated]`,
    `@deprecated` JSDoc, `__deprecated__` Python, etc.) captured at index
-   time post-R0.
+   time R0.
 2. For each, `find_refs` + LSP confirm.
 3. Group output by deprecated symbol with version annotation from
    `hover` doc string when available.
@@ -1468,7 +1468,7 @@ Costly; the comparator-side index is cached by commit SHA.
 
 Goal: enumerate external triggers that can reach a symbol.
 
-**Level 0 — Scope home turf** (post-R5 framework-plugin work)
+**Level 0 — Scope home turf** (R5 framework-plugin work)
 
 ```text
 $ mudang triggers chargeCustomer
@@ -2111,7 +2111,7 @@ linter-class servers are out of scope.
 `workspace/symbol` is fuzzy and per-server: some servers (jdtls, gopls)
 return excellent recall; others (tsserver) return narrow keyword
 matches. Mudang does not rely on it for primary search — Scope's FTS5
-plus post-refactor vector search is the primary path. `workspace/symbol`
+plusvector search is the primary path. `workspace/symbol`
 is the fallback when both fail.
 
 ---

@@ -5,7 +5,7 @@
 #   No function in scope-core/src/languages/, scope-core/src/extract/,
 #   or scope-core/src/frameworks/ has a name implying type-system
 #   inference, evaluation, narrowing, overload resolution, or macro
-#   expansion. R5 (sprint 0005) extends the gate to `frameworks/` so
+#   expansion. R5 extends the gate to `frameworks/` so
 #   future `FrameworkPlugin` impls cannot regress the negative trait
 #   shape.
 #
@@ -25,7 +25,7 @@
 # doc comments, or string literals do not count (`// infer_*` in prose
 # is fine).
 #
-# Per ENFORCEMENT-MAP.md § R11 + § R12, sprint 0002 ae37e30
+# Per ENFORCEMENT-MAP.md § R11 + § R12 ae37e30
 # (A.4 trait collapse), and LANGUAGE-PLAYBOOK.md A1/A2/A3/B2/C1.
 #
 # Exits non-zero on any match.

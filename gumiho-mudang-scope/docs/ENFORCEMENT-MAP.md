@@ -23,7 +23,7 @@ Companion docs:
 | [`FRAMEWORK-PLAYBOOK.md`](FRAMEWORK-PLAYBOOK.md) | Framework adoption flow, version strategies, 15 gotcha categories |
 | [`CI-GATES.md`](CI-GATES.md) | Every CI gate referenced below — script paths, recipe names, allowlist convention |
 | [`sprints/README.md`](sprints/README.md) | Sprint methodology and the end-of-sprint update gate that keeps this document live |
-| [`POST-REFACTOR-PLAN.md`](POST-REFACTOR-PLAN.md) | Work queue eligible against the current architecture |
+| [`BACKLOG.md`](BACKLOG.md) | Work queue eligible against the current architecture |
 | [`GLOSSARY.md`](GLOSSARY.md) | Term definitions |
 
 ---
@@ -87,7 +87,7 @@ These tables map every universal rule to its enforcement class and the R-entry +
 
 ### Why detectable, not mechanical, for trait-shape rules
 
-A name-based audit ([R12](#r12--type-system-free-trait-audit--process-spawn-denylist) trait-shape) catches a method called `infer_type_at`, but does not catch a helper method named `compute_X_for_Y` that performs the same work. The process-spawn denylist catches `Command::new("rustc")` literally but not `Command::new(env::var("CC")?)` — the binary name resolves at runtime. True mechanical enforcement would require module isolation (separate crate with no `tree_sitter` dep on the inference path), an explicit dependency denylist, or a sandboxed plugin runtime — feasible follow-ups queued in [`POST-REFACTOR-PLAN.md`](POST-REFACTOR-PLAN.md).
+A name-based audit ([R12](#r12--type-system-free-trait-audit--process-spawn-denylist) trait-shape) catches a method called `infer_type_at`, but does not catch a helper method named `compute_X_for_Y` that performs the same work. The process-spawn denylist catches `Command::new("rustc")` literally but not `Command::new(env::var("CC")?)` — the binary name resolves at runtime. True mechanical enforcement would require module isolation (separate crate with no `tree_sitter` dep on the inference path), an explicit dependency denylist, or a sandboxed plugin runtime — feasible follow-ups queued in [`BACKLOG.md`](BACKLOG.md).
 
 Enforcement is the **combination** of three layers: trait-shape audit, process-spawn denylist, and [R8](#r8--confidence-audit-subcommand) confidence audit. The trait-shape and spawn audits catch sloppy implementations at PR time; the [R8](#r8--confidence-audit-subcommand) audit catches the symptom (overconfident edges) when a clean-but-forbidden implementation evades both gates by being correctly named and dynamically invoked. **Honest framing**: a determined plugin author can still write a correctly-named helper and a runtime-resolved compiler call that [R8](#r8--confidence-audit-subcommand) cannot easily reach if its precision is high — that residual surface is why the discipline-only universal list (B1, C2, E3) is short but not empty, and why the `detectable` label is best-effort rather than exhaustive. Detection is the gate, not prevention; rules listed as `detectable` are enforced by the combined audits **for typical violations**, with a small unobserved area for the determined-evasion case that falls back to code review.
 
@@ -99,7 +99,7 @@ The 15 gotcha categories are **per-instance decisions**, not universal rules. Th
 
 ## Rule enforcements
 
-Each entry below has: **ID, rules it enforces, durable contract, where to find it in the tree, CI gates**. The R-ID is the durable anchor — external docs ([`CHARTER.md`](CHARTER.md), [`GLOSSARY.md`](GLOSSARY.md), playbooks, [`POST-REFACTOR-PLAN.md`](POST-REFACTOR-PLAN.md), [`AUDIT-LABEL-SCHEMA.md`](AUDIT-LABEL-SCHEMA.md)) deep-link into these section anchors.
+Each entry below has: **ID, rules it enforces, durable contract, where to find it in the tree, CI gates**. The R-ID is the durable anchor — external docs ([`CHARTER.md`](CHARTER.md), [`GLOSSARY.md`](GLOSSARY.md), playbooks, [`BACKLOG.md`](BACKLOG.md), [`AUDIT-LABEL-SCHEMA.md`](AUDIT-LABEL-SCHEMA.md)) deep-link into these section anchors.
 
 ### R0 — Schema closures
 
@@ -114,7 +114,7 @@ Each entry below has: **ID, rules it enforces, durable contract, where to find i
     - `edges.pattern_id TEXT NOT NULL` — short slug naming the pattern that produced the edge (`calls.method`, `imports.use`, `http_route.decorator_literal`, …). Used by [R8](#r8--confidence-audit-subcommand) to localize tier drift to a specific pattern.
     - `edges.capture_id TEXT NULL` — tree-sitter capture name when applicable.
     - `edges.framework TEXT NULL` — populated only for framework-derived edges.
-    - `edges.args_text TEXT NULL` — call-site / declaration-site argument literal as written in source, capped at 2 KB with `[truncated]` marker (the 2 KB cap is queued for removal by [`POST-REFACTOR-PLAN.md` § Priority 2 — Honesty audit](POST-REFACTOR-PLAN.md#priority-2-immediately-post-refactor--honesty-audit-eliminate-non-essential-approximations)).
+    - `edges.args_text TEXT NULL` — call-site / declaration-site argument literal as written in source, capped at 2 KB with `[truncated]` marker (the 2 KB cap is queued for removal by [`BACKLOG.md` § Priority 2 — Honesty audit](BACKLOG.md#priority-2--honesty-audit-eliminate-non-essential-approximations)).
   - **Edge kind whitelist (38 total)**: 8 universal (`calls`, `imports`, `extends`, `implements`, `instantiates`, `references`, `references_type`, `contains`) + 30 domain. Domain split: baseline (13) — `http_route`, `queue_handler`, `orm_relation`, `green_thread_spawn`, `renders`, `hook_use`, `inherits_from`, `migration`, `cron`, `feature_flag`, `awaits_on`, `channel_send`, `channel_recv`. Tier 1 (5) — `middleware`, `validates_with`, `error_handler`, `websocket_handler`, `client_route`. Tier 2 (5) — `auth_guard`, `cache_binding`, `runtime_task_spawn`, `route_mount`, `store_select`. Tier 3 (7) — `sse_stream`, `signal_handler`, `cancel_token`, `lazy_load`, `query_binding`, `os_process_spawn`, `os_thread_spawn`.
   - **No generic primitive edges** (`decorator_call`, `annotation_call`, `template_render`, `hook_call`) — primitives live in `symbols.metadata` per [R5](#r5--frameworkplugin-operates-on-symbols-and-edges-not-ast-graph-only-via-metadata); only domain edges are top-level rows.
   - **4-kind concurrency split** (`os_process_spawn` / `os_thread_spawn` / `green_thread_spawn` / `runtime_task_spawn`) records operational differences in stack ownership, scheduler, address space, and sync-block safety. A producer-side plugin picks one based on what the runtime actually does, not on the surface API spelling.
@@ -221,9 +221,9 @@ Each entry below has: **ID, rules it enforces, durable contract, where to find i
     3. `scope audit confidence --label <path>` reads the labelled file and produces the precision report.
   - **Auditor immutability**: hard mechanical SHA-256 drift gate via `Graph::check_audit_freshness` (no `--allow-drift` escape). The auditor never mutates source-derived tables.
   - **Output format**: default `--format json` carrying `schema_version`, `disclaimer`, `sample_schema_doc`, `report[]`. `--format tsv` is a convenience view.
-  - **JSONL sample schema** (full doc in [`AUDIT-LABEL-SCHEMA.md`](AUDIT-LABEL-SCHEMA.md)): `schema_version: "1"`, fields `edge_id`, `kind`, `confidence`, `producer`, `pattern_id`, `from`, `to`, `source_snippet`, `lang_version`, `label`. `lang_version` is reserved-for-future; emits always `null`. Bump to `"2"` is scheduled in [`POST-REFACTOR-PLAN.md` § Priority 1 sub-item (g)](POST-REFACTOR-PLAN.md#priority-1-immediately-post-refactor--self-correction-cycle).
+  - **JSONL sample schema** (full doc in [`AUDIT-LABEL-SCHEMA.md`](AUDIT-LABEL-SCHEMA.md)): `schema_version: "1"`, fields `edge_id`, `kind`, `confidence`, `producer`, `pattern_id`, `from`, `to`, `source_snippet`, `lang_version`, `label`. `lang_version` is reserved-for-future; emits always `null`. Bump to `"2"` is scheduled in [`BACKLOG.md` § Priority 1 sub-item (g)](BACKLOG.md#priority-1--self-correction-cycle).
   - **What R8 measures and what it does not**: precision only. **Not recall** — a predicate that simply stops matching emits zero rows and zero rows are not sampleable. Recall regressions caught by integration-test fixtures with expected edge counts (snapshot via `insta`).
-- **Where in the tree**: `gumiho-mudang-cli/src/commands/audit.rs` (subcommand surface — extraction to `scope-audit` sub-crate queued in [`POST-REFACTOR-PLAN.md` § Priority 3 — Layering audit](POST-REFACTOR-PLAN.md#priority-3-immediately-post-refactor--layering-audit-thin-cli-fat-library)); `scope-graph/src/audit.rs` (`AuditEdgeRow`, `AuditFreshness`, `check_audit_freshness`); `scope-core/tests/fixtures/reference/<lang>/audit-samples/` (committed labelled corpus).
+- **Where in the tree**: `gumiho-mudang-cli/src/commands/audit.rs` (subcommand surface — extraction to `scope-audit` sub-crate queued in [`BACKLOG.md` § Priority 3 — Layering audit](BACKLOG.md#priority-3--layering-audit-thin-cli-fat-library)); `scope-graph/src/audit.rs` (`AuditEdgeRow`, `AuditFreshness`, `check_audit_freshness`); `scope-core/tests/fixtures/reference/<lang>/audit-samples/` (committed labelled corpus).
 - **CI gates**: Confidence audit (`just audit-confidence` runs the integration suite).
 
 ### R9 — Immutable source guarantee
@@ -280,4 +280,4 @@ The 15 framework-gotcha categories from [FRAMEWORK-PLAYBOOK Step 4](FRAMEWORK-PL
 
 ## Where new work goes
 
-Feature work — per-language depth, framework rollout, vector embeddings, time-travel queries, `mudang link`, `.js`/`.jsx` indexing, the self-correction cycle, the honesty audit, the layering audit — is queued in [`POST-REFACTOR-PLAN.md`](POST-REFACTOR-PLAN.md). Each item respects its own gate (language adoption flow per [`LANGUAGE-PLAYBOOK.md`](LANGUAGE-PLAYBOOK.md); framework adoption flow per [`FRAMEWORK-PLAYBOOK.md`](FRAMEWORK-PLAYBOOK.md); trigger frequency for cross-cutting items).
+Feature work — per-language depth, framework rollout, vector embeddings, time-travel queries, `mudang link`, `.js`/`.jsx` indexing, the self-correction cycle, the honesty audit, the layering audit — is queued in [`BACKLOG.md`](BACKLOG.md). Each item respects its own gate (language adoption flow per [`LANGUAGE-PLAYBOOK.md`](LANGUAGE-PLAYBOOK.md); framework adoption flow per [`FRAMEWORK-PLAYBOOK.md`](FRAMEWORK-PLAYBOOK.md); trigger frequency for cross-cutting items).

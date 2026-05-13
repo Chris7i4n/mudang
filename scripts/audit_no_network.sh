@@ -18,11 +18,10 @@
 # closed by this preprocessing — the matching is identical to a raw
 # grep, but operates on the collapsed corpus.
 #
-# `cargo-deny` is **not** wired as a refactor gate — dep-tree hygiene
-# is tooling, not the R12 contract (per the sprint 0004 ambiguity
-# resolution on main, commit fd3788b). Allowlist tag:
-# `// scope:audit-allow network — <rationale>` on the line immediately
-# preceding the reference.
+# `cargo-deny` is **not** wired as an architecture gate — dep-tree
+# hygiene is tooling, not the R12 contract. Allowlist tag:
+# `// scope:audit-allow network — <rationale>` on the line
+# immediately preceding the reference.
 #
 # Per ENFORCEMENT-MAP.md § R12, CHARTER.md § 5, and
 # CI-GATES.md § Allowlist convention.
@@ -120,7 +119,7 @@ preprocessed=$(
 # The alias-declaration arms `(reqwest|hyper|ureq)[[:space:]]+as[[:space:]]+\w+`
 # catch aliased forms regardless of import syntax — anyone introducing
 # an alias is forced to remove it; the bare crate name then matches.
-# Codex sprint-0004 round-4 review surfaced both cases.
+# Both cases must be caught.
 PATTERN='(std::net::|tokio::net::|reqwest::|hyper::|ureq::|\buse[[:space:]]+(::[[:space:]]*)?std::net\b|\buse[[:space:]]+(::[[:space:]]*)?tokio::net\b|\buse[[:space:]]+(::[[:space:]]*)?(reqwest|hyper|ureq)\b|\buse[[:space:]]+(::[[:space:]]*)?std::\{[^}]*\bnet\b|\buse[[:space:]]+(::[[:space:]]*)?tokio::\{[^}]*\bnet\b|\b(reqwest|hyper|ureq)[[:space:]]+as[[:space:]]+[A-Za-z_])'
 
 hits=$(echo "$preprocessed" \

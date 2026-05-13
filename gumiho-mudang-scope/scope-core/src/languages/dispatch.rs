@@ -61,7 +61,7 @@ macro_rules! register_languages {
         ///
         /// Currently unused (extension dispatch is sufficient for every
         /// indexed file). Reserved for the cheap-path extension queued in
-        /// POST-REFACTOR-PLAN.md.
+        /// BACKLOG.md.
         pub const fn dispatch_shebang(token: &str) -> Option<LanguageId> {
             $(
                 {

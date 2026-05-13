@@ -22,7 +22,7 @@
 # Path filter:
 #   - gumiho-mudang-cli/src/output/
 #   - gumiho-mudang-cli/src/commands/
-#   (Shared output crate, if extracted post-refactor, is added here.)
+#   (Shared output crate, if extracted later, is added here.)
 #
 # Exits non-zero on any match.
 

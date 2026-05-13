@@ -18,7 +18,7 @@ These documents are **law**, not suggestion. Every sprint links into them instea
 | [`FRAMEWORK-PLAYBOOK.md`](../FRAMEWORK-PLAYBOOK.md) | Framework adoption flow, version strategies, gotcha catalogue |
 | [`GLOSSARY.md`](../GLOSSARY.md) | Term definitions (one source of truth) |
 | [`CI-GATES.md`](../CI-GATES.md) | CI gate inventory, allowlist convention |
-| [`POST-REFACTOR-PLAN.md`](../POST-REFACTOR-PLAN.md) | Work queue eligible against the current architecture |
+| [`BACKLOG.md`](../BACKLOG.md) | Work queue eligible against the current architecture |
 
 A sprint pulls its rules from these. If a sprint surfaces a rule that does not live in any of them, the sprint **halts** under § 3 Ambiguity protocol — the rule is decided on `main` first, then the sprint resumes.
 
@@ -228,7 +228,7 @@ Sprint reviewers check the diff for code touching audit scripts, schema definiti
 
 ### 8. Out of scope for any sprint
 
-Anything in [`POST-REFACTOR-PLAN.md`](../POST-REFACTOR-PLAN.md) is governed by that doc's own gate language and prioritisation. A sprint that proposes an item from that queue without invoking the queue's gate is invalid.
+Anything in [`BACKLOG.md`](../BACKLOG.md) is governed by that doc's own gate language and prioritisation. A sprint that proposes an item from that queue without invoking the queue's gate is invalid.
 
 Also out: anything that requires breaking a charter invariant ([`CHARTER.md` § 3](../CHARTER.md#3-core-invariants--must-never-break)) or crosses a hard limit ([`CHARTER.md` § 5](../CHARTER.md#5-hard-limits--scope-will-never-cross-these)). These are non-negotiable.
 
@@ -278,7 +278,7 @@ The checklist is **mechanical** — every item is either covered by codex's repo
 - The review report is attached to the PR body (under a `### Codex review` heading) so reviewers see what Codex flagged and how it was addressed.
 - Findings are categorised by the sprint author:
   - **Blocker** — sprint cannot close until addressed. Follow-up commit lands on the sprint branch.
-  - **Non-blocker** — recorded in the PR body with rationale for deferral; tracked in `POST-REFACTOR-PLAN.md` if it survives the initiative's horizon.
+  - **Non-blocker** — recorded in the PR body with rationale for deferral; tracked in `BACKLOG.md` if it survives the initiative's horizon.
   - **Rejected** — Codex misread the contract; record the counter-argument in the PR body so the rationale is durable.
 - **Codex is not authority**. If the review surfaces a rule ambiguity, the §3 ambiguity protocol takes over — the rule is resolved by amending the source-of-truth document, not by what Codex said.
 
@@ -327,5 +327,5 @@ For quick reference. The authoritative definitions live in [`GLOSSARY.md`](../GL
 
 - Not a substitute for any governing doc. Acceptance criteria live in the source-of-truth doc; sprints reference them, they do not redefine them.
 - Not a calendar. Sprints have order; they do not have dates. The work is bounded but not time-boxed.
-- Not a feature backlog. Features are queued in [`POST-REFACTOR-PLAN.md`](../POST-REFACTOR-PLAN.md) and gated per that doc's own rules.
+- Not a feature backlog. Features are queued in [`BACKLOG.md`](../BACKLOG.md) and gated per that doc's own rules.
 - Not a place to amend charter or playbook rules. Amendments go through the explicit-commit channels each governing document defines.

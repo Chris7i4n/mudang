@@ -4,8 +4,8 @@
 ///   confidence  — precision report per (kind, tier, producer, pattern_id)
 ///                 against the reference fixture corpus.
 ///
-/// `scope audit coverage` is explicitly post-refactor — see
-/// `POST-REFACTOR-PLAN.md` § Items deliberately deferred.
+/// `scope audit coverage` is explicitly — see
+/// `BACKLOG.md` § Items deliberately deferred.
 use anyhow::{Context, Result};
 use clap::{Args, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
@@ -47,8 +47,8 @@ pub const SCHEMA_DOC_POINTER: &str =
 /// Schema_version "1" surfaces precision per
 /// `(kind, tier, producer, pattern_id)` over the *labelled* records in
 /// each group. It deliberately omits three classes of signal that are
-/// post-refactor design work (see
-/// `POST-REFACTOR-PLAN.md` § Priority 1 — Self-correction cycle):
+///design work (see
+/// `BACKLOG.md` § Priority 1 — Self-correction cycle):
 ///
 /// 1. **Per-group coverage** — how many records the labeller skipped
 ///    (left `label = null`). A precision number with high skip ratio
@@ -67,12 +67,12 @@ pub const SCHEMA_DOC_POINTER: &str =
 /// number on this report is one face of a richer truth surface that has
 /// not yet been built. Read it together with the disclaimer above.
 pub const COVERAGE_LIMITATION_NOTE: &str =
-    "report schema_version \"1\" surfaces precision over labelled records only; per-group coverage, richer verdict types (target/kind/confidence_proposed, evidence, reasoning_text), and multi-labeller aggregation land in schema_version \"2\" — see POST-REFACTOR-PLAN.md § Priority 1 — Self-correction cycle.";
+    "report schema_version \"1\" surfaces precision over labelled records only; per-group coverage, richer verdict types (target/kind/confidence_proposed, evidence, reasoning_text), and multi-labeller aggregation land in schema_version \"2\" — see BACKLOG.md § Priority 1 — Self-correction cycle.";
 
 /// Wire-format schema version emitted by `--emit-sample` and accepted by
 /// `--label`. Locked at `"1"` per the contract in
 /// `docs/AUDIT-LABEL-SCHEMA.md`. Bumping this is charter-grade and lands
-/// via the POST-REFACTOR-PLAN.md § Priority 2 audit (which bundles the
+/// via the BACKLOG.md § Priority 2 audit (which bundles the
 /// `producer_captured_args` field addition with the `args_text` cap drop).
 pub const SCHEMA_VERSION: &str = "1";
 
@@ -113,10 +113,10 @@ pub struct SampleRecord {
 
 impl SampleRecord {
     /// Build a record from a sampled edge row plus the snippet read
-    /// from disk. `lang_version` is `null` for sprint 0007 (populated
-    /// by a future sprint when the seven per-language detectors land
-    /// atomically — see `docs/AUDIT-LABEL-SCHEMA.md`). `label` is
-    /// `null` on emit; the external labeller fills it.
+    /// from disk. `lang_version` is currently always `null` (populated
+    /// when the seven per-language detectors land atomically — see
+    /// `docs/AUDIT-LABEL-SCHEMA.md`). `label` is `null` on emit; the
+    /// external labeller fills it.
     pub fn from_row(row: &AuditEdgeRow, source_snippet: String) -> Self {
         Self {
             schema_version: SCHEMA_VERSION.to_string(),
@@ -175,7 +175,7 @@ pub struct PrecisionReport {
     /// Operator-facing acknowledgement that this `schema_version: "1"`
     /// report omits per-group coverage, richer verdict types, and
     /// multi-labeller aggregation. See [`COVERAGE_LIMITATION_NOTE`]
-    /// and `POST-REFACTOR-PLAN.md` § Priority 1 sub-items (g) + (h) + (i).
+    /// and `BACKLOG.md` § Priority 1 sub-items (g) + (h) + (i).
     pub coverage_limitation_note: String,
     pub report: Vec<ReportRow>,
 }
@@ -416,9 +416,9 @@ fn emit_sample(
 }
 
 /// `--label <PATH>`: parse a labelled JSONL file, drift-check, hold
-/// records for the precision report (chunks 5-6).
+/// records for the precision report.
 ///
-/// Chunk 4 lands the read-path mechanics:
+/// Read-path mechanics:
 /// - One record per line; empty lines and `#`-prefixed comments skipped.
 /// - Every record must declare `schema_version: "1"`; unknown versions
 ///   are a hard error with re-emit remediation.
@@ -426,8 +426,8 @@ fn emit_sample(
 ///   `edge_id`s (joined back through the index, since the schema does
 ///   not carry `file_path`).
 ///
-/// The actual precision computation, JSON / TSV writers, and tier gate
-/// land in chunks 5-6.
+/// Precision computation, JSON / TSV writers, and tier gate run after
+/// this read-path completes.
 fn label_pass(
     graph: &Graph,
     args: &ConfidenceArgs,
@@ -545,7 +545,7 @@ fn label_pass(
     // Priority 2 honesty principle: the denominator is never inflated
     // by counting null records as judged. A future schema bump may add
     // a sibling `skipped_count` column to surface the partial-coverage
-    // ratio per group; that lands in POST-REFACTOR-PLAN.md § Priority 1.
+    // ratio per group; that lands in BACKLOG.md § Priority 1.
     let unlabelled = records.iter().filter(|(_, r)| r.label.is_none()).count();
     if unlabelled == records.len() {
         anyhow::bail!(
@@ -753,7 +753,7 @@ fn label_pass(
         // `lang_version` field (codex round 7 P2): the schema's
         // reserved per-project lang_version slot. Sprint 0007 always
         // emits `null` (the seven per-language detectors land
-        // atomically post-refactor — Priority 1 sub-item (d)). The
+        // atomically — Priority 1 sub-item (d)). The
         // labeller fills `label` only; rewriting `lang_version` is
         // sample tamper on the same auditor-immutability rule. With
         // the emit-time value pinned at `None`, any non-`None` value
@@ -1345,7 +1345,7 @@ mod tests {
     #[test]
     fn schema_version_constant_locked_at_one() {
         // The schema is contract-grade per docs/AUDIT-LABEL-SCHEMA.md.
-        // Bumping is charter-grade and must land via POST-REFACTOR-PLAN
+        // Bumping is charter-grade and must land via BACKLOG
         // § Priority 2; this assertion is the canary against drive-by edits.
         assert_eq!(SCHEMA_VERSION, "1");
     }
@@ -1571,7 +1571,7 @@ mod tests {
         write_report(&report, ReportFormat::Json, &mut buf).unwrap();
         let json = String::from_utf8(buf).unwrap();
         assert!(json.contains("\"coverage_limitation_note\""));
-        assert!(json.contains("POST-REFACTOR-PLAN.md"));
+        assert!(json.contains("BACKLOG.md"));
         // TSV: third preamble line is the note.
         let mut buf = Vec::new();
         write_report(&report, ReportFormat::Tsv, &mut buf).unwrap();
@@ -1589,7 +1589,7 @@ mod tests {
             .contains("schema_version"));
         assert!(report
             .coverage_limitation_note
-            .contains("POST-REFACTOR-PLAN.md"));
+            .contains("BACKLOG.md"));
     }
 
     #[test]

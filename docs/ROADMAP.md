@@ -41,7 +41,7 @@ No cross-cutting shortcuts.
 Enforcement map: `gumiho-mudang-scope/docs/ENFORCEMENT-MAP.md`.
 
 R0–R12 are part of the current architecture. Scope's own internal
-phase letters used during the refactor are unrelated to this roadmap's
+phase letters used  are unrelated to this roadmap's
 phases A–E and must not be conflated.
 
 ### Demonstrated
@@ -317,4 +317,4 @@ To amend this roadmap:
 - Phase A (scope refactor) shipped. R0–R12 part of the current
   architecture — see `gumiho-mudang-scope/docs/ENFORCEMENT-MAP.md`
   (rule→implementation map) and
-  `gumiho-mudang-scope/docs/POST-REFACTOR-PLAN.md` for queued work.
+  `gumiho-mudang-scope/docs/BACKLOG.md` for queued work.

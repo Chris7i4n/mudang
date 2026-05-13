@@ -124,7 +124,7 @@ impl Indexer {
         //   Pass 2 — resolve each file's raw edges against the now-
         //            populated symbols table, then write the
         //            InsertableEdge rows.
-        // R3 (sprint 0003) replaces the stub wholesale; the two-pass
+        // R3 replaces the stub wholesale; the two-pass
         // wiring stays as the natural write order for the real
         // resolver too.
         for pf in &parsed {
@@ -169,8 +169,8 @@ impl Indexer {
             }
         }
 
-        // R5 framework dispatch seam (sprint 0005, Phase C). When real
-        // frameworks are adopted post-refactor per
+        // R5 framework dispatch seam. When real
+        // frameworks are adopted later per
         // `FRAMEWORK-PLAYBOOK.md`, this is the call site that invokes
         // `scope_core::frameworks::dispatch::run_frameworks` over the
         // workspace's accumulated `Symbol` + `RawEdge` slices, then
@@ -519,7 +519,7 @@ struct ParsedFile {
     lang: LanguageId,
     /// Concatenation of plugin-driven skips and tree-sitter parser-recovery
     /// skips for this file, in source order. R6 / R2 plumbing — written to
-    /// `file_hashes.skipped_ranges` (sprint 0003 chunk 3a). Empty for clean
+    /// `file_hashes.skipped_ranges`. Empty for clean
     /// parses where no plugin opted to skip.
     skipped_ranges: Vec<SkippedRange>,
 }

@@ -10,7 +10,7 @@
 //! The per-language modules in this directory own the **capture** side:
 //! `extract_metadata`, `extract_docstring` (for languages that override
 //! the default). The **edge** side (per-`EdgeKind` decisions, `RawEdge`
-//! construction) lives in [`crate::extract`] per R2 — sprint 0003 chunk 2
+//! construction) lives in [`crate::extract`] per R2
 //! moved the `extract_*_edge` free functions and the `make_edge` /
 //! `resolve_scope_id` helpers there. Per-language modules have no `impl`
 //! blocks beyond on their own data structs.

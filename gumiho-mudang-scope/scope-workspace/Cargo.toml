@@ -1,6 +1,6 @@
 [package]
 name = "scope-workspace"
-description = "Scope's federated workspace facade. Owns the multi-graph query layer; R4 (sprint 0002) lands LanguageWorkspaceContext / FrameworkWorkspaceContext here."
+description = "Scope's federated workspace facade. Owns the multi-graph query layer; R4 lands LanguageWorkspaceContext / FrameworkWorkspaceContext here."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

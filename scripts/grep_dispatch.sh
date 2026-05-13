@@ -5,7 +5,7 @@
 #   Plugin code does not read file content for self-activation
 #   (no `read_to_string` etc. in plugin trait impls).
 #
-# Post-R7 (sprint 0002), dispatch is the const-fn table built by
+# Post-R7, dispatch is the const-fn table built by
 # `register_languages!` in `scope-core/src/languages/dispatch.rs`.
 # Plugins (`scope-core/src/languages/*.rs`) receive a parsed tree +
 # source slice from the indexer; they must not read file content to

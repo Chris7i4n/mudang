@@ -1,6 +1,6 @@
 # Reference fixture corpus — R8 confidence audit
 
-> **Ships**: sprint 0007 (R8 — Confidence audit subcommand).
+> **Owner**: R8 — Confidence audit subcommand.
 > **Source of truth**: [`ENFORCEMENT-MAP.md` § R8](../../../../docs/ENFORCEMENT-MAP.md#r8--confidence-audit-subcommand).
 > **Sample schema**: [`AUDIT-LABEL-SCHEMA.md`](../../../../docs/AUDIT-LABEL-SCHEMA.md).
 
@@ -53,7 +53,7 @@ reference/
 
 Sprint 0007 lands the directory skeleton. Content lands as part of
 the same sprint's labelling pass; subsequent labelling passes (post
-sprint 0007) accumulate per
+the architecture) accumulate per
 [`AUDIT-LABEL-SCHEMA.md` § Committed sample policy](../../../../docs/AUDIT-LABEL-SCHEMA.md#committed-sample-policy).
 
 ---
@@ -125,7 +125,7 @@ provenance policy in
 ## What is *not* here
 
 - **Synthetic framework fixtures** — see
-  [`../frameworks/`](../frameworks/) (sprint 0005 R5 infrastructure).
+  [`../frameworks/`](../frameworks/) (R5 infrastructure).
 - **Cross-language pre-filter corpus** — see
   [`../frameworks/_pre_filter/`](../frameworks/_pre_filter/).
 - **Per-language extractor unit-test corpora** — those live next to
@@ -133,8 +133,8 @@ provenance policy in
   corpus exists for the audit subcommand, not for extractor unit
   tests.
 - **Per-language `lang_version` detector fixtures** — `lang_version`
-  is reserved in the sample schema but always `null` in sprint 0007.
+  is reserved in the sample schema but always `null`.
   Detector fixtures land atomically across all seven languages as
   the
-  [`POST-REFACTOR-PLAN.md` § Priority 1 sub-item (d)](../../../../docs/POST-REFACTOR-PLAN.md#priority-1-immediately-post-refactor--self-correction-cycle)
+  [`BACKLOG.md` § Priority 1 sub-item (d)](../../../../docs/BACKLOG.md#priority-1--self-correction-cycle)
   delivery.

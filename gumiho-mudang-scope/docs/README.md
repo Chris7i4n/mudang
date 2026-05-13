@@ -8,7 +8,7 @@ Entry point for the docs tree. If this is your first time, read in this order.
 2. **`ENFORCEMENT-MAP.md`** — rule→implementation map. R-entries (R0, R1, …) name the technique that enforces each charter / playbook rule. Mandatory end-of-sprint update gate keeps it live (see `sprints/README.md` §7.5).
 3. **`LANGUAGE-PLAYBOOK.md`** — how to add and maintain a language plugin within the 18 universal boundaries.
 4. **`FRAMEWORK-PLAYBOOK.md`** — how to add and maintain a framework plugin within the 15 gotcha categories. Includes version-strategy rules (A/B/C) and unknown-version policy.
-5. **`POST-REFACTOR-PLAN.md`** — work queued against the current architecture, ordered by priority.
+5. **`BACKLOG.md`** — work queued against the current architecture, ordered by priority.
 6. **`sprints/README.md`** — sprint methodology (linear order, atomic phase shipment, codex consultation, branch protocol, enforcement-map update gate). Durable for any initiative. The sprint skeleton lives in [`sprints/_TEMPLATE.md`](sprints/_TEMPLATE.md).
 
 ## Reference docs (read on demand)
@@ -28,7 +28,7 @@ These documents govern decisions; revise via explicit commit, not silent edit.
 | `sprints/_TEMPLATE.md` | Per-sprint doc skeleton |
 | `LANGUAGE-PLAYBOOK.md` | 18 universal language-plugin rules, language-adoption flow, per-language doc structure |
 | `FRAMEWORK-PLAYBOOK.md` | Framework adoption flow, version strategies, unknown-version policy, 15 gotcha categories |
-| `POST-REFACTOR-PLAN.md` | Work queue against the current architecture |
+| `BACKLOG.md` | Work queue against the current architecture |
 | `GLOSSARY.md` | Central term definitions |
 | `CI-GATES.md` | CI gate inventory; canonical script paths; allowlist convention |
 
@@ -64,7 +64,7 @@ The architecture is stable. Every CI gate listed in `CI-GATES.md` is `active`; `
 | A friction event for a candidate plugin | the matching trigger log |
 | A verdict on a candidate plugin | the matching decision log |
 | A per-plugin gotcha or rule-temptation rejection | the per-instance doc (`languages/<name>.md` or `frameworks/<name>.md`) |
-| A work item against the current architecture | `POST-REFACTOR-PLAN.md` |
+| A work item against the current architecture | `BACKLOG.md` |
 | An unfamiliar term used elsewhere | look up in `GLOSSARY.md`; if missing, add it |
 
 ## Outside this directory

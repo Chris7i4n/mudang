@@ -121,7 +121,7 @@ end-to-end cross-language relationships.
 - §6 confidence policy (`high` / `medium` / `low` / `drop`)
 - §7 failure modes (dynamic URL, microservices, wildcard route,
   version mismatch)
-- §8 required scope fields (post-R0; 0009 absorbed into R0)
+- §8 required scope fields (R0; 0009 absorbed into R0)
 - §9 composer public API (`flow`, `stitched_edges`,
   `unresolved_anchors`)
 - §10 coverage estimates per anchor
@@ -176,7 +176,7 @@ architecture discussion. See `todos/README.md` for the index.
 - `gumiho-mudang-scope/docs/ENFORCEMENT-MAP.md` — rule→implementation
   map for scope's internal R-entries (R0–R12). Grows by mandatory
   end-of-sprint update gate (`sprints/README.md` §7.5).
-- `gumiho-mudang-scope/docs/POST-REFACTOR-PLAN.md` — scope's work queue
+- `gumiho-mudang-scope/docs/BACKLOG.md` — scope's work queue
   against the current architecture.
 
 ---

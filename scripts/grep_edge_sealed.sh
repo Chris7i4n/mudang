@@ -22,11 +22,10 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # not basename excludes, so accidental `types.rs` elsewhere in the
 # workspace is not silently allowlisted).
 #
-# `scope-graph/src/resolve/mod.rs` owns `InsertableEdge` (R3, sprint
-# 0003 chunk 6 migration); the compile-fail fixture
-# `insertable_fields_private.rs` deliberately exercises the
-# struct-literal-construction failure mode and is allowlisted because
-# it never compiles — it is the gate itself.
+# `scope-graph/src/resolve/mod.rs` owns `InsertableEdge` (R3); the
+# compile-fail fixture `insertable_fields_private.rs` deliberately
+# exercises the struct-literal-construction failure mode and is
+# allowlisted because it never compiles — it is the gate itself.
 ALLOW_PATHS=(
     "gumiho-mudang-scope/scope-core/src/edge.rs"
     "gumiho-mudang-scope/scope-core/src/types.rs"

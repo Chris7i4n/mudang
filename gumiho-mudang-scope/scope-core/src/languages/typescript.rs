@@ -296,9 +296,9 @@ mod ts_decorator_tests {
         }
     }
 
-    /// Codex review P2 (chunks 4–5 round): class-member decorators are
-    /// preceding siblings of the method inside `class_body`, not direct
-    /// children. The prev-sibling walk must capture them.
+    /// Class-member decorators are preceding siblings of the method
+    /// inside `class_body`, not direct children. The prev-sibling
+    /// walk must capture them.
     #[test]
     fn class_member_decorator_is_captured_for_owning_method() {
         let source = r#"class C {

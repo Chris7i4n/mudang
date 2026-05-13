@@ -19,7 +19,7 @@ When a term collides with a Rust crate name (`semver`, `tree-sitter`), the entry
 | **3-question test** | Quick eligibility check (no toolchain / static second pass / preserves invariants) | `CHARTER.md` §4 |
 | **4th question** | Priority booster: framework or domain semantics that LSP will never cover | `CHARTER.md` §4 |
 | **Universal edge** | Edge kind every language plugin emits: `calls`, `imports`, `contains`, `references`, `references_type`, `extends`, `implements`, `instantiates` | `LANGUAGE-PLAYBOOK.md` Step 5 + R0 |
-| **Domain edge** | Framework-specific edge (30 total post-R0). R0 baseline (13): `http_route`, `queue_handler`, `orm_relation`, `green_thread_spawn`, `renders`, `hook_use`, `inherits_from`, `migration`, `cron`, `feature_flag`, `awaits_on`, `channel_send`, `channel_recv`. Tier 1 (5): `middleware`, `validates_with`, `error_handler`, `websocket_handler`, `client_route`. Tier 2 (5): `auth_guard`, `cache_binding`, `runtime_task_spawn`, `route_mount`, `store_select`. Tier 3 (7): `sse_stream`, `signal_handler`, `cancel_token`, `lazy_load`, `query_binding`, `os_process_spawn`, `os_thread_spawn`. | `CHARTER.md` §6 + R0 |
+| **Domain edge** | Framework-specific edge (30 total R0). R0 baseline (13): `http_route`, `queue_handler`, `orm_relation`, `green_thread_spawn`, `renders`, `hook_use`, `inherits_from`, `migration`, `cron`, `feature_flag`, `awaits_on`, `channel_send`, `channel_recv`. Tier 1 (5): `middleware`, `validates_with`, `error_handler`, `websocket_handler`, `client_route`. Tier 2 (5): `auth_guard`, `cache_binding`, `runtime_task_spawn`, `route_mount`, `store_select`. Tier 3 (7): `sse_stream`, `signal_handler`, `cancel_token`, `lazy_load`, `query_binding`, `os_process_spawn`, `os_thread_spawn`. | `CHARTER.md` §6 + R0 |
 | **Polyglot single graph** | All languages share one `symbols` / `edges` schema (charter invariant 4) | `CHARTER.md` §3 |
 | **Resolution pass** | Stage that lifts `RawEdge` to `InsertableEdge` by assigning `status` based on workspace symbol-table lookup | R3 |
 | **Typestate pipeline** | Extract → resolve → write enforced by Rust types: `RawCaptures` → `RawEdge` → `InsertableEdge` | R2 + R3 |
@@ -30,7 +30,7 @@ When a term collides with a Rust crate name (`semver`, `tree-sitter`), the entry
 
 | Term | Definition | Source |
 |---|---|---|
-| `RawCaptures` | Plugin output (post-R2): `{captures, metadata, skipped_ranges}` | R2 |
+| `RawCaptures` | Plugin output (R2): `{captures, metadata, skipped_ranges}` | R2 |
 | `RawEdge` | Extractor output without `status`; produced by `EdgeBuilder` | R1 |
 | `InsertableEdge` | Resolver output with `status` set; only type implementing `Insertable` | R3 |
 | `EdgeBuilder` | Typestate builder; missing required field is a compile error; no `.status()` setter | R1 |
@@ -101,10 +101,10 @@ When a term collides with a Rust crate name (`semver`, `tree-sitter`), the entry
 | `SupportedLanguage` | Historical name; replaced by `LanguageId` in R7. Do not introduce new uses | R7 |
 | `LanguagePlugin` | **Historical trait** that defined the per-language extraction interface in scope-core. **Removed in R7** — the trait and the seven `*Plugin` unit structs (`PythonPlugin`, `RustPlugin`, etc.) were deleted; behaviour moved to `LanguageId` inherent methods. The R2 + R4 commitment (consume `&dyn LanguageWorkspaceContext`) carried forward to the enum methods | R2 + R4 + R7 (removal) |
 | `FrameworkPlugin` | Trait owned by R5; consumes `&[Symbol]` and `&[Edge]`, never AST | R5 |
-| `Extractor` | Layer that converts `RawCaptures` to `EdgeBuilder` calls (post-R2) | R2 |
-| `EdgeKind` | Closed whitelist; post-R0 = 38 kinds (8 universal + 30 domain across R0 baseline + Tier 1 + Tier 2 + Tier 3) | R0 |
+| `Extractor` | Layer that converts `RawCaptures` to `EdgeBuilder` calls (R2) | R2 |
+| `EdgeKind` | Closed whitelist; R0 = 38 kinds (8 universal + 30 domain across R0 baseline + Tier 1 + Tier 2 + Tier 3) | R0 |
 | 4-kind concurrency split | `os_process_spawn` / `os_thread_spawn` / `green_thread_spawn` / `runtime_task_spawn`; producer-side plugin picks one based on stack ownership + scheduler + sync-block safety, not surface API spelling | R0 |
-| `kind` (symbols) | Closed whitelist; post-R0 = 13 kinds (10 legacy + `macro`, `module`, `trait`) | R0 |
+| `kind` (symbols) | Closed whitelist; R0 = 13 kinds (10 legacy + `macro`, `module`, `trait`) | R0 |
 | Reserved metadata keys | `decorators`, `annotations`, `template_calls`; populated by language plugin, consumed by framework plugin. All three template-system-agnostic — `template_calls` covers JSX, ERB partials, Jinja includes, HEEx components, etc. | R0 + R5 |
 
 ---
@@ -135,7 +135,7 @@ When a term collides with a Rust crate name (`semver`, `tree-sitter`), the entry
 | `scope status` | Reports index health | R0 |
 | `scope index` | Builds `.scope/`; `--watch` mode polls filesystem | `CHARTER.md` §3 |
 | `scope audit confidence` | Precision report per `(kind, tier, producer, pattern_id)`; not recall | R8 |
-| `scope audit coverage` (planned) | Recall-side report: edges emitted per pattern per fixture | `POST-REFACTOR-PLAN.md` |
+| `scope audit coverage` (planned) | Recall-side report: edges emitted per pattern per fixture | `BACKLOG.md` |
 | `scope link` (planned) | Cross-project edges; mono-repo / microservice graph | `CHARTER.md` §6 |
 | `scope diff --ref main` | Git-aware diff query | `CHARTER.md` §8 |
 | `scope find` | Intent search (FTS5 + planned vectors) | `CHARTER.md` §6 + §8 |

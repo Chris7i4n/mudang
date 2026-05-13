@@ -12,7 +12,7 @@ known gaps, and the intended direction for closing those gaps.
   capabilities must be treated once the implementation is completed.
 - [SCOPE_OUTPUT_INTEROP.md](SCOPE_OUTPUT_INTEROP.md) records the
   forward-looking possibility — unlocked by Scope's R10 typed output
-  schema (sprint 0006) — of a future composition layer consuming Scope
+  schema — of a future composition layer consuming Scope
   output via shared Rust types or TS/typeshare-generated bindings.
 
 ## Design Principle

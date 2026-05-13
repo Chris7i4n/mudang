@@ -23,7 +23,7 @@ anyhow = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 
-# R8 (sprint 0007) — `Graph::check_audit_freshness` re-hashes source files
+# R8 — `Graph::check_audit_freshness` re-hashes source files
 # referenced by the audit sample and compares against `file_hashes.hash`.
 # Same crates the indexer uses to write that column (`scope-index`), so the
 # re-hash on the audit side is byte-identical by construction.

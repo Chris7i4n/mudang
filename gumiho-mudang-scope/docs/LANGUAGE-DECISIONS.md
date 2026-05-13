@@ -18,7 +18,7 @@ Verdict log for language adoptions. Format defined in `LANGUAGE-PLAYBOOK.md` Ste
 
 DEFER entries are re-evaluated 90 days after the original verdict; record the re-evaluation as a new dated entry that references the original.
 
-A BUILD verdict authorizes implementation per `LANGUAGE-PLAYBOOK.md` Step 5 within the 18 universal boundaries (Step 4). Depth feature work resumes only after `ENFORCEMENT-MAP.md` ships (`POST-REFACTOR-PLAN.md` gate); surface-only work is unblocked.
+A BUILD verdict authorizes implementation per `LANGUAGE-PLAYBOOK.md` Step 5 within the 18 universal boundaries (Step 4). Depth feature work resumes only after `ENFORCEMENT-MAP.md` ships (`BACKLOG.md` gate); surface-only work is unblocked.
 
 The `Path` field is mandatory. Path B (maintainer-asserted) skips the trigger log but not the ROI worksheet; the active-projects field is the substitute for trigger evidence.
 

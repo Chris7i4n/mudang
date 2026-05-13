@@ -41,9 +41,9 @@ done
 # (not e.g. `Vec<Tree>` or unrelated `MyTree`).
 #
 # An optional `'<lifetime>` between `&` and `mut` must match — Rust permits
-# `&'a mut str`, `&'_ mut Tree`, etc. Codex sprint-0004 review flagged the
-# original `&mut[[:space:]]+...` pattern as bypassable by any lifetime-qualified
-# signature; the lifetime arm is now part of the contract.
+# `&'a mut str`, `&'_ mut Tree`, etc. The lifetime arm is part of the
+# contract so a `&mut[[:space:]]+...`-only pattern cannot be bypassed
+# by lifetime-qualified signatures.
 #
 # Pattern structure:
 #   &                            literal reference

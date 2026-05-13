@@ -7,7 +7,7 @@
 ## Purpose
 
 This corpus is the input that the malformed-source integration test
-(`scope-core/tests/malformed_sources.rs`, lands in chunk 4 of sprint
+(`scope-core/tests/malformed_sources.rs`, lands of sprint
 0008) walks to assert the [`CHARTER.md` §3 invariant 5](../../../../docs/CHARTER.md#3-core-invariants--must-never-break)
 mechanical gate:
 
@@ -92,14 +92,14 @@ Each fixture directory contains exactly:
     `skipped_ranges` (e.g. `lines 17–24` — inclusive, 1-indexed).
   - The **reason tag** expected in `skipped_ranges`. `expected.md`
     typically writes the family prefix (e.g. `tree_sitter_error`); the
-    `insta` snapshot test in chunk 4 pins the precise subkind emitted
+    `insta` snapshot test pins the precise subkind emitted
     by `error_scan.rs` (one of `tree_sitter_error:syntax_error`,
     `tree_sitter_error:missing_node`, or
     `plugin_skip:<plugin>:<rationale>`).
 
-Sprint 0008 chunk 1 lands the directory skeleton (this file + per-lang
-`.gitkeep` markers). Chunk 2 populates the 35-fixture floor (5 per
-language × 7 languages); chunks 3–4 wire the harness against them.
+The directory skeleton (this file + per-lang `.gitkeep` markers) is
+the entry point. The corpus carries the 35-fixture floor (5 per
+language × 7 languages); the harness wires against them.
 
 ---
 
@@ -199,7 +199,7 @@ Shared base categories (when the language admits them):
 - **missing close tag in JSX** — `<div>` opened, never closed
   (TS/TSX only).
 
-Per-language category index (filled in as chunk 2 lands fixtures):
+Per-language category index (filled in as lands fixtures):
 
 | Language | 5 categories selected | Notes |
 |---|---|---|
@@ -211,8 +211,8 @@ Per-language category index (filled in as chunk 2 lands fixtures):
 | Rust | `truncated-mid-function`, `unbalanced-brace`, `eof-in-raw-string`, `eof-in-macro-body`, `eof-in-generics-angle` | Brace-balanced; raw-string variant covers `r#"..."#` recovery, macro-body variant covers permissive token-tree recovery, generics variant covers the LL(1)-ambiguous `<`/`>` recovery stress point. |
 | TypeScript | `truncated-mid-function`, `unbalanced-brace`, `eof-in-template-literal`, `missing-close-tag-jsx`, `eof-in-type-annotation` | Brace-balanced + JSX (TSX-only). Template-literal variant covers backtick + `${...}` interpolation recovery; JSX variant covers element-tag recovery (TSX-only fixture, `source.tsx`); generics variant covers the LL(1)-ambiguous `<`/`>` recovery stress point. |
 
-The table is editorial; chunk 2 finalises the picks and rewrites the
-`_TBD chunk 2_` cells with the actual fixture-directory names.
+The table is editorial; each row's fixture-directory name is the
+authoritative pointer.
 
 ---
 
@@ -220,10 +220,10 @@ The table is editorial; chunk 2 finalises the picks and rewrites the
 
 - **Anonymized real-world fixtures for precision audit** — those live
   in [`../reference/`](../reference/README.md) and are the R8 input
-  (sprint 0007).
+ .
 - **Framework adoption fixtures** — synthetic per-framework fixtures
   live in [`../frameworks/`](../frameworks/) (R5 infrastructure,
-  sprint 0005). Framework fixtures exercise call-pattern walkthroughs;
+  the architecture). Framework fixtures exercise call-pattern walkthroughs;
   this corpus exercises parser recovery.
 - **Adoption-time per-language real-shape fixtures** — covered by
   [`LANGUAGE-PLAYBOOK.md` Step 5 item 6](../../../../docs/LANGUAGE-PLAYBOOK.md#step-5--implementation-procedure-within-bounds)
@@ -234,4 +234,4 @@ The table is editorial; chunk 2 finalises the picks and rewrites the
 - **Byte-level invalid-UTF-8 fixtures** — explicitly out of scope per
   [`ENFORCEMENT-MAP.md` § R6](../../../../docs/ENFORCEMENT-MAP.md#r6--malformed-source-test-harness)
   ("invalid UTF-8 at the byte level"). Trigger-deferred
-  ([`POST-REFACTOR-PLAN.md` § Items deliberately deferred](../../../../docs/POST-REFACTOR-PLAN.md#items-deliberately-deferred-beyond-this-plan)).
+  ([`BACKLOG.md` § Items deliberately deferred](../../../../docs/BACKLOG.md#items-deliberately-deferred-beyond-this-plan)).

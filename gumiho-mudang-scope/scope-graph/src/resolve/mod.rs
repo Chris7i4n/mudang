@@ -1,11 +1,11 @@
 //! R3 resolver — typestate `Captured` → `Resolution`.
 //!
 //! Sole resolver in `scope-graph`. The Phase A `resolver:phase-a` stub
-//! was retired wholesale in sprint 0003 chunk 5; `Graph::resolve` /
+//! was retired wholesale; `Graph::resolve` /
 //! `Graph::resolve_batch` route directly through this module's
 //! `Resolver`.
 //!
-//! Sprint 0003 chunk 6 migrated `InsertableEdge` + the sealed
+//! R3 migrated `InsertableEdge` + the sealed
 //! `Insertable` trait into this module. The constructor
 //! [`InsertableEdge::new`] is module-private (no `pub`) and the
 //! struct fields are private, so no caller outside
@@ -50,20 +50,20 @@
 //!
 //! Consulting `LanguageWorkspaceContext` (workspace-internal-vs-external
 //! import resolution, package-scoped name lookup) is **out of scope for
-//! sprint 0003**: it requires `LanguageWorkspaceContext` to thread
+//! the architecture**: it requires `LanguageWorkspaceContext` to thread
 //! through every indexer call site, which depends on R4's full
 //! `WorkspaceContext` plumbing. The current resolver lookup is
 //! `symbols.id = ?1 OR symbols.name = ?1`. The R3 mechanically
 //! enforced contracts are the typestate + multi-row Ambiguous
 //! expansion + the `Captured`→`Resolution` pipeline; lookup-quality
-//! upgrades are queued post-refactor.
+//! upgrades are queued.
 
 use anyhow::Result;
 use rusqlite::Connection;
 use scope_core::{Confidence, EdgeKind, Producer, RawEdge, Status};
 use serde::{Deserialize, Serialize};
 
-// ---------- Insertable typestate (R3, sprint 0003 chunk 6) ----------
+// ---------- Insertable typestate (R3) ----------
 //
 // `InsertableEdge` and `Insertable` live here, not in `scope-core`,
 // because the resolver is the sole legitimate construction site and

@@ -151,7 +151,7 @@ impl CodeParser {
             let id = format!("{file_path}::{name}::{kind}::{line}");
 
             // Extract metadata using language-specific logic. Phase B
-            // passes a NoopWorkspaceContext (R4); R2/R3 (sprint 0003)
+            // passes a NoopWorkspaceContext (R4); R2/R3
             // thread a real context.
             let ctx = crate::workspace_context::NoopWorkspaceContext::default();
             let metadata = lang.extract_metadata(&def, source, &kind, &ctx)?;

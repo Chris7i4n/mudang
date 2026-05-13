@@ -36,7 +36,7 @@
 //!   forwards `RawCaptures.skipped_ranges` verbatim; it never
 //!   re-orders, merges, or filters them. Indexer concatenates these
 //!   with tree-sitter-error skips into `file_hashes.skipped_ranges`
-//!   (R6 / sprint 0007).
+//!   (R&).
 //! - `LANGUAGE-PLAYBOOK.md` C2 (no version-coupled config in language
 //!   layer): the extractor has no parameter that could carry such
 //!   config — `RawCaptures` is the only input, and its types are
@@ -56,7 +56,7 @@
 //! `pattern_id = "legacy.<kind>"` placeholder are deleted in this
 //! same chunk; `make_edge` now takes an explicit `pattern_id`.
 //!
-//! Phase B (sprint 0004) ships R12 (trait-shape audit). The CI gate
+//! Phase B ships R12 (trait-shape audit). The CI gate
 //! at that point validates that this module exposes no method whose
 //! signature implies inference, expansion, resolution, evaluation,
 //! narrowing, or overload resolution.
@@ -108,13 +108,13 @@ pub struct RawCaptures {
     /// are `decorators`, `annotations`, `template_calls`. Plugins
     /// **omit** a key entirely if the language has no AST surface for
     /// it; presence of the key with an empty array means "I looked
-    /// and found none" (chunk 3 lands the rule mechanically).
+    /// and found none" (lands the rule mechanically).
     pub metadata: Vec<MetadataField>,
 
     /// Plugin-driven skipped ranges. Each entry is a region the plugin
     /// chose not to analyse (e.g., a macro body it cannot interpret).
     /// The indexer merges these with tree-sitter-error skips into
-    /// `file_hashes.skipped_ranges` (R6, sprint 0008). The extractor
+    /// `file_hashes.skipped_ranges` (R6). The extractor
     /// passes them through unchanged; charter invariant 5
     /// (tree-sitter resilience) forbids any reorder / merge / filter
     /// at this layer.
@@ -222,7 +222,7 @@ pub struct MetadataEntry {
 /// `template_calls`. Plugins may emit other keys for their own
 /// reserved domain, but framework-shaped derivations (`hooks`, route
 /// metadata, queue handlers) belong to the framework layer (R5,
-/// sprint 0005) — language plugins must not pre-compute them.
+/// the architecture) — language plugins must not pre-compute them.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MetadataField {
     /// The symbol this metadata is attached to. Carries the same
@@ -243,7 +243,7 @@ pub struct MetadataField {
 /// Distinct from tree-sitter-error skips: those come from the
 /// indexer's parser-level error recovery and are merged with the
 /// plugin's `skipped_ranges` into `file_hashes.skipped_ranges` only
-/// at the indexer layer (R6, sprint 0007). The plugin records
+/// at the indexer layer (R6). The plugin records
 /// **intentional** skips here — e.g., a macro body whose syntactic
 /// content the plugin cannot interpret meaningfully.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -304,7 +304,7 @@ pub fn find_capture<'a>(captures: &'a [Capture], name: &str) -> Option<&'a Captu
 /// module-level ID of the form `"{file_path}::__module__::{kind}"` is
 /// returned, where `kind` is either `"function"` or `"class"`.
 ///
-/// Lived in `crate::languages` pre-R2. Now owned by the extractor since
+/// Lived in `crate::languages` before R2. Now owned by the extractor since
 /// it is the only EdgeKind-aware site (R2 target state).
 pub fn resolve_scope_id(enclosing_scope_id: Option<&str>, file_path: &str, kind: &str) -> String {
     enclosing_scope_id
@@ -326,7 +326,7 @@ pub fn resolve_scope_id(enclosing_scope_id: Option<&str>, file_path: &str, kind:
 /// `"<kind>.<pattern>"` where `<kind>` matches the `EdgeKind` slug
 /// (e.g., `calls.method`, `imports.named`, `extends.class`,
 /// `references_type.annotation`). The pattern_id is the durable
-/// audit key for R8's confidence audit subcommand (sprint 0006).
+/// audit key for R8's confidence audit subcommand.
 ///
 /// Returns a `RawEdge`; the resolver assigns `status` downstream (R3).
 pub fn make_edge(

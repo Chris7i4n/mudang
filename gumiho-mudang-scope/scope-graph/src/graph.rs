@@ -44,7 +44,7 @@ pub struct AuditEdgeRow {
     pub args_text: Option<String>,
 }
 
-/// One row destined for the `file_hashes` table (R6 — sprint 0003 chunk 3a).
+/// One row destined for the `file_hashes` table (R6).
 ///
 /// Wraps the historical `(file_path, hash)` pair with `skipped_ranges` so
 /// the indexer can record both tree-sitter parser-recovery skips (R6) and
@@ -66,7 +66,7 @@ pub struct FileHashRow {
 /// between the indexed snapshot and the on-disk source files referenced
 /// by an audit sample.
 ///
-/// The audit (R8 / sprint 0007) refuses to operate when the working tree
+/// The audit (R8) refuses to operate when the working tree
 /// has diverged from what the extractor saw at index time, per
 /// `docs/AUDIT-LABEL-SCHEMA.md` § Auditor immutability rule. This struct
 /// is the report the CLI surfaces in the resulting hard error.
@@ -2165,7 +2165,7 @@ impl Graph {
     ///
     /// The `skipped_ranges` slice on each `FileHashRow` is serialised to JSON
     /// and written to `file_hashes.skipped_ranges`. An empty slice yields
-    /// `'[]'`, matching the column default. R6 (sprint 0007) reads this column
+    /// `'[]'`, matching the column default. R6 reads this column
     /// during the malformed-source harness to distinguish indexed-but-degraded
     /// files from clean parses.
     pub fn update_file_hashes(&mut self, hashes: &HashMap<String, FileHashRow>) -> Result<()> {

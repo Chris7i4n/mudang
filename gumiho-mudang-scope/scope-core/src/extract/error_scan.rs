@@ -1,4 +1,4 @@
-//! Tree-sitter error scanner (R6 — sprint 0003, chunk 3a).
+//! Tree-sitter error scanner (R6).
 //!
 //! Walks a parsed `tree_sitter::Tree` and collects every node where
 //! `node.is_error()` or `node.is_missing()` into a flat
@@ -9,7 +9,7 @@
 //! - `reason = "tree_sitter_error:syntax_error"` for `ERROR` nodes
 //! - `reason = "tree_sitter_error:missing_node"` for `MISSING` nodes
 //!
-//! Both share the `tree_sitter_error:` prefix that the sprint 0008 R6
+//! Both share the `tree_sitter_error:` prefix that thethe R&
 //! malformed-source harness greps to distinguish parser-recovery skips
 //! from plugin-driven skips (the latter use `plugin_skip:` per
 //! [`SkippedRange::reason`] convention). These two `tree_sitter_error:*`

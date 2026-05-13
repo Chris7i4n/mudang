@@ -464,7 +464,7 @@ fn extract_enrichment_prefix(language: &str, metadata_json: &str) -> String {
 
     match language {
         "java" => {
-            // Show annotations as @Name prefixes. R2 (sprint 0003 chunk 3b)
+            // Show annotations as @Name prefixes. R2
             // migrated the per-entry shape from string to object — read
             // `.name` instead of treating each entry as a bare string.
             if let Some(annotations) = parsed.get("annotations").and_then(|v| v.as_array()) {
@@ -481,7 +481,7 @@ fn extract_enrichment_prefix(language: &str, metadata_json: &str) -> String {
             String::new()
         }
         "python" => {
-            // Show decorators as @name prefixes. R2 (sprint 0003 chunk 3b)
+            // Show decorators as @name prefixes. R2
             // migrated the per-entry shape from string to object — read
             // `.name` instead of treating each entry as a bare string.
             if let Some(decorators) = parsed.get("decorators").and_then(|v| v.as_array()) {

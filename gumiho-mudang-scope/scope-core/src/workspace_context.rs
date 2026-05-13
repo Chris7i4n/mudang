@@ -90,7 +90,7 @@ pub struct ModuleLayout {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct FrameworkVersions {
     /// Maps framework name (e.g., `"rails"`, `"react"`) to the resolved
-    /// `DetectedVersion` (see R5 / sprint 0005).
+    /// `DetectedVersion` (see R&).
     pub versions: BTreeMap<String, String>,
 }
 
