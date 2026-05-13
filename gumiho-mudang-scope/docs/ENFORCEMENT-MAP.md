@@ -269,6 +269,10 @@ Each entry below has: **ID, rules it enforces, durable contract, where to find i
   - **ci-gates-recipes** — every `CI-GATES.md` row marked `active` has its `just <recipe>` defined in the root `justfile`.
   - **doc-relative-links** — every `](relative-path)` markdown link under `gumiho-mudang-scope/docs/` resolves on disk (http(s) + anchor-only links skipped).
   - **cycle-docs-indexed** — `SELF-CORRECTION-CYCLE.md` and `SELF-CORRECTION-STATE.md`, when present, are referenced from `gumiho-mudang-scope/docs/README.md`.
+
+  Per-sprint refinements:
+  - **audit-samples-layout** (sprint 0002 / (e)) — every `LanguageId::as_str` slug owns an `audit-samples/` directory under `gumiho-mudang-scope/scope-core/tests/fixtures/reference/`, no extras.
+  - **lang-version-detector-modules** (sprint 0003 / (d)) — every `LanguageId` variant from `id.rs` has both a `LanguageId::<Variant>` arm in `lang_version.rs::detect_in_dir` and a matching `### <Display>` subsection under `CHARTER.md § 7. Per-language scope and non-scope` (`CSharp` → `C#`, optional ` (surface)` suffix tolerated).
 - **Honest limit**: catches **drift between named code surfaces and named doc passages**, not semantic drift ("the doc says X is fast; the code is slow"), not missing documentation for a code surface (R8 / § 7.5 reviewer discipline), and not out-of-band rule amendments ([`sprints/README.md` § 3](sprints/README.md#3-ambiguity-protocol--consult-the-human-amend-the-source-doc)).
 - **Extension protocol**: later sprints in Priority 1 add **one** new `check_<short_name>` function per drift shape they introduce. See [`SELF-CORRECTION-CYCLE.md` § Extending the doc-sync gate](SELF-CORRECTION-CYCLE.md#extending-the-doc-sync-gate) for the sprint-by-sprint table and the function-template recipe. Each addition is a refinement (per [`sprints/README.md` § 7.5](sprints/README.md#75-enforcement-map-update)) of this R-entry, not a new R-entry.
 - **Where in the tree**: `scripts/gate_doc_sync.sh`, `justfile` recipe `gate-doc-sync` (called by `gate-refactor`).

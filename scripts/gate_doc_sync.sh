@@ -347,13 +347,68 @@ check_audit_samples_layout() {
 }
 
 # ─────────────────────────────────────────────────────────────
+# Check 6 — every `LanguageId` variant in
+# `scope-core/src/languages/id.rs` (a) appears as a
+# `LanguageId::<Variant>` arm in `detect_in_dir` inside
+# `scope-core/src/workspace/lang_version.rs`, AND (b) has a matching
+# subsection under `CHARTER.md § 7. Per-language scope and non-scope`
+# (heading text equals the variant name, with `CSharp` rendered as
+# `C#`, and an optional ` (surface)` suffix tolerated).
+#
+# Rationale: sprint 0003 wires a per-language `lang_version` detector
+# matrix per [`SELF-CORRECTION-CYCLE.md` § "Sprint-by-sprint
+# additions expected"](gumiho-mudang-scope/docs/SELF-CORRECTION-CYCLE.md)
+# row 0003 / (d). The detector dispatcher is the single source of
+# truth for which languages emit a non-null `lang_version`. CHARTER
+# §7 is the source of truth for which languages Scope supports at
+# all. A drift in either direction (variant added without detector
+# arm; variant added without CHARTER §7 acknowledgement; CHARTER §7
+# section without an enum variant) is the drift shape this check
+# catches. The Rust compiler enforces exhaustive `match` so the
+# variant→detector half is already structurally true; this check
+# adds the doc-side half on top.
+#
+# Drift shape caught: variant set ≠ CHARTER §7 subsection set, or
+# variant absent from `detect_in_dir`.
+check_lang_version_detector_modules() {
+    local charter="$SCOPE_DOCS/CHARTER.md"
+    local id_rs="gumiho-mudang-scope/scope-core/src/languages/id.rs"
+    local detector="gumiho-mudang-scope/scope-core/src/workspace/lang_version.rs"
+    [[ -f "$charter" && -f "$id_rs" && -f "$detector" ]] || return 0
+    local variants
+    variants="$(grep -oE 'Self::[A-Z][a-zA-Z]+ =>' "$id_rs" \
+                | sed -E 's/Self::([A-Z][a-zA-Z]+) =>/\1/' \
+                | sort -u)"
+    [[ -z "$variants" ]] && return 0
+    local charter_section
+    charter_section="$(awk '/^## 7\./{flag=1; next} /^## /{flag=0} flag' "$charter")"
+    local detail=""
+    while IFS= read -r v; do
+        [[ -z "$v" ]] && continue
+        local display="$v"
+        [[ "$v" == "CSharp" ]] && display="C#"
+        if ! printf '%s\n' "$charter_section" \
+             | grep -qE "^### ${display}( \\(surface\\))?[[:space:]]*\$"; then
+            detail+="LanguageId::$v → expected '### $display' (optionally ' (surface)') subsection under CHARTER.md § 7"$'\n'
+        fi
+        if ! grep -qE "LanguageId::$v[[:space:]]" "$detector"; then
+            detail+="LanguageId::$v → expected arm in lang_version.rs::detect_in_dir"$'\n'
+        fi
+    done <<< "$variants"
+    if [[ -n "$detail" ]]; then
+        fail_block "lang-version-detector-modules" \
+                   "LanguageId variant set ≠ CHARTER.md § 7 subsections or lang_version.rs::detect_in_dir arms" \
+                   "$detail"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────
 # Future sprint extension hooks. Each later sprint in Priority 1 adds
 # ONE function here (named `check_<short_name>`) and invokes it from
 # `main()`. See SELF-CORRECTION-CYCLE.md § "Extending the doc-sync
 # gate" for the per-sprint table.
 #
 # Sprints expected to extend this script:
-#   - 0003 (d): per-language detector module presence ↔ CHARTER.md § 7
 #   - 0004 (g): SCHEMA_VERSION const ↔ schema_version doc value
 #   - 0004 (g): SampleRecord field set ⊆ AUDIT-LABEL-SCHEMA.md fields
 #   - 0004 (h): coverage_summary fields ↔ doc fields
@@ -369,6 +424,7 @@ main() {
     check_doc_relative_links
     check_cycle_docs_indexed
     check_audit_samples_layout
+    check_lang_version_detector_modules
 
     if [[ "$FAILED" -ne 0 ]]; then
         echo "doc-sync gate: FAIL" >&2
