@@ -67,15 +67,16 @@ impl<P: Provider, W: Write> Labeller for LlmLabeller<P, W> {
 
     fn label_one(&mut self, mut record: SampleRecord) -> Result<SampleRecord, Infallible> {
         let prompt = render_prompt(&record);
-        match self.provider.complete(&prompt) {
+        let verdict = match self.provider.complete(&prompt) {
             Ok(response) => match Verdict::parse_response(&response.text) {
-                Ok(verdict) => verdict.apply_to(&mut record),
+                Ok(v) => v,
                 Err(err) => {
                     let _ = writeln!(
                         self.diagnostics,
                         "scope-audit-labeller-llm: verdict-parse error for edge {}: {err}",
                         record.edge_id,
                     );
+                    Verdict::default()
                 }
             },
             Err(err) => {
@@ -84,8 +85,16 @@ impl<P: Provider, W: Write> Labeller for LlmLabeller<P, W> {
                     "scope-audit-labeller-llm: provider error for edge {}: {err}",
                     record.edge_id,
                 );
+                Verdict::default()
             }
-        }
+        };
+        // The LLM's `labeller_id` is about to be stamped, so the seven
+        // labeller-fillable columns must reflect the LLM's verdict —
+        // including the all-None abstain that error paths produce.
+        // Without this clear, a record carrying a prior labeller's
+        // verdict would emerge with the LLM's id attributed to the
+        // stale fields. Codex round 2 P2.
+        verdict.apply_to(&mut record);
         record.labeller_id = Some(self.labeller_id.clone());
         Ok(record)
     }
@@ -148,11 +157,16 @@ mod tests {
         let mut diagnostics = Vec::new();
         let mut labeller = LlmLabeller::with_diagnostics(provider, &mut diagnostics);
         let input = template_record();
-        let out = labeller.label_one(input.clone()).unwrap();
-        // labeller_id stamped; verdict fields untouched.
+        let out = labeller.label_one(input).unwrap();
+        // labeller_id stamped; all seven labeller-fillable fields cleared.
         assert_eq!(out.labeller_id.as_deref(), Some("llm:mock:m1"));
-        assert_eq!(out.label, input.label);
-        assert_eq!(out.reasoning_text, input.reasoning_text);
+        assert_eq!(out.label, None);
+        assert!(out.evidence.is_none());
+        assert!(out.target_proposed.is_none());
+        assert!(out.kind_proposed.is_none());
+        assert!(out.confidence_proposed.is_none());
+        assert!(out.reasoning_text.is_none());
+        assert!(out.lang_version_evidence.is_none());
         // Diagnostic line written.
         let diag = String::from_utf8(diagnostics).unwrap();
         assert!(diag.contains("provider error"));
@@ -170,6 +184,55 @@ mod tests {
         assert_eq!(out.label, None);
         let diag = String::from_utf8(diagnostics).unwrap();
         assert!(diag.contains("verdict-parse error"));
+    }
+
+    #[test]
+    fn provider_error_on_prelabelled_record_clears_prior_verdict() {
+        // Codex round 2 P2: a record pre-filled by a prior labeller
+        // must not emerge with the prior verdict attributed to the LLM
+        // when the LLM's transport fails.
+        let provider = MockProvider::new("mock", "m1").with_response(MockResponse::err("timeout"));
+        let mut labeller = LlmLabeller::with_diagnostics(provider, Vec::new());
+        let mut input = template_record();
+        input.label = Some(true);
+        input.evidence = Some({
+            let mut m = serde_json::Map::new();
+            m.insert("prior".into(), serde_json::Value::String("evidence".into()));
+            m
+        });
+        input.target_proposed = Some("prior-target".to_string());
+        input.kind_proposed = Some("prior-kind".to_string());
+        input.confidence_proposed = Some("high".to_string());
+        input.reasoning_text = Some("prior reasoning".to_string());
+        input.lang_version_evidence = Some("2018".to_string());
+        input.labeller_id = Some("prior:labeller".to_string());
+        let out = labeller.label_one(input).unwrap();
+        assert_eq!(out.labeller_id.as_deref(), Some("llm:mock:m1"));
+        assert_eq!(out.label, None);
+        assert!(out.evidence.is_none());
+        assert!(out.target_proposed.is_none());
+        assert!(out.kind_proposed.is_none());
+        assert!(out.confidence_proposed.is_none());
+        assert!(out.reasoning_text.is_none());
+        assert!(out.lang_version_evidence.is_none());
+    }
+
+    #[test]
+    fn unparseable_response_on_prelabelled_record_clears_prior_verdict() {
+        // Codex round 2 P2 (parse-error variant): a record pre-filled
+        // by a prior labeller must not emerge with the prior verdict
+        // attributed to the LLM when the model's reply fails to parse.
+        let provider =
+            MockProvider::new("mock", "m1").with_response(MockResponse::ok("definitely not json"));
+        let mut labeller = LlmLabeller::with_diagnostics(provider, Vec::new());
+        let mut input = template_record();
+        input.label = Some(false);
+        input.target_proposed = Some("prior-target".to_string());
+        input.labeller_id = Some("prior:labeller".to_string());
+        let out = labeller.label_one(input).unwrap();
+        assert_eq!(out.labeller_id.as_deref(), Some("llm:mock:m1"));
+        assert_eq!(out.label, None);
+        assert!(out.target_proposed.is_none());
     }
 
     #[test]
