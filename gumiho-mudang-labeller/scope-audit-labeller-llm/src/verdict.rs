@@ -61,33 +61,25 @@ impl Verdict {
         Ok(verdict)
     }
 
-    /// Copy verdict fields onto the record. Existing `label` is
-    /// overwritten only when the verdict has one (`Some(_)`); absent
-    /// verdict fields leave the record's prior value alone. This means
-    /// pre-filled records (e.g. emitted by `scope audit confidence
-    /// --emit-sample` with `label = null`) are augmented, not erased.
+    /// Copy verdict fields onto the record, unconditionally. The seven
+    /// labeller-fillable columns belong to the labeller named by the
+    /// record's `labeller_id` — when the LLM stamps its id, it also
+    /// owns those columns. A verdict field of `None` (either because
+    /// the model omitted the key or because it returned an explicit
+    /// `null`) clears any prior value; this prevents a downstream
+    /// reader from seeing `labeller_id = llm:…` paired with a
+    /// `label`/`target_proposed`/… written by a previous labeller in a
+    /// composed or rerun pipeline. Aggregating partial verdicts across
+    /// labellers is the aggregator's job (sprint 0006 (i)), not the
+    /// per-labeller code's.
     pub fn apply_to(self, record: &mut SampleRecord) {
-        if self.label.is_some() {
-            record.label = self.label;
-        }
-        if self.evidence.is_some() {
-            record.evidence = self.evidence;
-        }
-        if self.target_proposed.is_some() {
-            record.target_proposed = self.target_proposed;
-        }
-        if self.kind_proposed.is_some() {
-            record.kind_proposed = self.kind_proposed;
-        }
-        if self.confidence_proposed.is_some() {
-            record.confidence_proposed = self.confidence_proposed;
-        }
-        if self.reasoning_text.is_some() {
-            record.reasoning_text = self.reasoning_text;
-        }
-        if self.lang_version_evidence.is_some() {
-            record.lang_version_evidence = self.lang_version_evidence;
-        }
+        record.label = self.label;
+        record.evidence = self.evidence;
+        record.target_proposed = self.target_proposed;
+        record.kind_proposed = self.kind_proposed;
+        record.confidence_proposed = self.confidence_proposed;
+        record.reasoning_text = self.reasoning_text;
+        record.lang_version_evidence = self.lang_version_evidence;
     }
 }
 
@@ -144,7 +136,13 @@ mod tests {
     }
 
     #[test]
-    fn apply_to_only_overwrites_set_fields() {
+    fn apply_to_overwrites_every_labeller_fillable_field() {
+        // Codex round 1 P2: verdict fields are owned by the labeller
+        // whose `labeller_id` ends up on the record. An LLM abstain
+        // (`label = None`) on a record pre-filled by another labeller
+        // must clear that prior labeller's verdict, not silently inherit
+        // it under the LLM's id. Aggregation across labellers is the
+        // aggregator's responsibility (sprint 0006 (i)).
         let mut record = SampleRecord {
             schema_version: "2".to_string(),
             edge_id: "e-1".to_string(),
@@ -159,21 +157,69 @@ mod tests {
             label: Some(true),
             evidence: None,
             target_proposed: Some("prior".to_string()),
+            kind_proposed: Some("prior-kind".to_string()),
+            confidence_proposed: Some("high".to_string()),
+            reasoning_text: Some("prior-reasoning".to_string()),
+            lang_version_evidence: Some("2018".to_string()),
+            labeller_id: Some("prior:labeller".to_string()),
+        };
+        // Verdict: LLM abstains, supplies one explicit reasoning.
+        let v = Verdict {
+            label: None,
+            evidence: None,
+            target_proposed: None,
             kind_proposed: None,
             confidence_proposed: None,
-            reasoning_text: None,
+            reasoning_text: Some("I cannot tell from this snippet".to_string()),
+            lang_version_evidence: None,
+        };
+        v.apply_to(&mut record);
+        // Every prior labeller-fillable field cleared / overwritten.
+        assert_eq!(record.label, None);
+        assert!(record.evidence.is_none());
+        assert!(record.target_proposed.is_none());
+        assert!(record.kind_proposed.is_none());
+        assert!(record.confidence_proposed.is_none());
+        assert_eq!(
+            record.reasoning_text.as_deref(),
+            Some("I cannot tell from this snippet")
+        );
+        assert!(record.lang_version_evidence.is_none());
+        // `labeller_id` is set by the labeller, not `apply_to`; should
+        // still hold the prior value until `LlmLabeller::label_one`
+        // stamps it.
+        assert_eq!(record.labeller_id.as_deref(), Some("prior:labeller"));
+    }
+
+    #[test]
+    fn explicit_null_in_response_clears_prior_value() {
+        // Round-trip the wire shape: model returns explicit nulls; the
+        // resulting `Verdict` must clear, not preserve.
+        let text = r#"{"label": null, "target_proposed": null, "reasoning_text": null}"#;
+        let v = Verdict::parse_response(text).unwrap();
+        let mut record = SampleRecord {
+            schema_version: "2".to_string(),
+            edge_id: "e-1".to_string(),
+            kind: "calls".to_string(),
+            confidence: "medium".to_string(),
+            producer: "rust".to_string(),
+            pattern_id: "rust.calls.method".to_string(),
+            from_id: "a".to_string(),
+            to_id: "b".to_string(),
+            source_snippet: "a()".to_string(),
+            lang_version: Some("2021".to_string()),
+            label: Some(false),
+            evidence: None,
+            target_proposed: Some("prior".to_string()),
+            kind_proposed: None,
+            confidence_proposed: None,
+            reasoning_text: Some("prior".to_string()),
             lang_version_evidence: None,
             labeller_id: None,
         };
-        let v = Verdict {
-            label: None,           // verdict abstains → preserve record.label
-            target_proposed: None, // preserve record.target_proposed
-            reasoning_text: Some("set me".to_string()),
-            ..Default::default()
-        };
         v.apply_to(&mut record);
-        assert_eq!(record.label, Some(true)); // preserved
-        assert_eq!(record.target_proposed.as_deref(), Some("prior")); // preserved
-        assert_eq!(record.reasoning_text.as_deref(), Some("set me")); // set
+        assert_eq!(record.label, None);
+        assert!(record.target_proposed.is_none());
+        assert!(record.reasoning_text.is_none());
     }
 }
