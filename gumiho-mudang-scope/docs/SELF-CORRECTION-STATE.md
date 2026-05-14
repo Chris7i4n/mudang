@@ -13,7 +13,7 @@ Initiative prefix: `selfcorrect/`. Merge mode: rebase-merge (sprint → `main`; 
 | Sub-item | Owning sprint | Status | Branch | Commit | Notes |
 |---|---|---|---|---|---|
 | Priority 1 (a) — Loop architecture document | 0001 | shipped | `selfcorrect/sprint-0001-loop-architecture` | `c06a23d` | 2026-05-13 |
-| Priority 1 (b₁) — Labeller workspace scaffolding + shared core | 0005 | in-progress | `selfcorrect/sprint-0005-labeller-workspace-scaffolding` | — | sibling workspace `gumiho-mudang-labeller/`, excluded from root; ships `scope-audit-labeller-core` + `-noop` reference impl |
+| Priority 1 (b₁) — Labeller workspace scaffolding + shared core | 0005 | shipped | `selfcorrect/sprint-0005-labeller-workspace-scaffolding` | `bd3aad2` | 2026-05-14; sibling workspace `gumiho-mudang-labeller/`, excluded from root; ships `scope-audit-labeller-core` + `-noop` reference impl; R14 gate active |
 | Priority 1 (b₂) — LLM labeller | 0010 | unstarted | — | — | `scope-audit-labeller-llm`; blocked by (b₁) |
 | Priority 1 (b₃) — LSP labeller | 0011 | unstarted | — | — | `scope-audit-labeller-lsp` via `tower-lsp`; blocked by (b₁) |
 | Priority 1 (b₄) — Hybrid labeller | 0012 | unstarted | — | — | `scope-audit-labeller-hybrid`; blocked by (b₁); composes (b₂) when shipped |
@@ -34,7 +34,7 @@ Initiative prefix: `selfcorrect/`. Merge mode: rebase-merge (sprint → `main`; 
 | 0002 — corpus accumulation policy | shipped | `selfcorrect/sprint-0002-corpus-accumulation-policy` | `467c356` |
 | 0003 — `lang_version` detector matrix | shipped | `selfcorrect/sprint-0003-lang-version-detector-matrix` | `cc61a5b` |
 | 0004 — schema-v2 bundle (g+h+j) | shipped | `selfcorrect/sprint-0004-schema-v2-bundle` | `402ab2a` |
-| 0005 — labeller workspace scaffolding + core | in-progress | `selfcorrect/sprint-0005-labeller-workspace-scaffolding` | — |
+| 0005 — labeller workspace scaffolding + core | shipped | `selfcorrect/sprint-0005-labeller-workspace-scaffolding` | `bd3aad2` |
 | 0006 — multi-labeller aggregation | unstarted | — | — |
 | 0007 — continuous re-audit in CI | unstarted | — | — |
 | 0008 — ML patch suggester | unstarted | — | — |
@@ -74,3 +74,5 @@ Append-only. Newest entry at the bottom.
 - 2026-05-14 | sprint 0004 | merged | commit `b5204fa` | notes: FF merge to `main` complete; branch `selfcorrect/sprint-0004-schema-v2-bundle` deleted locally + on origin per single-operator hygiene
 - 2026-05-14 | sprint 0005 prep | doc amendment | commit `e8061b5` | notes: BACKLOG (b) physical-location + sprint-split amendment landed on `main` ahead of sprint 0005 open per ambiguity protocol. (b) split into (b₁) workspace scaffolding + shared core (sprint 0005), (b₂) LLM labeller (sprint 0010), (b₃) LSP labeller (sprint 0011), (b₄) hybrid labeller (sprint 0012). Physical location pinned: sibling dir `gumiho-mudang-labeller/`, separate `[workspace]`, excluded from root, never enters scope binary. Crate names preserved per user decision: `scope-audit-labeller-{core,llm,lsp,hybrid}` + `-noop` reference impl. Sprint plan docs landed for 0010/0011/0012 in same commit; sprint-0005 plan rewritten to scaffolding-only scope.
 - 2026-05-14 | Priority 1 (b₁) | unstarted → in-progress | branch `selfcorrect/sprint-0005-labeller-workspace-scaffolding` | notes: sprint 0005 opened
+- 2026-05-14 | Priority 1 (b₁) | in-progress → shipped | commit `bd3aad2` | notes: sprint 0005 closed; sibling cargo workspace `gumiho-mudang-labeller/` stood up + excluded from root Scope workspace (CP1); `scope-audit-labeller-core` ships `Labeller` trait + v2 `SampleRecord` types + JSONL read/write helpers (CP2, 5 unit tests); `scope-audit-labeller-noop` reference impl + end-to-end binary integration test (CP3, 4 tests); workspace README + cross-link from `SELF-CORRECTION-CYCLE.md § Labeller workspace` (CP4); R14 `labeller-workspace-isolation` gate active via 3 narrow-grep checks (root-exclude declared + scope-side path-dep-on-labeller absent + labeller-side path-dep-on-scope absent) wired into `gate-refactor` (CP5); codex review converged after 2 rounds — round 1 surfaced 2 P2s (evidence shape, BufWriter flush) addressed in `6feb2a1`; round 2 surfaced 1 P2 (missing required nullable fields) addressed in `bd3aad2`; round 3 — no findings. `cargo metadata` at repo root lists zero labeller crates; sibling-workspace tests green (15 across 6 suites); Scope-side `gate-refactor` green.
+- 2026-05-14 | sprint 0005 | in-progress → shipped | commit `bd3aad2` | notes: branch ready for FF merge to main
