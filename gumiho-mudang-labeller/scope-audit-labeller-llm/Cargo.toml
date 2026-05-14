@@ -1,0 +1,38 @@
+[package]
+name = "scope-audit-labeller-llm"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+publish.workspace = true
+description = "LLM-backed Scope audit labeller. Provider-agnostic at the trait level; first provider ships behind the `deepseek` cargo feature (OpenAI-compatible chat-completions endpoint at api.deepseek.com)."
+
+[[bin]]
+name = "scope-audit-labeller-llm"
+path = "src/main.rs"
+
+[features]
+# `cargo add scope-audit-labeller-llm` selects the DeepSeek provider out of
+# the box. Users adding another provider in a future sprint will opt in
+# via `--features <provider>` and/or `--no-default-features`.
+default = ["deepseek"]
+
+# DeepSeek provider — pulls in `ureq` for the synchronous HTTP transport.
+deepseek = ["dep:ureq"]
+
+# Opt-in live integration tests against the real DeepSeek API. Off by
+# default so `cargo test --workspace` never reaches the network. Tests
+# under this feature additionally guard on `DEEPSEEK_API_KEY` presence at
+# runtime and no-op when the key is unset.
+live-deepseek-tests = ["deepseek"]
+
+[dependencies]
+scope-audit-labeller-core = { path = "../scope-audit-labeller-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+ureq = { workspace = true, optional = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+tempfile = { workspace = true }

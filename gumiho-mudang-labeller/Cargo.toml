@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "scope-audit-labeller-core",
     "scope-audit-labeller-noop",
+    "scope-audit-labeller-llm",
 ]
 
 [workspace.package]
@@ -16,6 +17,11 @@ publish = false
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "1"
+
+# HTTP transport for LLM-provider crates. Synchronous `ureq` keeps the
+# labeller workspace tokio-free; line-by-line JSONL processing is
+# naturally synchronous.
+ureq = { version = "2", features = ["json"] }
 
 # dev-deps
 tempfile = "3"
