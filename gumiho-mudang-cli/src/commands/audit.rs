@@ -1014,6 +1014,8 @@ fn build_audit_history_rows(records: &[SampleRecord]) -> Result<Vec<AuditHistory
         out.push(AuditHistoryRow {
             edge_id,
             pattern_id: r.pattern_id.clone(),
+            from_id: r.from.clone(),
+            to_id: r.to.clone(),
             labeller_id: r.labeller_id.clone(),
             label,
             target_proposed: r.target_proposed.clone(),

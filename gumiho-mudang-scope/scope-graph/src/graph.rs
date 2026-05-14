@@ -53,11 +53,13 @@ pub struct AuditEdgeRow {
 /// row in one labelling pass shares the same values without the caller
 /// having to thread them.
 ///
-/// `pattern_id` is denormalised onto the audit row so the pattern
-/// drill is robust under wipe-and-reindex (`edges.edge_id` is
-/// AUTOINCREMENT and is not stable across reindex; the source-derived
-/// pattern_id is). See `scope-graph/src/sql/schema.sql` comment on
-/// `edge_audit_history`.
+/// `pattern_id` / `from_id` / `to_id` are denormalised onto the audit
+/// row so both halves of the pattern drill (precision timeline +
+/// currently-incorrect drivers) are robust under wipe-and-reindex.
+/// `edges.edge_id` is AUTOINCREMENT and is not stable across reindex;
+/// the source-derived `pattern_id` slug and the `from_id` / `to_id`
+/// symbol identifiers are. See `scope-graph/src/sql/schema.sql`
+/// comment on `edge_audit_history`.
 ///
 /// `label` is the verdict-as-stored: `"correct"` / `"incorrect"` /
 /// `"skipped"`. The trichotomy is preserved verbatim from the
@@ -70,6 +72,8 @@ pub struct AuditEdgeRow {
 pub struct AuditHistoryRow {
     pub edge_id: i64,
     pub pattern_id: String,
+    pub from_id: String,
+    pub to_id: String,
     pub labeller_id: Option<String>,
     pub label: String,
     pub target_proposed: Option<String>,
@@ -2449,15 +2453,18 @@ impl Graph {
         {
             let mut stmt = tx.prepare(
                 "INSERT INTO edge_audit_history
-                 (audit_id, edge_id, pattern_id, labelled_at, labeller_id, label,
-                  target_proposed, kind_proposed, confidence_proposed, evidence_json)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                 (audit_id, edge_id, pattern_id, from_id, to_id, labelled_at,
+                  labeller_id, label, target_proposed, kind_proposed,
+                  confidence_proposed, evidence_json)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             )?;
             for row in rows {
                 stmt.execute(params![
                     audit_id,
                     row.edge_id,
                     row.pattern_id,
+                    row.from_id,
+                    row.to_id,
                     now,
                     row.labeller_id,
                     row.label,
@@ -2509,18 +2516,17 @@ impl Graph {
     /// `pattern_id` — feeds `scope audit history pattern <ID>`
     /// (sprint 0004 (j)).
     ///
-    /// `timeline` reads `pattern_id` directly off `edge_audit_history`
-    /// (denormalised at write time per CP6.5 — addresses codex review
-    /// on sprint 0004). Pre-CP6.5 the timeline JOINed against `edges`
-    /// to recover the pattern_id, which silently dropped history rows
-    /// after a wipe-and-reindex (edge_id is AUTOINCREMENT and is not
-    /// stable across reindex). The denormalised column makes the
-    /// timeline truly "outlive source".
-    ///
-    /// `currently_incorrect` still JOINs to `edges` for `from_id` /
-    /// `to_id` — scoped to `MAX(audit_id)` where edges still exist by
-    /// construction (the latest audit happened against the current
-    /// `edges` table).
+    /// Both halves read directly off `edge_audit_history`: `pattern_id`,
+    /// `from_id`, and `to_id` are denormalised onto the audit row at
+    /// write time (CP6.5 + CP6.6 — both address codex review passes
+    /// on sprint 0004) so neither query depends on the mutable
+    /// `edges` table. The earlier shape JOINed `edges` for the
+    /// drivers; under wipe-and-reindex `edges.edge_id` is unstable
+    /// (AUTOINCREMENT) so MAX(audit_id) drivers could either vanish
+    /// (edge wiped) or silently surface unrelated rows (edge_id reused
+    /// for a different logical edge). The denormalisation eliminates
+    /// both failure modes — the audit row carries the labeller's
+    /// snapshot of source state at audit time and stays self-contained.
     pub fn audit_history_pattern(&self, pattern_id: &str) -> Result<AuditHistoryPattern> {
         // Per-audit fold for this pattern. No JOIN — pattern_id is on
         // the audit row directly so the timeline survives reindex.
@@ -2558,25 +2564,20 @@ impl Graph {
             .collect::<rusqlite::Result<Vec<_>>>()?;
 
         // Latest audit_id present for this pattern, then the
-        // currently-incorrect drivers in that audit. The JOIN to
-        // `edges` is preserved here because the drivers query needs
-        // `from_id` / `to_id` from the source-derived row, and is
-        // scoped to MAX(audit_id) where the edges still exist by
-        // construction (the latest audit ran against the current edges
-        // table — its rows have not yet been wiped). For prior audits
-        // the timeline above is the read surface; drivers from prior
-        // audits are not surfaced by this view.
+        // currently-incorrect drivers in that audit. No JOIN —
+        // `from_id` / `to_id` are denormalised onto the audit row
+        // (CP6.6) so the drivers survive `edges.edge_id` instability
+        // across wipe-and-reindex.
         let mut stmt_drivers = self.conn.prepare(
-            "SELECT eh.edge_id, e.from_id, e.to_id, eh.target_proposed, eh.labeller_id
-               FROM edge_audit_history eh
-               JOIN edges e ON e.edge_id = eh.edge_id
-              WHERE eh.pattern_id = ?1
-                AND eh.label = 'incorrect'
-                AND eh.audit_id = (
+            "SELECT edge_id, from_id, to_id, target_proposed, labeller_id
+               FROM edge_audit_history
+              WHERE pattern_id = ?1
+                AND label = 'incorrect'
+                AND audit_id = (
                     SELECT MAX(audit_id) FROM edge_audit_history
                      WHERE pattern_id = ?1
                 )
-              ORDER BY eh.edge_id ASC",
+              ORDER BY edge_id ASC",
         )?;
         let currently_incorrect: Vec<AuditHistoryPatternDriver> = stmt_drivers
             .query_map(params![pattern_id], |row| {

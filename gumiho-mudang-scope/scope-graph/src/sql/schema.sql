@@ -125,15 +125,22 @@ CREATE TABLE IF NOT EXISTS file_hashes (
 -- is INTEGER PRIMARY KEY AUTOINCREMENT and is not stable across
 -- wipe-and-reindex), but the historical verdicts against it remain.
 --
--- pattern_id is denormalised onto the audit row so the read-side
--- pattern drill (`scope audit history pattern <id>`) is robust under
--- re-index. `edges.pattern_id` is the source-derived value at audit
--- time; copying it here lets `audit_history_pattern` query directly,
--- without a JOIN to the mutable `edges` table that may have been
--- wiped between audits (CP6.5 — addresses codex review on sprint 0004
--- regarding "history outlives source"). For the `currently_incorrect`
--- drivers query the JOIN is preserved because it is scoped to
--- MAX(audit_id) where the edges still exist.
+-- pattern_id / from_id / to_id are denormalised onto the audit row so
+-- the read-side pattern drill (`scope audit history pattern <id>`,
+-- including the `currently_incorrect` drivers it surfaces) is robust
+-- under re-index. `edges.edge_id` is INTEGER PRIMARY KEY AUTOINCREMENT
+-- and is not stable across wipe-and-reindex; a `MAX(audit_id)` query
+-- against `edge_audit_history` may resolve to an audit whose edges
+-- have been wiped (no fresh audit since reindex), and an `edge_id`
+-- collision with a new logical edge would silently surface unrelated
+-- driver data. The source-derived `pattern_id` slug + `from_id` /
+-- `to_id` values (carried as `pattern_id` / `from` / `to` on the
+-- SampleRecord wire contract) are stable under reindex. Copying them
+-- here lets both the timeline and drivers queries read directly from
+-- the audit row without any JOIN to the mutable `edges` table — the
+-- write-once denormalisation is the canonical durable form of the
+-- "history outlives source" invariant (CP6.5 + CP6.6 — both address
+-- codex review passes on sprint 0004).
 --
 -- label is the verdict as stored: `correct` (label=true), `incorrect`
 -- (label=false), `skipped` (label=null). Storing the trichotomy
@@ -152,6 +159,8 @@ CREATE TABLE IF NOT EXISTS edge_audit_history (
     audit_id            INTEGER NOT NULL,
     edge_id             INTEGER NOT NULL,
     pattern_id          TEXT NOT NULL,
+    from_id             TEXT NOT NULL,
+    to_id               TEXT NOT NULL,
     labelled_at         INTEGER NOT NULL,
     labeller_id         TEXT,
     label               TEXT NOT NULL CHECK(label IN ('correct','incorrect','skipped')),

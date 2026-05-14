@@ -501,4 +501,23 @@ fn test_audit_history_pattern_timeline_survives_reindex() {
         audit_ids.contains(&2),
         "audit_id=2 from post-reindex run must appear; got {audit_ids:?}",
     );
+
+    // CP6.6 — currently_incorrect drivers also denormalised
+    // (from_id / to_id on the audit row). If any drivers surface,
+    // their from / to fields must be non-empty strings (no NULL /
+    // blank from a vanished `edges` JOIN). Pre-CP6.6 these came out
+    // empty when MAX(audit_id)'s edges had been wiped.
+    let drivers = v["currently_incorrect"].as_array().unwrap();
+    for d in drivers {
+        let from = d["from"].as_str().unwrap_or("");
+        let to = d["to"].as_str().unwrap_or("");
+        assert!(
+            !from.is_empty(),
+            "driver from must be non-empty (denormalised, not JOIN-derived): {d}"
+        );
+        assert!(
+            !to.is_empty(),
+            "driver to must be non-empty (denormalised, not JOIN-derived): {d}"
+        );
+    }
 }
