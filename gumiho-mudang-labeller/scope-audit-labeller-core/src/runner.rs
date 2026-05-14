@@ -73,5 +73,10 @@ where
         write_record(&mut writer, &labelled)?;
         stats.records_labelled += 1;
     }
+    // Explicit flush before reporting success. `BufWriter`'s `Drop` impl
+    // swallows late flush errors (e.g. broken pipe, full filesystem) so a
+    // caller that uses a buffered writer would otherwise see `Ok(stats)`
+    // while the final bytes never reached the underlying writer.
+    writer.flush()?;
     Ok(stats)
 }

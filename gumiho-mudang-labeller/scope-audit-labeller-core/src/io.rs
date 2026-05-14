@@ -188,6 +188,37 @@ mod tests {
     }
 
     #[test]
+    fn rejects_non_object_evidence() {
+        // The v2 schema requires `evidence: object | null`. The struct's
+        // type-level constraint (`Option<serde_json::Map<String, Value>>`)
+        // makes any other JSON shape unparseable. A labeller built on this
+        // core cannot accidentally emit records `--label` rejects.
+        for bad_shape in [r#""checked""#, r#"["a","b"]"#, r#"42"#, r#"true"#] {
+            let bad = example_v2_line()
+                .replace(r#""evidence":null"#, &format!(r#""evidence":{bad_shape}"#));
+            let cursor = Cursor::new(bad.into_bytes());
+            let err = read_records(cursor).next().unwrap().unwrap_err();
+            match err {
+                ParseError::Json { line, .. } => assert_eq!(line, 1),
+                other => panic!("expected Json error for evidence={bad_shape}, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn accepts_object_evidence() {
+        let labelled = example_v2_line().replace(
+            r#""evidence":null"#,
+            r#""evidence":{"resolver":"rust-analyzer","target_uri":"file:///x"}"#,
+        );
+        let cursor = Cursor::new(labelled.into_bytes());
+        let rec = read_records(cursor).next().unwrap().expect("parse");
+        let ev = rec.evidence.expect("evidence present");
+        assert_eq!(ev.get("resolver").and_then(|v| v.as_str()), Some("rust-analyzer"));
+        assert_eq!(ev.get("target_uri").and_then(|v| v.as_str()), Some("file:///x"));
+    }
+
+    #[test]
     fn parse_error_carries_line_number() {
         let content = format!("{}\nnot-json\n", example_v2_line());
         let cursor = Cursor::new(content.into_bytes());

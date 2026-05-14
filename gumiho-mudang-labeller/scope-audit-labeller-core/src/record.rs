@@ -23,6 +23,14 @@ pub const SCHEMA_VERSION: &str = "2";
 /// `lang_version_evidence`, `labeller_id`) are `Option`-typed with `null`
 /// on emit; capable labellers populate them. Partial population is
 /// tolerated per the schema doc.
+///
+/// `evidence` is typed `Option<serde_json::Map<String, serde_json::Value>>`
+/// rather than `Option<serde_json::Value>` so the type system enforces the
+/// schema doc's `object | null` shape — non-object JSON values (strings,
+/// arrays, numbers, booleans) are rejected at deserialisation time and a
+/// labeller cannot accidentally emit a shape `scope audit confidence
+/// --label` would reject (see `label_pass`'s `is_object()` check in
+/// `gumiho-mudang-cli/src/commands/audit.rs`, sprint 0004 (g)).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SampleRecord {
     pub schema_version: String,
@@ -38,7 +46,7 @@ pub struct SampleRecord {
     pub source_snippet: String,
     pub lang_version: Option<String>,
     pub label: Option<bool>,
-    pub evidence: Option<serde_json::Value>,
+    pub evidence: Option<serde_json::Map<String, serde_json::Value>>,
     pub target_proposed: Option<String>,
     pub kind_proposed: Option<String>,
     pub confidence_proposed: Option<String>,
