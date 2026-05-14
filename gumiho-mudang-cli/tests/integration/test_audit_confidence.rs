@@ -633,6 +633,52 @@ fn test_audit_confidence_label_rejects_tampered_lang_version() {
 }
 
 #[test]
+fn test_audit_confidence_label_rejects_non_object_evidence() {
+    // CP6.5 — addresses codex review on sprint 0004. The `evidence`
+    // field is typed `Option<serde_json::Value>` because the
+    // labeller-defined inner shape varies, but the outer shape is
+    // fixed by `AUDIT-LABEL-SCHEMA.md` as `object | null`. A scalar
+    // or array value must be rejected — otherwise schema-invalid
+    // records pass `--label` and reach `edge_audit_history.evidence_
+    // json`, breaking downstream readers that expect an object.
+    let (_dir, root) = setup_indexed_fixture();
+    let sample = root.join("sample.jsonl");
+
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--emit-sample"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .success();
+
+    // Replace `"evidence":null` with a scalar value on the first
+    // record. The first record also flips its label so the line
+    // would otherwise pass every other validation gate — isolating
+    // the failure to the evidence-shape check.
+    let raw = std::fs::read_to_string(&sample).unwrap();
+    let mut out_lines: Vec<String> = raw
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+        .map(str::to_string)
+        .collect();
+    out_lines[0] = out_lines[0]
+        .replace("\"label\":null", "\"label\":true")
+        .replace("\"evidence\":null", "\"evidence\":\"checked\"");
+    std::fs::write(&sample, out_lines.join("\n") + "\n").unwrap();
+
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--label"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .failure()
+        .stderr(contains("`evidence` must be a JSON object or null"))
+        .stderr(contains("got a string"));
+}
+
+#[test]
 fn test_audit_confidence_label_rejects_records_missing_label_field() {
     // Regression: `serde` deserializes a missing `label` key
     // identically to `label: null` — both become `Option::None`. The

@@ -635,6 +635,34 @@ fn label_pass(
                 SAMPLE_SCHEMA_VERSION
             );
         }
+        // `evidence` is typed `Option<serde_json::Value>` because the
+        // labeller-defined inner shape varies (LSP cross-check carries
+        // resolver/target_uri keys; LLM carries model/reasoning keys);
+        // but the outer shape is fixed by docs/AUDIT-LABEL-SCHEMA.md as
+        // `object | null`. Reject scalars / arrays here so wire-schema
+        // violations cannot reach `edge_audit_history.evidence_json`
+        // and break downstream readers that expect an object.
+        if let Some(ev) = &record.evidence {
+            if !ev.is_object() {
+                anyhow::bail!(
+                    "{}: line {}: `evidence` must be a JSON object or null per docs/AUDIT-LABEL-SCHEMA.md \
+                     (schema_version {:?}); got a {}. Labellers carry labeller-defined keys inside the \
+                     object (e.g. {{\"resolver\":\"rust-analyzer\",...}} or {{\"model\":\"claude-...\",...}}); \
+                     the outer shape is fixed.",
+                    in_path.display(),
+                    idx + 1,
+                    SAMPLE_SCHEMA_VERSION,
+                    match ev {
+                        serde_json::Value::Null => "null", // unreachable — handled by Option
+                        serde_json::Value::Bool(_) => "boolean",
+                        serde_json::Value::Number(_) => "number",
+                        serde_json::Value::String(_) => "string",
+                        serde_json::Value::Array(_) => "array",
+                        serde_json::Value::Object(_) => "object", // unreachable — branch above
+                    },
+                );
+            }
+        }
         records.push((idx + 1, record));
     }
 
