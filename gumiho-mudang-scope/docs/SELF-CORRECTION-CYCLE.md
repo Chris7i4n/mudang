@@ -138,7 +138,7 @@ The boundary is the build-system fact that turns two CHARTER lines into mechanic
 |---|---|---|
 | `scope-audit-labeller-core` | 0005 (b₁) | `Labeller` trait, `SampleRecord` v2 wire types, JSONL read/write helpers. Consumes only the published schema doc; zero dependency edges to Scope crates. |
 | `scope-audit-labeller-noop` | 0005 (b₁) | Reference impl. Stamps `labeller_id = "noop:reference-v0"` and passes every other field through. Proves the trait + IO loop end-to-end before concrete labellers ship. |
-| `scope-audit-labeller-llm` | 0010 (b₂) | Provider-agnostic LLM wrapper. |
+| `scope-audit-labeller-llm` | 0010 (b₂) | Provider-agnostic LLM wrapper. First provider: DeepSeek (`deepseek` cargo feature, default; OpenAI-compatible chat-completions endpoint). Additional providers (Anthropic / OpenAI / Gemini / local) land as separate cargo features in follow-up sprints. |
 | `scope-audit-labeller-lsp` | 0011 (b₃) | Per-language LSP cross-check via `tower-lsp` clients. |
 | `scope-audit-labeller-hybrid` | 0012 (b₄) | LLM-first composition over an inner labeller plus a human-reviews-diffs surface. |
 
@@ -165,6 +165,18 @@ gumiho-mudang-labeller (excluded sibling workspace)
 ```
 
 No cargo `path` dependency runs between the two workspaces in either direction. R14's narrow-grep gate verifies this on every CI run (sprint 0005 ships the gate alongside the workspace).
+
+### First concrete labeller — `scope-audit-labeller-llm`
+
+Sprint 0010 (b₂) ships the first concrete impl on top of the sprint-0005 scaffolding. The crate splits provider-agnostic logic from transport:
+
+- `Provider` trait — one method (`complete(&Prompt)`) plus stable `provider_id` / `model_id` strings. Retry / rate-limit handling is the provider's responsibility; by the time `complete` returns the bounded policy has already run.
+- `LlmLabeller<P: Provider>` — implements `Labeller`. Renders the prompt, calls the provider, parses the verdict, copies verdict fields onto the record, stamps `labeller_id` as `llm:<provider_id>:<model_id>` (three-segment shape; the two-segment form from earlier docs is retired).
+- Concrete providers live behind individual cargo features (`deepseek` ships in this sprint; Anthropic / OpenAI / Gemini / local follow). Adding a provider does not touch `LlmLabeller`, the prompt template, or the verdict parser.
+
+The `Provider` seam is also the test seam: `MockProvider` (in the crate's public surface, not `cfg(test)`-only) substitutes canned responses without any HTTP fake. The live DeepSeek transport is exercised by a separate test gated behind the `live-deepseek-tests` cargo feature **and** a `DEEPSEEK_API_KEY` env-var presence check; default `cargo test --workspace` never reaches the network.
+
+Per-record failure mode is **abstain, not corrupt**: a transport error after the retry policy, or an unparseable model response, writes a stderr diagnostic line and emits a record with the seven labeller-fillable fields untouched plus `labeller_id` stamped. The downstream `scope audit confidence --label` already tolerates `label: null` rows — an abstain is signal, not pipeline failure.
 
 ## Mandatory human review gate
 
