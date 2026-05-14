@@ -111,7 +111,7 @@ Each surface has a single owner sprint. Other sprints reference it; never duplic
 | Sample JSONL emitter | R8 (shipped) | One row per audited edge; `schema_version: "2"` from sprint 0004 |
 | Sample schema | sprint 0004 (g) | `SampleRecord` struct ↔ [`AUDIT-LABEL-SCHEMA.md`](./AUDIT-LABEL-SCHEMA.md); gated by doc-sync |
 | Labelled corpus on disk | sprint 0002 (e) | `scope-core/tests/fixtures/reference/<lang>/audit-samples/*.jsonl` + per-directory `MANIFEST.md` provenance; policy in [`AUDIT-LABEL-SCHEMA.md` § Corpus accumulation policy](./AUDIT-LABEL-SCHEMA.md#corpus-accumulation-policy) |
-| Labellers | sprint 0005 (b) | External workspace; LLM / LSP / hybrid crates; consume v2 schema |
+| Labellers | sprint 0005 (b₁) — scaffolding + reference noop; sprints 0010 (b₂) / 0011 (b₃) / 0012 (b₄) — concrete LLM / LSP / hybrid | Sibling cargo workspace `gumiho-mudang-labeller/` excluded from the root Scope workspace; shared `scope-audit-labeller-core` defines the `Labeller` trait + v2 JSONL helpers; concrete labellers depend only on core, never on Scope crates ([§ Labeller workspace](#labeller-workspace) below) |
 | Aggregator | sprint 0006 (i) | Runner-side; merges multi-labeller verdicts; emits single aggregated JSONL |
 | Coverage report | sprint 0004 (h) | `coverage_summary` top-level + per-row `skipped_count` / `coverage_ratio` |
 | Audit-history table | sprint 0004 (j) | `edge_audit_history` — append-only; sibling auditor-immutability rule |
@@ -122,6 +122,49 @@ Each surface has a single owner sprint. Other sprints reference it; never duplic
 | Doc-sync gate | sprint 0001 (this doc) | `scripts/gate_doc_sync.sh` — narrow-grep gate against doc-↔-code drift |
 
 ---
+
+## Labeller workspace
+
+Concrete labellers (LLM / LSP / hybrid, plus the reference noop) live in the **sibling cargo workspace** `gumiho-mudang-labeller/` at the repo root. The workspace is listed under the root `Cargo.toml`'s `[workspace] exclude = [...]`; cargo builds at the repo root never see it.
+
+The boundary is the build-system fact that turns two CHARTER lines into mechanical guarantees:
+
+- **CHARTER §3 invariant 6** — *"Deterministic, read-only at query time. No network calls."* LLM labellers call provider APIs (network) and LSP labellers spawn language servers (toolchain). The exclusion ensures both can exist as Scope-adjacent tooling without their dependencies entering the Scope binary's `Cargo.lock`.
+- **CHARTER §5 hard limits** — *"Network calls during query"*, *"No toolchain required"*, *"Invoking the language's compiler or interpreter"*. Labellers may legitimately do all three because they are not Scope; the workspace boundary keeps that division enforceable in review (a cargo edit that adds the wrong dependency fails the [`CI-GATES.md` R14 gate](./CI-GATES.md), it is not a code-review judgment call).
+
+### Surface
+
+| Crate | Sprint | Role |
+|---|---|---|
+| `scope-audit-labeller-core` | 0005 (b₁) | `Labeller` trait, `SampleRecord` v2 wire types, JSONL read/write helpers. Consumes only the published schema doc; zero dependency edges to Scope crates. |
+| `scope-audit-labeller-noop` | 0005 (b₁) | Reference impl. Stamps `labeller_id = "noop:reference-v0"` and passes every other field through. Proves the trait + IO loop end-to-end before concrete labellers ship. |
+| `scope-audit-labeller-llm` | 0010 (b₂) | Provider-agnostic LLM wrapper. |
+| `scope-audit-labeller-lsp` | 0011 (b₃) | Per-language LSP cross-check via `tower-lsp` clients. |
+| `scope-audit-labeller-hybrid` | 0012 (b₄) | LLM-first composition over an inner labeller plus a human-reviews-diffs surface. |
+
+The trait shape is **frozen at sprint 0005's close** — concrete labellers in 0010-0012 inherit it. A future bump to the trait is `schema_version`-grade discipline: charter-amendment commit on `main`, all four concrete labellers updated in lockstep, never a silent shape change.
+
+### Contract direction
+
+The labeller side imports nothing from Scope. The v2 record types in `scope-audit-labeller-core::record` are a **duplicate** of what `gumiho-mudang-scope/docs/AUDIT-LABEL-SCHEMA.md` § Record schema documents. The duplicate is intentional: the schema doc is the contract, the code on each side is an implementation of it. Drift surfaces as integration-test failure long before any silent breakage could escape.
+
+The wiring is intentionally one-way:
+
+```
+gumiho-mudang-scope (cargo workspace at repo root)
+    │
+    │  scope audit confidence --emit-sample sample.jsonl
+    │     writes v2 records per AUDIT-LABEL-SCHEMA.md
+    ▼
+sample.jsonl (the contract)
+    ▲
+    │  read_records / write_record from scope-audit-labeller-core
+    │
+gumiho-mudang-labeller (excluded sibling workspace)
+    └── scope-audit-labeller-{core, noop, llm, lsp, hybrid}
+```
+
+No cargo `path` dependency runs between the two workspaces in either direction. R14's narrow-grep gate verifies this on every CI run (sprint 0005 ships the gate alongside the workspace).
 
 ## Mandatory human review gate
 
