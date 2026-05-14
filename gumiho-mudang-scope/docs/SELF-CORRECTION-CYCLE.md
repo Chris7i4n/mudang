@@ -230,7 +230,7 @@ If a sprint's drift shape does not fit "one named code value ↔ one named doc v
 
 - [`BACKLOG.md` § Priority 1 — Self-correction cycle](./BACKLOG.md#priority-1--self-correction-cycle) — sub-item (a) through (k) catalogue.
 - [`SELF-CORRECTION-STATE.md`](./SELF-CORRECTION-STATE.md) — sprint state tracking.
-- [`AUDIT-LABEL-SCHEMA.md`](./AUDIT-LABEL-SCHEMA.md) — JSONL contract surface (current `schema_version: "1"`; bumped to `"2"` in sprint 0004).
+- [`AUDIT-LABEL-SCHEMA.md`](./AUDIT-LABEL-SCHEMA.md) — JSONL contract surface (current `schema_version: "2"`, shipped sprint 0004).
 - [`ENFORCEMENT-MAP.md` § R8](./ENFORCEMENT-MAP.md) — confidence-audit sensor; [`§ R13`](./ENFORCEMENT-MAP.md) — doc-sync gate.
 - [`CI-GATES.md`](./CI-GATES.md) — gate inventory including doc-sync.
 - [`CHARTER.md` § 6 Soft expansion zone](./CHARTER.md#6-soft-expansion-zone--scope-expands-freely-here) — the surface this initiative expands.

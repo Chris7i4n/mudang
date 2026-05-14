@@ -423,16 +423,318 @@ check_lang_version_detector_modules() {
 }
 
 # ─────────────────────────────────────────────────────────────
+# Check 7 — `SAMPLE_SCHEMA_VERSION` const in audit.rs ↔ documented
+# version in AUDIT-LABEL-SCHEMA.md.
+#
+# Rationale: AUDIT-LABEL-SCHEMA.md is the wire contract for external
+# labellers (LLM / LSP / hybrid). The schema version stamp appears in
+# TWO places that must match: the heading
+# `### Record schema (\`schema_version: "X"\`)` and the row in the
+# fields table whose `Description` cell quotes the active version
+# (`Always "X" on emit`). Code emission uses
+# `SAMPLE_SCHEMA_VERSION: &str = "X"` from audit.rs. Sprint 0004 (g)
+# bumped v1 → v2 across all three; any drift between them silently
+# breaks the external-labeller contract.
+#
+# Drift shape caught: const value ≠ heading value, or const value ≠
+# table-row value, or heading value ≠ table-row value.
+check_schema_version_const_doc() {
+    local audit_rs="gumiho-mudang-cli/src/commands/audit.rs"
+    local schema_doc="$SCOPE_DOCS/AUDIT-LABEL-SCHEMA.md"
+    [[ -f "$audit_rs" && -f "$schema_doc" ]] || return 0
+
+    # Extract the const value. Wrap each pipeline with `|| true` so
+    # `set -e` does not kill the gate on a deliberate no-match — the
+    # absence detail is surfaced via the `[[ -z ... ]]` guards below.
+    local const_value
+    const_value="$(grep -oE 'SAMPLE_SCHEMA_VERSION:[[:space:]]*&str[[:space:]]*=[[:space:]]*"[^"]+"' "$audit_rs" 2>/dev/null \
+                   | head -n1 \
+                   | sed -E 's/.*=[[:space:]]*"([^"]+)".*/\1/' || true)"
+    if [[ -z "$const_value" ]]; then
+        fail_block "schema-version-const-doc" \
+                   "SAMPLE_SCHEMA_VERSION const not found in $audit_rs (the gate cannot validate against an absent anchor)" \
+                   "expected: pub const SAMPLE_SCHEMA_VERSION: &str = \"<version>\";"
+        return
+    fi
+
+    # Extract the heading value: the section header that opens the
+    # record-schema table. AUDIT-LABEL-SCHEMA.md renders this at H2
+    # (`## Record schema (\`schema_version: "X"\`)`) but the gate
+    # tolerates H3 too in case the doc is reshuffled — the named
+    # token "Record schema" is the contract.
+    local heading_value
+    heading_value="$(grep -oE '^#+[[:space:]]+Record schema[[:space:]]+\(`schema_version: "[^"]+"`\)' "$schema_doc" 2>/dev/null \
+                     | head -n1 \
+                     | sed -E 's/.*"([^"]+)".*/\1/' || true)"
+
+    # Extract the table-row value: the row whose first cell is
+    # `\`schema_version\`` and whose Description quotes the version.
+    local table_value
+    table_value="$(grep -E '^\| `schema_version` \|' "$schema_doc" 2>/dev/null \
+                   | head -n1 \
+                   | grep -oE 'Always `"[^"]+"`' \
+                   | sed -E 's/.*"([^"]+)".*/\1/' || true)"
+
+    local detail=""
+    if [[ -z "$heading_value" ]]; then
+        detail+="AUDIT-LABEL-SCHEMA.md missing heading \`### Record schema (\`schema_version: \"<X>\"\`)\`"$'\n'
+    fi
+    if [[ -z "$table_value" ]]; then
+        detail+="AUDIT-LABEL-SCHEMA.md missing schema_version row with \`Always \"<X>\"\` description"$'\n'
+    fi
+    if [[ -n "$heading_value" && "$heading_value" != "$const_value" ]]; then
+        detail+="SAMPLE_SCHEMA_VERSION=\"$const_value\" ≠ AUDIT-LABEL-SCHEMA.md heading schema_version=\"$heading_value\""$'\n'
+    fi
+    if [[ -n "$table_value" && "$table_value" != "$const_value" ]]; then
+        detail+="SAMPLE_SCHEMA_VERSION=\"$const_value\" ≠ AUDIT-LABEL-SCHEMA.md table-row schema_version=\"$table_value\""$'\n'
+    fi
+    if [[ -n "$detail" ]]; then
+        fail_block "schema-version-const-doc" \
+                   "SAMPLE_SCHEMA_VERSION const ≠ AUDIT-LABEL-SCHEMA.md schema_version value (wire-contract drift)" \
+                   "$detail"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────
+# Check 8 — `SampleRecord` field set in audit.rs ⊆ documented v2
+# fields in AUDIT-LABEL-SCHEMA.md.
+#
+# Rationale: SampleRecord is the on-the-wire serde shape for the
+# `*.jsonl` sample file. Adding a field to the struct without
+# documenting it leaks an undocumented field into the wire contract
+# and breaks external-labeller authoring (the labeller has no spec to
+# code against). Documenting more than the struct exposes is fine
+# (forward-reservation), so this check is one-way: every code-side
+# field must appear in the doc table.
+#
+# Drift shape caught: a `pub <name>: …` field inside `pub struct
+# SampleRecord { … }` whose `<name>` has no `\`<name>\`` cell in the
+# AUDIT-LABEL-SCHEMA.md record-schema table.
+check_sample_record_fields() {
+    local audit_rs="gumiho-mudang-cli/src/commands/audit.rs"
+    local schema_doc="$SCOPE_DOCS/AUDIT-LABEL-SCHEMA.md"
+    [[ -f "$audit_rs" && -f "$schema_doc" ]] || return 0
+
+    # Extract field names from the SampleRecord struct body. BSD awk
+    # (macOS default) does not support gawk's three-argument `match()`,
+    # so the body is sliced with an open-ended range pattern and the
+    # field-line shape is matched and trimmed with `sub` (POSIX awk).
+    local code_fields
+    code_fields="$(awk '
+        /pub struct SampleRecord[[:space:]]*\{/ { in_struct = 1; next }
+        in_struct {
+            if ($0 ~ /^\}/) { exit }
+            line = $0
+            sub(/^[[:space:]]*pub[[:space:]]+/, "", line)
+            if (line ~ /^[a-z_][a-z0-9_]*:/) {
+                sub(/:.*$/, "", line)
+                print line
+            }
+        }
+    ' "$audit_rs" | sort -u)"
+
+    if [[ -z "$code_fields" ]]; then
+        fail_block "sample-record-fields" \
+                   "pub struct SampleRecord { … } not found in $audit_rs (gate cannot validate against an absent anchor)" \
+                   "expected: a top-level \`pub struct SampleRecord { pub <field>: <type>, … }\` block"
+        return
+    fi
+
+    # Extract documented field names from the record-schema table —
+    # rows whose first cell is `\`<name>\``.
+    local doc_fields
+    doc_fields="$(grep -oE '^\| `[a-z_][a-z0-9_]*` \|' "$schema_doc" \
+                  | sed -E 's/^\| `([a-z_][a-z0-9_]*)` \|/\1/' \
+                  | sort -u)"
+
+    local missing
+    missing="$(comm -23 <(printf '%s\n' "$code_fields") <(printf '%s\n' "$doc_fields"))"
+    if [[ -n "$missing" ]]; then
+        local detail="SampleRecord fields without a row in AUDIT-LABEL-SCHEMA.md record-schema table:"$'\n'
+        while IFS= read -r f; do [[ -n "$f" ]] && detail+="  $f"$'\n'; done <<< "$missing"
+        fail_block "sample-record-fields" \
+                   "SampleRecord field set ⊄ AUDIT-LABEL-SCHEMA.md documented fields (undocumented wire field)" \
+                   "$detail"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────
+# Check 9 — `CoverageSummary` struct fields in audit.rs ↔
+# documented field names in ENFORCEMENT-MAP.md § R8.
+#
+# Rationale: ENFORCEMENT-MAP.md § R8 is the canonical surface
+# description for the audit subcommand. Its `coverage_summary`
+# bullet enumerates the top-level coverage object's field names
+# verbatim. CoverageSummary is the serde shape; serde renames are
+# disallowed by structure (the struct is direct-serialised). A drift
+# (struct field renamed, doc still cites old name) silently breaks
+# any operator who reads the doc and reaches for the field by the
+# documented name.
+#
+# Drift shape caught: struct field set ≠ doc field set, either
+# direction.
+check_coverage_summary_fields() {
+    local audit_rs="gumiho-mudang-cli/src/commands/audit.rs"
+    local map="$SCOPE_DOCS/ENFORCEMENT-MAP.md"
+    [[ -f "$audit_rs" && -f "$map" ]] || return 0
+
+    local code_fields
+    code_fields="$(awk '
+        /pub struct CoverageSummary[[:space:]]*\{/ { in_struct = 1; next }
+        in_struct {
+            if ($0 ~ /^\}/) { exit }
+            line = $0
+            sub(/^[[:space:]]*pub[[:space:]]+/, "", line)
+            if (line ~ /^[a-z_][a-z0-9_]*:/) {
+                sub(/:.*$/, "", line)
+                print line
+            }
+        }
+    ' "$audit_rs" | sort -u)"
+
+    if [[ -z "$code_fields" ]]; then
+        fail_block "coverage-summary-fields" \
+                   "pub struct CoverageSummary { … } not found in $audit_rs (gate cannot validate against an absent anchor)" \
+                   "expected: a top-level \`pub struct CoverageSummary { pub <field>: <type>, … }\` block"
+        return
+    fi
+
+    # Extract the documented field set from the R8 coverage_summary
+    # bullet. The bullet has a single line shape:
+    #   …`coverage_summary` carries top-level coverage (`field_a`,
+    #   `field_b`, `field_c`, …)…
+    # The line itself contains many other backticked identifiers
+    # (other JSON envelope keys, per-row coverage fields). Scope the
+    # extraction to the parenthetical that *immediately follows* the
+    # phrase "`coverage_summary` carries top-level coverage" so
+    # neighbouring identifiers stay out.
+    local parenthetical
+    parenthetical="$(sed -nE 's/.*`coverage_summary` carries top-level coverage \(([^)]*)\).*/\1/p' "$map" 2>/dev/null \
+                     | head -n1 || true)"
+    if [[ -z "$parenthetical" ]]; then
+        fail_block "coverage-summary-fields" \
+                   "ENFORCEMENT-MAP.md § R8 missing the coverage_summary bullet (the gate's doc anchor)" \
+                   "expected: a line of shape \"…\`coverage_summary\` carries top-level coverage (\`field_a\`, \`field_b\`, …)\""
+        return
+    fi
+    local doc_fields
+    doc_fields="$(printf '%s' "$parenthetical" \
+                  | grep -oE '`[a-z_][a-z0-9_]*`' \
+                  | sed -E 's/`//g' \
+                  | sort -u)"
+
+    local missing extra
+    missing="$(comm -23 <(printf '%s\n' "$code_fields") <(printf '%s\n' "$doc_fields"))"
+    extra="$(comm -13 <(printf '%s\n' "$code_fields") <(printf '%s\n' "$doc_fields"))"
+    local detail=""
+    if [[ -n "$missing" ]]; then
+        detail+="CoverageSummary fields not in ENFORCEMENT-MAP.md § R8 coverage_summary bullet:"$'\n'
+        while IFS= read -r f; do [[ -n "$f" ]] && detail+="  $f"$'\n'; done <<< "$missing"
+    fi
+    if [[ -n "$extra" ]]; then
+        detail+="ENFORCEMENT-MAP.md § R8 coverage_summary fields not in CoverageSummary struct:"$'\n'
+        while IFS= read -r f; do [[ -n "$f" ]] && detail+="  $f"$'\n'; done <<< "$extra"
+    fi
+    if [[ -n "$detail" ]]; then
+        fail_block "coverage-summary-fields" \
+                   "CoverageSummary struct field set ≠ ENFORCEMENT-MAP.md § R8 coverage_summary fields" \
+                   "$detail"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────
+# Check 10 — `edge_audit_history` column set in schema.sql ↔
+# documented column set in ENFORCEMENT-MAP.md § R0.
+#
+# Rationale: sprint 0004 (j) carved a writable namespace into the
+# auditor-immutability rule and pinned the audit-history table's
+# columns in R0's schema closure. The SQL schema and the R-entry must
+# stay in lockstep — a column added to the table without an R0 update
+# means the closure description lies; a column documented but not
+# created means readers reach for fields that do not exist.
+#
+# Drift shape caught: schema.sql column set ≠ R0 bullet column set,
+# either direction.
+check_edge_audit_history_columns() {
+    local schema_sql="gumiho-mudang-scope/scope-graph/src/sql/schema.sql"
+    local map="$SCOPE_DOCS/ENFORCEMENT-MAP.md"
+    [[ -f "$schema_sql" && -f "$map" ]] || return 0
+
+    # Extract column names from the CREATE TABLE block. BSD awk
+    # (macOS default) does not support gawk's three-argument
+    # `match()`, so column lines are trimmed with `sub` (POSIX awk).
+    local sql_columns
+    sql_columns="$(awk '
+        /CREATE TABLE IF NOT EXISTS edge_audit_history[[:space:]]*\(/ { in_table = 1; next }
+        in_table {
+            if ($0 ~ /^\)[[:space:]]*;/) { exit }
+            line = $0
+            sub(/^[[:space:]]+/, "", line)
+            if (line ~ /^[a-z_][a-z0-9_]*[[:space:]]+(INTEGER|TEXT|REAL|BLOB|NUMERIC)/) {
+                sub(/[[:space:]]+.*$/, "", line)
+                print line
+            }
+        }
+    ' "$schema_sql" | sort -u)"
+
+    if [[ -z "$sql_columns" ]]; then
+        fail_block "edge-audit-history-columns" \
+                   "CREATE TABLE IF NOT EXISTS edge_audit_history (…) not found in $schema_sql (the gate cannot validate against an absent anchor)" \
+                   "expected: a CREATE TABLE block for edge_audit_history with explicit column declarations"
+        return
+    fi
+
+    # Extract documented column names from the R0
+    # "Audit-derived rows (writable namespace)" bullet. The bullet
+    # carries the full CREATE-TABLE signature inline as one backtick
+    # span: `edge_audit_history (col1 TYPE NOT NULL, col2 TYPE …)`.
+    # Grab the span, peel the parens, split on commas, take the first
+    # identifier of each entry, drop the CHECK-clause noise.
+    local doc_span
+    doc_span="$(grep -E '^[[:space:]]+- \*\*Audit-derived rows \(writable namespace\)\*\*' "$map" \
+                | head -n1 \
+                | grep -oE '`edge_audit_history \([^`]+\)`' \
+                | head -n1)"
+    if [[ -z "$doc_span" ]]; then
+        fail_block "edge-audit-history-columns" \
+                   "ENFORCEMENT-MAP.md § R0 missing the edge_audit_history schema bullet (the gate's doc anchor)" \
+                   "expected: a bullet of shape \"- **Audit-derived rows (writable namespace)**: \`edge_audit_history (col1 TYPE …, col2 TYPE …)\` — …\""
+        return
+    fi
+    local doc_columns
+    doc_columns="$(printf '%s' "$doc_span" \
+                   | sed -E 's/^`edge_audit_history \(//; s/\)`$//' \
+                   | tr ',' '\n' \
+                   | sed -E 's/^[[:space:]]+//; s/[[:space:]]+.*$//' \
+                   | grep -E '^[a-z_][a-z0-9_]*$' \
+                   | sort -u)"
+
+    local missing extra
+    missing="$(comm -23 <(printf '%s\n' "$sql_columns") <(printf '%s\n' "$doc_columns"))"
+    extra="$(comm -13 <(printf '%s\n' "$sql_columns") <(printf '%s\n' "$doc_columns"))"
+    local detail=""
+    if [[ -n "$missing" ]]; then
+        detail+="schema.sql edge_audit_history columns not documented in ENFORCEMENT-MAP.md § R0:"$'\n'
+        while IFS= read -r c; do [[ -n "$c" ]] && detail+="  $c"$'\n'; done <<< "$missing"
+    fi
+    if [[ -n "$extra" ]]; then
+        detail+="ENFORCEMENT-MAP.md § R0 edge_audit_history columns not in schema.sql:"$'\n'
+        while IFS= read -r c; do [[ -n "$c" ]] && detail+="  $c"$'\n'; done <<< "$extra"
+    fi
+    if [[ -n "$detail" ]]; then
+        fail_block "edge-audit-history-columns" \
+                   "schema.sql edge_audit_history column set ≠ ENFORCEMENT-MAP.md § R0 column set" \
+                   "$detail"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────
 # Future sprint extension hooks. Each later sprint in Priority 1 adds
 # ONE function here (named `check_<short_name>`) and invokes it from
 # `main()`. See SELF-CORRECTION-CYCLE.md § "Extending the doc-sync
 # gate" for the per-sprint table.
 #
 # Sprints expected to extend this script:
-#   - 0004 (g): SCHEMA_VERSION const ↔ schema_version doc value
-#   - 0004 (g): SampleRecord field set ⊆ AUDIT-LABEL-SCHEMA.md fields
-#   - 0004 (h): coverage_summary fields ↔ doc fields
-#   - 0004 (j): edge_audit_history columns ↔ doc columns
 #   - 0006 (i): documented default aggregation policy ↔ aggregator default
 #   - 0007 (c): audit-ci / audit-nightly recipes ↔ CI-GATES.md rows
 #   - 0009 (k): audit-trail path doc ↔ indexer-read path
@@ -445,6 +747,10 @@ main() {
     check_cycle_docs_indexed
     check_audit_samples_layout
     check_lang_version_detector_modules
+    check_schema_version_const_doc
+    check_sample_record_fields
+    check_coverage_summary_fields
+    check_edge_audit_history_columns
 
     if [[ "$FAILED" -ne 0 ]]; then
         echo "doc-sync gate: FAIL" >&2
