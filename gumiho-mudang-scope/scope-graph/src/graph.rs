@@ -71,6 +71,92 @@ pub struct AuditHistoryRow {
     pub evidence_json: Option<String>,
 }
 
+/// One timeline row returned by [`Graph::audit_history_edge`] — a single
+/// labelling verdict against one edge.
+#[derive(Debug, Clone)]
+pub struct AuditHistoryEdgeTimelineRow {
+    pub audit_id: i64,
+    pub labelled_at: i64,
+    pub labeller_id: Option<String>,
+    pub label: String,
+    pub target_proposed: Option<String>,
+    pub kind_proposed: Option<String>,
+    pub confidence_proposed: Option<String>,
+}
+
+/// One precision-over-time data point returned by
+/// [`Graph::audit_history_pattern`]. `precision` is `None` when the
+/// pattern had zero labelled rows in that audit (only skipped) — same
+/// semantics as `ReportRow.precision`.
+#[derive(Debug, Clone)]
+pub struct AuditHistoryPatternPoint {
+    pub audit_id: i64,
+    pub labelled_at: i64,
+    pub labelled_count: usize,
+    pub correct_count: usize,
+    pub precision: Option<f64>,
+}
+
+/// One currently-incorrect driver edge for the pattern drill — surfaces
+/// the edges actively pulling the pattern's precision down in the
+/// latest audit.
+#[derive(Debug, Clone)]
+pub struct AuditHistoryPatternDriver {
+    pub edge_id: i64,
+    pub from_id: Option<String>,
+    pub to_id: Option<String>,
+    pub target_proposed: Option<String>,
+    pub labeller_id: Option<String>,
+}
+
+/// Output bundle for the pattern drill — paired since both halves are
+/// always rendered together.
+#[derive(Debug, Clone)]
+pub struct AuditHistoryPattern {
+    pub pattern_id: String,
+    pub timeline: Vec<AuditHistoryPatternPoint>,
+    pub currently_incorrect: Vec<AuditHistoryPatternDriver>,
+}
+
+/// One row of the default-dashboard's "regressing patterns" table.
+/// `previous_precision` is `None` when the pattern only appears in the
+/// latest audit; `delta` is `current_precision - previous_precision`
+/// when both are `Some`, otherwise `None`.
+#[derive(Debug, Clone)]
+pub struct AuditHistoryPatternRegression {
+    pub pattern_id: String,
+    pub previous_precision: Option<f64>,
+    pub current_precision: f64,
+    pub delta: Option<f64>,
+}
+
+/// One row of the default-dashboard's "flapping edges" table. A flap is
+/// one adjacent `correct ↔ incorrect` transition in the edge's
+/// chronological history (skipped rows are not counted as transitions).
+#[derive(Debug, Clone)]
+pub struct AuditHistoryEdgeFlap {
+    pub edge_id: i64,
+    pub transitions: usize,
+    pub last_label: String,
+}
+
+/// Output bundle for the default `scope audit history` dashboard.
+///
+/// `latest_audit_id` is `None` when `edge_audit_history` is empty —
+/// every other field is then either zero or empty.
+#[derive(Debug, Clone, Default)]
+pub struct AuditHistoryDashboard {
+    pub latest_audit_id: Option<i64>,
+    pub labelled_at: Option<i64>,
+    pub records_total: usize,
+    pub records_correct: usize,
+    pub records_incorrect: usize,
+    pub records_skipped: usize,
+    pub overall_precision: Option<f64>,
+    pub regressing_patterns: Vec<AuditHistoryPatternRegression>,
+    pub flapping_edges: Vec<AuditHistoryEdgeFlap>,
+}
+
 /// One row destined for the `file_hashes` table (R6).
 ///
 /// Wraps the historical `(file_path, hash)` pair with `skipped_ranges` so
@@ -2376,6 +2462,325 @@ impl Graph {
         }
         tx.commit()?;
         Ok(audit_id)
+    }
+
+    /// Chronological label timeline for one `edge_id` — feeds
+    /// `scope audit history edge <ID>` (sprint 0004 (j)).
+    ///
+    /// Rows are ordered by `(audit_id ASC, labelled_at ASC)`. An empty
+    /// vec means either the edge has never been audited or has been
+    /// deleted from `edges` since the last audit — the read-side
+    /// surface treats both cases as "no timeline".
+    pub fn audit_history_edge(&self, edge_id: i64) -> Result<Vec<AuditHistoryEdgeTimelineRow>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT audit_id, labelled_at, labeller_id, label,
+                    target_proposed, kind_proposed, confidence_proposed
+               FROM edge_audit_history
+              WHERE edge_id = ?1
+              ORDER BY audit_id ASC, labelled_at ASC",
+        )?;
+        let rows = stmt.query_map(params![edge_id], |row| {
+            Ok(AuditHistoryEdgeTimelineRow {
+                audit_id: row.get(0)?,
+                labelled_at: row.get(1)?,
+                labeller_id: row.get(2)?,
+                label: row.get(3)?,
+                target_proposed: row.get(4)?,
+                kind_proposed: row.get(5)?,
+                confidence_proposed: row.get(6)?,
+            })
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
+    /// Precision-over-time + currently-incorrect drivers for one
+    /// `pattern_id` — feeds `scope audit history pattern <ID>`
+    /// (sprint 0004 (j)).
+    ///
+    /// `timeline` JOINs `edge_audit_history` against `edges` on
+    /// `edge_id` to recover the pattern_id (which lives on the
+    /// source-derived side). An edge whose row in `edges` has been
+    /// wiped between audits drops out of the timeline — its history
+    /// rows survive but the JOIN no longer resolves the pattern.
+    /// `currently_incorrect` filters to the latest audit and
+    /// `label = 'incorrect'`.
+    pub fn audit_history_pattern(&self, pattern_id: &str) -> Result<AuditHistoryPattern> {
+        // Per-audit fold for this pattern.
+        let mut stmt = self.conn.prepare(
+            "SELECT eh.audit_id,
+                    MIN(eh.labelled_at) AS labelled_at,
+                    SUM(CASE WHEN eh.label IN ('correct','incorrect') THEN 1 ELSE 0 END) AS labelled,
+                    SUM(CASE WHEN eh.label = 'correct' THEN 1 ELSE 0 END) AS correct
+               FROM edge_audit_history eh
+               JOIN edges e ON e.edge_id = eh.edge_id
+              WHERE e.pattern_id = ?1
+              GROUP BY eh.audit_id
+              ORDER BY eh.audit_id ASC",
+        )?;
+        let timeline: Vec<AuditHistoryPatternPoint> = stmt
+            .query_map(params![pattern_id], |row| {
+                let audit_id: i64 = row.get(0)?;
+                let labelled_at: i64 = row.get(1)?;
+                let labelled: i64 = row.get(2)?;
+                let correct: i64 = row.get(3)?;
+                let labelled_count = labelled.max(0) as usize;
+                let correct_count = correct.max(0) as usize;
+                let precision = if labelled_count > 0 {
+                    Some(correct_count as f64 / labelled_count as f64)
+                } else {
+                    None
+                };
+                Ok(AuditHistoryPatternPoint {
+                    audit_id,
+                    labelled_at,
+                    labelled_count,
+                    correct_count,
+                    precision,
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+
+        // Latest audit_id present for this pattern, then the
+        // currently-incorrect drivers in that audit.
+        let mut stmt_drivers = self.conn.prepare(
+            "SELECT eh.edge_id, e.from_id, e.to_id, eh.target_proposed, eh.labeller_id
+               FROM edge_audit_history eh
+               JOIN edges e ON e.edge_id = eh.edge_id
+              WHERE e.pattern_id = ?1
+                AND eh.label = 'incorrect'
+                AND eh.audit_id = (
+                    SELECT MAX(eh2.audit_id) FROM edge_audit_history eh2
+                      JOIN edges e2 ON e2.edge_id = eh2.edge_id
+                     WHERE e2.pattern_id = ?1
+                )
+              ORDER BY eh.edge_id ASC",
+        )?;
+        let currently_incorrect: Vec<AuditHistoryPatternDriver> = stmt_drivers
+            .query_map(params![pattern_id], |row| {
+                Ok(AuditHistoryPatternDriver {
+                    edge_id: row.get(0)?,
+                    from_id: row.get(1)?,
+                    to_id: row.get(2)?,
+                    target_proposed: row.get(3)?,
+                    labeller_id: row.get(4)?,
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+
+        Ok(AuditHistoryPattern {
+            pattern_id: pattern_id.to_string(),
+            timeline,
+            currently_incorrect,
+        })
+    }
+
+    /// Aggregate dashboard for `scope audit history` (no subcommand)
+    /// — sprint 0004 (j). `limit` caps both the regressing-patterns
+    /// and flapping-edges tables.
+    ///
+    /// Empty `edge_audit_history` → all fields zero / `None`. The
+    /// dashboard prints an explanatory "no history yet" message on
+    /// the CLI side in that case; this method just returns the
+    /// empty-shape struct.
+    pub fn audit_history_dashboard(&self, limit: usize) -> Result<AuditHistoryDashboard> {
+        let latest_audit_id: Option<i64> = self
+            .conn
+            .query_row("SELECT MAX(audit_id) FROM edge_audit_history", [], |r| {
+                r.get(0)
+            })
+            .optional()?
+            .flatten();
+        let Some(latest) = latest_audit_id else {
+            return Ok(AuditHistoryDashboard::default());
+        };
+
+        // Headline counts at the latest audit_id.
+        let labelled_at: i64 = self.conn.query_row(
+            "SELECT MIN(labelled_at) FROM edge_audit_history WHERE audit_id = ?1",
+            params![latest],
+            |r| r.get(0),
+        )?;
+        let mut records_correct = 0usize;
+        let mut records_incorrect = 0usize;
+        let mut records_skipped = 0usize;
+        {
+            let mut stmt = self.conn.prepare(
+                "SELECT label, COUNT(*) FROM edge_audit_history
+                  WHERE audit_id = ?1
+                  GROUP BY label",
+            )?;
+            let rows = stmt.query_map(params![latest], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            })?;
+            for r in rows {
+                let (label, n) = r?;
+                let n = n.max(0) as usize;
+                match label.as_str() {
+                    "correct" => records_correct = n,
+                    "incorrect" => records_incorrect = n,
+                    "skipped" => records_skipped = n,
+                    _ => {}
+                }
+            }
+        }
+        let records_total = records_correct + records_incorrect + records_skipped;
+        let labelled_denom = records_correct + records_incorrect;
+        let overall_precision = if labelled_denom > 0 {
+            Some(records_correct as f64 / labelled_denom as f64)
+        } else {
+            None
+        };
+
+        // Per-pattern precision for latest + previous audit_id (the
+        // top two ids). Compute delta; sort by delta asc; take limit.
+        let prev_audit_id: Option<i64> = self
+            .conn
+            .query_row(
+                "SELECT MAX(audit_id) FROM edge_audit_history WHERE audit_id < ?1",
+                params![latest],
+                |r| r.get(0),
+            )
+            .optional()?
+            .flatten();
+        let latest_stats = self.per_pattern_precision(latest)?;
+        let prev_stats: HashMap<String, f64> = match prev_audit_id {
+            Some(prev) => self.per_pattern_precision(prev)?,
+            None => HashMap::new(),
+        };
+        let mut regressions: Vec<AuditHistoryPatternRegression> = latest_stats
+            .into_iter()
+            .map(|(pattern_id, current_precision)| {
+                let previous_precision = prev_stats.get(&pattern_id).copied();
+                let delta = previous_precision.map(|p| current_precision - p);
+                AuditHistoryPatternRegression {
+                    pattern_id,
+                    previous_precision,
+                    current_precision,
+                    delta,
+                }
+            })
+            .collect();
+        // Sort: rows with a delta sort by delta ascending (most negative
+        // first); rows without (new patterns only in latest) trail. Tie-
+        // break by pattern_id for determinism.
+        regressions.sort_by(|a, b| match (a.delta, b.delta) {
+            (Some(da), Some(db)) => da
+                .partial_cmp(&db)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.pattern_id.cmp(&b.pattern_id)),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => a.pattern_id.cmp(&b.pattern_id),
+        });
+        regressions.truncate(limit);
+
+        // Flapping edges: count adjacent correct ↔ incorrect transitions
+        // per edge across all audits. Skipped rows do not break the
+        // sequence — they are skipped (the prior non-skipped label still
+        // counts as "previous" for the next non-skipped label).
+        let mut stmt = self.conn.prepare(
+            "SELECT edge_id, audit_id, label
+               FROM edge_audit_history
+              WHERE label IN ('correct','incorrect')
+              ORDER BY edge_id ASC, audit_id ASC",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })?;
+        let mut current_edge: Option<i64> = None;
+        let mut prev_label: Option<String> = None;
+        let mut transitions: usize = 0;
+        let mut last_label: String = String::new();
+        let mut flaps: Vec<AuditHistoryEdgeFlap> = Vec::new();
+        for r in rows {
+            let (edge_id, _audit_id, label) = r?;
+            if Some(edge_id) != current_edge {
+                if let Some(prev_edge) = current_edge.take() {
+                    if transitions > 0 {
+                        flaps.push(AuditHistoryEdgeFlap {
+                            edge_id: prev_edge,
+                            transitions,
+                            last_label: std::mem::take(&mut last_label),
+                        });
+                    }
+                }
+                current_edge = Some(edge_id);
+                prev_label = None;
+                transitions = 0;
+            }
+            if let Some(prev) = &prev_label {
+                if prev != &label {
+                    transitions += 1;
+                }
+            }
+            prev_label = Some(label.clone());
+            last_label = label;
+        }
+        if let Some(prev_edge) = current_edge {
+            if transitions > 0 {
+                flaps.push(AuditHistoryEdgeFlap {
+                    edge_id: prev_edge,
+                    transitions,
+                    last_label,
+                });
+            }
+        }
+        flaps.sort_by(|a, b| {
+            b.transitions
+                .cmp(&a.transitions)
+                .then_with(|| a.edge_id.cmp(&b.edge_id))
+        });
+        flaps.truncate(limit);
+
+        Ok(AuditHistoryDashboard {
+            latest_audit_id: Some(latest),
+            labelled_at: Some(labelled_at),
+            records_total,
+            records_correct,
+            records_incorrect,
+            records_skipped,
+            overall_precision,
+            regressing_patterns: regressions,
+            flapping_edges: flaps,
+        })
+    }
+
+    /// Per-pattern precision for one `audit_id`. Skipped rows excluded
+    /// from the denominator; patterns with zero labelled rows are
+    /// omitted (no precision is measurable).
+    fn per_pattern_precision(&self, audit_id: i64) -> Result<HashMap<String, f64>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT e.pattern_id,
+                    SUM(CASE WHEN eh.label = 'correct' THEN 1 ELSE 0 END) AS correct,
+                    SUM(CASE WHEN eh.label IN ('correct','incorrect') THEN 1 ELSE 0 END) AS labelled
+               FROM edge_audit_history eh
+               JOIN edges e ON e.edge_id = eh.edge_id
+              WHERE eh.audit_id = ?1
+              GROUP BY e.pattern_id",
+        )?;
+        let rows = stmt.query_map(params![audit_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, i64>(2)?,
+            ))
+        })?;
+        let mut out = HashMap::new();
+        for r in rows {
+            let (pattern_id, correct, labelled) = r?;
+            if labelled > 0 {
+                out.insert(pattern_id, correct as f64 / labelled as f64);
+            }
+        }
+        Ok(out)
     }
 
     /// Verify that every file in `file_paths` has the same content now as

@@ -261,6 +261,56 @@ pub enum AuditCommands {
     ///   scope audit confidence --emit-sample sample.jsonl
     ///   scope audit confidence --label sample.jsonl --format tsv
     Confidence(ConfidenceArgs),
+
+    /// read-side surface over the `edge_audit_history` table (sprint 0004 (j)).
+    ///
+    /// Three forms ship in sprint 0004: the no-subcommand default dashboard
+    /// (headline + top-N regressing patterns + top-N flapping edges),
+    /// `edge <edge_id>` (per-edge chronological timeline), and
+    /// `pattern <pattern_id>` (precision-over-time + currently-incorrect
+    /// driver edges). Two further forms (`labeller <id>` solo timeline
+    /// and `agreement-matrix`) defer to sprint 0006 (i) where multi-
+    /// labeller density makes them meaningful — see
+    /// `BACKLOG.md` § Priority 1 sub-item (j).
+    History(HistoryArgs),
+}
+
+/// Arguments for `scope audit history`.
+#[derive(Args, Debug)]
+pub struct HistoryArgs {
+    #[command(subcommand)]
+    pub command: Option<HistoryCommands>,
+
+    /// Emit JSON instead of human-readable text.
+    #[arg(long, global = true)]
+    pub json: bool,
+
+    /// Top-N cap for the default dashboard's regressing-patterns and
+    /// flapping-edges tables. Ignored on drill forms.
+    #[arg(long, default_value_t = 10)]
+    pub limit: usize,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum HistoryCommands {
+    /// chronological label timeline for one `edge_id`.
+    ///
+    /// Columns: `audit_id`, `labelled_at`, `labeller_id`, `label`,
+    /// `target_proposed`, `kind_proposed`, `confidence_proposed`.
+    /// Useful for spot-checking how the verdict on a specific edge has
+    /// drifted across labelling passes.
+    Edge {
+        /// `edges.edge_id` — surrogate PK round-tripped on the JSONL
+        /// sample-file contract (see `docs/AUDIT-LABEL-SCHEMA.md`).
+        edge_id: i64,
+    },
+
+    /// precision-over-time for one `pattern_id` + currently-incorrect
+    /// driver edges (latest audit).
+    Pattern {
+        /// `edges.pattern_id` slug (e.g. `rust.calls.method`).
+        pattern_id: String,
+    },
 }
 
 /// Arguments for `scope audit confidence`.
@@ -340,6 +390,7 @@ pub enum ReportFormat {
 pub fn run(args: &AuditArgs, project_root: &Path) -> Result<()> {
     match &args.command {
         AuditCommands::Confidence(c) => run_confidence(c, project_root),
+        AuditCommands::History(h) => run_history(h, project_root),
     }
 }
 
@@ -1349,6 +1400,343 @@ fn xorshift64(state: &mut u64) -> u64 {
     x ^= x << 17;
     *state = x;
     x
+}
+
+// ─────────────────────────────────────────────────────────────
+// `scope audit history` — read-side surface over `edge_audit_history`.
+// Sprint 0004 (j). Three forms: default dashboard, edge drill, pattern
+// drill. See `BACKLOG.md` § Priority 1 sub-item (j) + the surface
+// rationale in `gumiho-mudang-scope/docs/sprints/sprint-0004-...md`.
+
+fn run_history(args: &HistoryArgs, project_root: &Path) -> Result<()> {
+    let db_path = project_root.join(".scope").join("graph.db");
+    if !db_path.exists() {
+        anyhow::bail!(
+            "no index found at {}. Run `scope index` first.",
+            db_path.display()
+        );
+    }
+    let graph = gumiho_mudang_scope::graph::Graph::open(&db_path)
+        .with_context(|| format!("failed to open index at {}", db_path.display()))?;
+    let mut out = std::io::stdout().lock();
+    match &args.command {
+        None => {
+            let dash = graph.audit_history_dashboard(args.limit)?;
+            if args.json {
+                write_dashboard_json(&dash, &mut out)
+            } else {
+                write_dashboard_text(&dash, args.limit, &mut out)
+            }
+        }
+        Some(HistoryCommands::Edge { edge_id }) => {
+            let timeline = graph.audit_history_edge(*edge_id)?;
+            if args.json {
+                write_edge_json(*edge_id, &timeline, &mut out)
+            } else {
+                write_edge_text(*edge_id, &timeline, &mut out)
+            }
+        }
+        Some(HistoryCommands::Pattern { pattern_id }) => {
+            let bundle = graph.audit_history_pattern(pattern_id)?;
+            if args.json {
+                write_pattern_json(&bundle, &mut out)
+            } else {
+                write_pattern_text(&bundle, &mut out)
+            }
+        }
+    }
+}
+
+fn render_timestamp(unix_seconds: i64) -> String {
+    use chrono::TimeZone as _;
+    chrono::Utc
+        .timestamp_opt(unix_seconds, 0)
+        .single()
+        .map(|t| t.to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
+        .unwrap_or_else(|| unix_seconds.to_string())
+}
+
+fn render_precision(p: Option<f64>) -> String {
+    match p {
+        Some(v) => format!("{v:.4}"),
+        None => String::new(),
+    }
+}
+
+fn render_str_opt(s: &Option<String>) -> &str {
+    s.as_deref().unwrap_or("")
+}
+
+fn write_dashboard_text<W: Write>(
+    dash: &gumiho_mudang_scope::graph::AuditHistoryDashboard,
+    limit: usize,
+    out: &mut W,
+) -> Result<()> {
+    writeln!(out, "# scope audit history")?;
+    let Some(latest) = dash.latest_audit_id else {
+        writeln!(
+            out,
+            "# no audit history yet — run `scope audit confidence --label <path>` to populate"
+        )?;
+        return Ok(());
+    };
+    writeln!(out, "# headline")?;
+    writeln!(out, "latest_audit_id\t{latest}")?;
+    if let Some(at) = dash.labelled_at {
+        writeln!(out, "labelled_at\t{}", render_timestamp(at))?;
+    }
+    writeln!(out, "records_total\t{}", dash.records_total)?;
+    writeln!(out, "records_correct\t{}", dash.records_correct)?;
+    writeln!(out, "records_incorrect\t{}", dash.records_incorrect)?;
+    writeln!(out, "records_skipped\t{}", dash.records_skipped)?;
+    writeln!(
+        out,
+        "overall_precision\t{}",
+        render_precision(dash.overall_precision)
+    )?;
+    writeln!(out)?;
+    writeln!(
+        out,
+        "# top-{limit} patterns regressing (sorted by delta vs previous audit)"
+    )?;
+    writeln!(
+        out,
+        "pattern_id\tprevious_precision\tcurrent_precision\tdelta"
+    )?;
+    if dash.regressing_patterns.is_empty() {
+        writeln!(
+            out,
+            "# (no patterns with measurable precision in the latest audit)"
+        )?;
+    } else {
+        for r in &dash.regressing_patterns {
+            writeln!(
+                out,
+                "{}\t{}\t{:.4}\t{}",
+                r.pattern_id,
+                render_precision(r.previous_precision),
+                r.current_precision,
+                match r.delta {
+                    Some(d) => format!("{d:+.4}"),
+                    None => String::new(),
+                }
+            )?;
+        }
+    }
+    writeln!(out)?;
+    writeln!(
+        out,
+        "# top-{limit} edges flapping (correct ↔ incorrect transitions across audits)"
+    )?;
+    writeln!(out, "edge_id\ttransitions\tlast_label")?;
+    if dash.flapping_edges.is_empty() {
+        writeln!(
+            out,
+            "# (no flapping edges — every edge has stable verdict so far)"
+        )?;
+    } else {
+        for f in &dash.flapping_edges {
+            writeln!(out, "{}\t{}\t{}", f.edge_id, f.transitions, f.last_label)?;
+        }
+    }
+    Ok(())
+}
+
+fn write_dashboard_json<W: Write>(
+    dash: &gumiho_mudang_scope::graph::AuditHistoryDashboard,
+    out: &mut W,
+) -> Result<()> {
+    let regressions: Vec<serde_json::Value> = dash
+        .regressing_patterns
+        .iter()
+        .map(|r| {
+            serde_json::json!({
+                "pattern_id": r.pattern_id,
+                "previous_precision": r.previous_precision,
+                "current_precision": r.current_precision,
+                "delta": r.delta,
+            })
+        })
+        .collect();
+    let flaps: Vec<serde_json::Value> = dash
+        .flapping_edges
+        .iter()
+        .map(|f| {
+            serde_json::json!({
+                "edge_id": f.edge_id,
+                "transitions": f.transitions,
+                "last_label": f.last_label,
+            })
+        })
+        .collect();
+    let payload = serde_json::json!({
+        "latest_audit_id": dash.latest_audit_id,
+        "labelled_at": dash.labelled_at,
+        "records_total": dash.records_total,
+        "records_correct": dash.records_correct,
+        "records_incorrect": dash.records_incorrect,
+        "records_skipped": dash.records_skipped,
+        "overall_precision": dash.overall_precision,
+        "regressing_patterns": regressions,
+        "flapping_edges": flaps,
+    });
+    serde_json::to_writer_pretty(&mut *out, &payload)?;
+    writeln!(out)?;
+    Ok(())
+}
+
+fn write_edge_text<W: Write>(
+    edge_id: i64,
+    timeline: &[gumiho_mudang_scope::graph::AuditHistoryEdgeTimelineRow],
+    out: &mut W,
+) -> Result<()> {
+    writeln!(out, "# scope audit history edge {edge_id}")?;
+    if timeline.is_empty() {
+        writeln!(
+            out,
+            "# no history for edge_id {edge_id} (never audited, or edge deleted from index)"
+        )?;
+        return Ok(());
+    }
+    writeln!(
+        out,
+        "audit_id\tlabelled_at\tlabeller_id\tlabel\ttarget_proposed\tkind_proposed\tconfidence_proposed"
+    )?;
+    for r in timeline {
+        writeln!(
+            out,
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            r.audit_id,
+            render_timestamp(r.labelled_at),
+            render_str_opt(&r.labeller_id),
+            r.label,
+            render_str_opt(&r.target_proposed),
+            render_str_opt(&r.kind_proposed),
+            render_str_opt(&r.confidence_proposed),
+        )?;
+    }
+    Ok(())
+}
+
+fn write_edge_json<W: Write>(
+    edge_id: i64,
+    timeline: &[gumiho_mudang_scope::graph::AuditHistoryEdgeTimelineRow],
+    out: &mut W,
+) -> Result<()> {
+    let rows: Vec<serde_json::Value> = timeline
+        .iter()
+        .map(|r| {
+            serde_json::json!({
+                "audit_id": r.audit_id,
+                "labelled_at": r.labelled_at,
+                "labeller_id": r.labeller_id,
+                "label": r.label,
+                "target_proposed": r.target_proposed,
+                "kind_proposed": r.kind_proposed,
+                "confidence_proposed": r.confidence_proposed,
+            })
+        })
+        .collect();
+    let payload = serde_json::json!({
+        "edge_id": edge_id,
+        "timeline": rows,
+    });
+    serde_json::to_writer_pretty(&mut *out, &payload)?;
+    writeln!(out)?;
+    Ok(())
+}
+
+fn write_pattern_text<W: Write>(
+    bundle: &gumiho_mudang_scope::graph::AuditHistoryPattern,
+    out: &mut W,
+) -> Result<()> {
+    writeln!(out, "# scope audit history pattern {}", bundle.pattern_id)?;
+    if bundle.timeline.is_empty() {
+        writeln!(
+            out,
+            "# no history for pattern_id `{}` (no audited edges resolve to this pattern)",
+            bundle.pattern_id
+        )?;
+        return Ok(());
+    }
+    writeln!(out, "# precision-over-time")?;
+    writeln!(
+        out,
+        "audit_id\tlabelled_at\tlabelled_count\tcorrect_count\tprecision"
+    )?;
+    for p in &bundle.timeline {
+        writeln!(
+            out,
+            "{}\t{}\t{}\t{}\t{}",
+            p.audit_id,
+            render_timestamp(p.labelled_at),
+            p.labelled_count,
+            p.correct_count,
+            render_precision(p.precision),
+        )?;
+    }
+    writeln!(out)?;
+    writeln!(
+        out,
+        "# currently incorrect (driving regression in the latest audit)"
+    )?;
+    writeln!(out, "edge_id\tfrom\tto\ttarget_proposed\tlabeller_id")?;
+    if bundle.currently_incorrect.is_empty() {
+        writeln!(out, "# (no incorrect verdicts in the latest audit)")?;
+    } else {
+        for d in &bundle.currently_incorrect {
+            writeln!(
+                out,
+                "{}\t{}\t{}\t{}\t{}",
+                d.edge_id,
+                render_str_opt(&d.from_id),
+                render_str_opt(&d.to_id),
+                render_str_opt(&d.target_proposed),
+                render_str_opt(&d.labeller_id),
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn write_pattern_json<W: Write>(
+    bundle: &gumiho_mudang_scope::graph::AuditHistoryPattern,
+    out: &mut W,
+) -> Result<()> {
+    let timeline: Vec<serde_json::Value> = bundle
+        .timeline
+        .iter()
+        .map(|p| {
+            serde_json::json!({
+                "audit_id": p.audit_id,
+                "labelled_at": p.labelled_at,
+                "labelled_count": p.labelled_count,
+                "correct_count": p.correct_count,
+                "precision": p.precision,
+            })
+        })
+        .collect();
+    let drivers: Vec<serde_json::Value> = bundle
+        .currently_incorrect
+        .iter()
+        .map(|d| {
+            serde_json::json!({
+                "edge_id": d.edge_id,
+                "from": d.from_id,
+                "to": d.to_id,
+                "target_proposed": d.target_proposed,
+                "labeller_id": d.labeller_id,
+            })
+        })
+        .collect();
+    let payload = serde_json::json!({
+        "pattern_id": bundle.pattern_id,
+        "precision_over_time": timeline,
+        "currently_incorrect": drivers,
+    });
+    serde_json::to_writer_pretty(&mut *out, &payload)?;
+    writeln!(out)?;
+    Ok(())
 }
 
 #[cfg(test)]

@@ -156,3 +156,7 @@ path = "tests/integration/test_setup.rs"
 [[test]]
 name = "test_audit_confidence"
 path = "tests/integration/test_audit_confidence.rs"
+
+[[test]]
+name = "test_audit_history"
+path = "tests/integration/test_audit_history.rs"
