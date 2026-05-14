@@ -1,0 +1,9 @@
+/target
+Cargo.lock.bak
+**/*.rs.bk
+
+# Per-machine cargo config
+/.cargo/
+
+# Sprint-local ephemera
+**/wip/

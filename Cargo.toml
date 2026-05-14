@@ -10,6 +10,14 @@ members = [
     "gumiho-mudang-lsp",
     "gumiho-mudang-cli",
 ]
+# Sibling labeller workspace lives at `gumiho-mudang-labeller/` with its own
+# `[workspace]` block. Excluded so cargo builds at the root never compile
+# labeller-side crates and never pull labeller dependencies (LLM provider
+# SDKs, tower-lsp, async HTTP runtimes) into the root `Cargo.lock` or the
+# Scope binary. Mechanical enforcement of CHARTER §3 invariant 6 and §5
+# hard limits. See [`BACKLOG.md` § Priority 1 (b)] for the rationale and
+# [`ENFORCEMENT-MAP.md` § R14] for the gate that proves the boundary.
+exclude = ["gumiho-mudang-labeller"]
 
 [workspace.package]
 version = "0.1.0"

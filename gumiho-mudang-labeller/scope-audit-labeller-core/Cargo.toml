@@ -1,0 +1,16 @@
+[package]
+name = "scope-audit-labeller-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+publish.workspace = true
+description = "Shared core for Scope audit labellers: Labeller trait + v2 JSONL helpers. Consumes only the schema documented in gumiho-mudang-scope/docs/AUDIT-LABEL-SCHEMA.md."
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
