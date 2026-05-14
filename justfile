@@ -68,7 +68,7 @@ gate: fmt-check clippy test
 # this recipe.
 
 # Run every active architecture gate.
-gate-refactor: ci-edge-sealed test-builder test-typestate ci-context-shape ci-no-fs ci-dispatch ci-trait-shape ci-no-spawn ci-no-network ci-immutable ci-no-framework-scm ci-patterns ci-output-schema audit-confidence test-malformed gate-charter gate-doc-sync
+gate-refactor: ci-edge-sealed test-builder test-typestate ci-context-shape ci-no-fs ci-dispatch ci-trait-shape ci-no-spawn ci-no-network ci-immutable ci-no-framework-scm ci-patterns ci-output-schema audit-confidence ci-history-immutable test-malformed gate-charter gate-doc-sync
 
 ci-edge-sealed:
     ./scripts/grep_edge_sealed.sh
@@ -123,6 +123,18 @@ ci-output-schema:
 # queued — see BACKLOG.md § Priority 1 — Self-correction cycle.
 audit-confidence:
     cargo test -p gumiho-mudang-cli --test test_audit_confidence
+
+# R8 (sprint 0004 (j)) — edge_audit_history-source-immutability gate.
+#
+# Sprint 0004 carved a writable namespace for audit-derived rows
+# (`edge_audit_history`) out of the auditor-immutability rule.
+# Source-derived tables (`edges`, `symbols`, `file_hashes`) stay frozen
+# during audit. The gate is the mechanical enforcement: scans
+# `audit.rs` (the `--label` CLI surface) and the body of
+# `Graph::append_audit_history` (the sole writer reachable from the
+# `--label` flow) and refuses any source-derived SQL mutation.
+ci-history-immutable:
+    ./scripts/audit_history_immutability.sh
 
 # R6 — Malformed-source resilience harness.
 #

@@ -163,7 +163,7 @@ Justification for the hard lock (rather than a soft warning + opt-out flag):
 
 The SHA-256 check runs lazily: only the files referenced by the sample's edges are re-hashed, not the whole index (a typical N=30 sample touches ~10-30 distinct files). The cost is well under the time the labelling step itself takes.
 
-### Writable namespace for audit-derived rows (sprint 0004)
+### Writable namespace for audit-derived rows
 
 The immutability rule binds **source-derived rows** — `edges`, `symbols`, `file_hashes` — produced by the indexer from the source tree. These rows model "what the extractor saw" and stay frozen for the audit's lifetime; the SHA-256 lock above protects them by content, the schema enforces it by ownership.
 

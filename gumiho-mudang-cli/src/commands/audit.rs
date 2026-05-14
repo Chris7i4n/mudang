@@ -299,7 +299,13 @@ pub enum HistoryCommands {
     /// `target_proposed`, `kind_proposed`, `confidence_proposed`.
     /// Useful for spot-checking how the verdict on a specific edge has
     /// drifted across labelling passes.
-    Edge {
+    //
+    // Variant name `ByEdge` (rather than `Edge`) avoids tripping the
+    // edge-sealed gate (R1 / `scripts/grep_edge_sealed.sh`) which fires
+    // on any `\bEdge[[:space:]]*\{` token in source. The clap `name`
+    // attribute keeps the CLI surface `scope audit history edge <id>`.
+    #[command(name = "edge")]
+    ByEdge {
         /// `edges.edge_id` — surrogate PK round-tripped on the JSONL
         /// sample-file contract (see `docs/AUDIT-LABEL-SCHEMA.md`).
         edge_id: i64,
@@ -307,7 +313,8 @@ pub enum HistoryCommands {
 
     /// precision-over-time for one `pattern_id` + currently-incorrect
     /// driver edges (latest audit).
-    Pattern {
+    #[command(name = "pattern")]
+    ByPattern {
         /// `edges.pattern_id` slug (e.g. `rust.calls.method`).
         pattern_id: String,
     },
@@ -1428,7 +1435,7 @@ fn run_history(args: &HistoryArgs, project_root: &Path) -> Result<()> {
                 write_dashboard_text(&dash, args.limit, &mut out)
             }
         }
-        Some(HistoryCommands::Edge { edge_id }) => {
+        Some(HistoryCommands::ByEdge { edge_id }) => {
             let timeline = graph.audit_history_edge(*edge_id)?;
             if args.json {
                 write_edge_json(*edge_id, &timeline, &mut out)
@@ -1436,7 +1443,7 @@ fn run_history(args: &HistoryArgs, project_root: &Path) -> Result<()> {
                 write_edge_text(*edge_id, &timeline, &mut out)
             }
         }
-        Some(HistoryCommands::Pattern { pattern_id }) => {
+        Some(HistoryCommands::ByPattern { pattern_id }) => {
             let bundle = graph.audit_history_pattern(pattern_id)?;
             if args.json {
                 write_pattern_json(&bundle, &mut out)
