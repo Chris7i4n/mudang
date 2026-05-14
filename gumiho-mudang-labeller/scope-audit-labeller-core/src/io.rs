@@ -32,6 +32,14 @@ pub enum ParseError {
         source: serde_json::Error,
     },
     #[error(
+        "line {line}: record missing required field {field:?}. The v2 \
+         schema (AUDIT-LABEL-SCHEMA.md § Record schema) lists every \
+         field as required including the nullable ones — `null` must be \
+         present in the JSON, not omitted. Scope's `--label` rejects the \
+         same shape."
+    )]
+    MissingField { line: usize, field: &'static str },
+    #[error(
         "line {line}: unknown schema_version {got:?}; expected {expected:?}. \
          Per AUDIT-LABEL-SCHEMA.md § Versioning rules, the remediation is \
          wipe corpus + reindex + re-emit + re-label."
@@ -42,6 +50,30 @@ pub enum ParseError {
         expected: &'static str,
     },
 }
+
+/// The full v2 field set every record must carry, including the nullable
+/// ones. Order matches the [`SampleRecord`] struct declaration order which
+/// matches the schema-doc table.
+const REQUIRED_FIELDS: &[&str] = &[
+    "schema_version",
+    "edge_id",
+    "kind",
+    "confidence",
+    "producer",
+    "pattern_id",
+    "from",
+    "to",
+    "source_snippet",
+    "lang_version",
+    "label",
+    "evidence",
+    "target_proposed",
+    "kind_proposed",
+    "confidence_proposed",
+    "reasoning_text",
+    "lang_version_evidence",
+    "labeller_id",
+];
 
 /// Streaming iterator over the records of a JSONL sample file.
 ///
@@ -79,7 +111,32 @@ impl<R: BufRead> Iterator for RecordIter<R> {
                 continue;
             }
 
-            let record: SampleRecord = match serde_json::from_str(trimmed) {
+            // Pre-typed presence check: every v2 column is required (nullable
+            // columns require `null` explicitly; missing keys are a schema
+            // violation, not a default). Parse to a `Value` first so we can
+            // distinguish "present and null" from "absent" — serde alone
+            // would silently coerce absent `Option<T>` to `None`.
+            let raw: serde_json::Map<String, serde_json::Value> =
+                match serde_json::from_str(trimmed) {
+                    Ok(serde_json::Value::Object(map)) => map,
+                    Ok(_) => {
+                        return Some(Err(ParseError::Json {
+                            line: line_no,
+                            source: serde::de::Error::custom("record must be a JSON object"),
+                        }));
+                    }
+                    Err(source) => return Some(Err(ParseError::Json { line: line_no, source })),
+                };
+            for field in REQUIRED_FIELDS {
+                if !raw.contains_key(*field) {
+                    return Some(Err(ParseError::MissingField {
+                        line: line_no,
+                        field,
+                    }));
+                }
+            }
+            let record: SampleRecord = match serde_json::from_value(serde_json::Value::Object(raw))
+            {
                 Ok(r) => r,
                 Err(source) => return Some(Err(ParseError::Json { line: line_no, source })),
             };
@@ -216,6 +273,50 @@ mod tests {
         let ev = rec.evidence.expect("evidence present");
         assert_eq!(ev.get("resolver").and_then(|v| v.as_str()), Some("rust-analyzer"));
         assert_eq!(ev.get("target_uri").and_then(|v| v.as_str()), Some("file:///x"));
+    }
+
+    #[test]
+    fn rejects_records_missing_required_nullable_fields() {
+        // Every v2 column is required, including nullable ones. A record
+        // missing `label` / `evidence` / `labeller_id` (etc.) is a schema
+        // violation — `null` must be present, not omitted. Scope's CLI
+        // `--label` rejects the same shape.
+        let strip = |needle: &str| {
+            // Strip the `,"<needle>":<value>` segment, robust to whether the
+            // value is `null` or an object.
+            let s = example_v2_line();
+            // Find the comma-prefixed key occurrence and remove through the
+            // following null/value boundary.
+            let pat = format!(",\"{needle}\":null");
+            assert!(s.contains(&pat), "fixture missing pattern {pat}");
+            s.replace(&pat, "")
+        };
+
+        for field in ["label", "evidence", "labeller_id", "target_proposed"] {
+            let bad = strip(field);
+            let cursor = Cursor::new(bad.into_bytes());
+            let err = read_records(cursor).next().unwrap().unwrap_err();
+            match err {
+                ParseError::MissingField { line, field: got_field } => {
+                    assert_eq!(line, 1);
+                    assert_eq!(got_field, field, "wrong field name in error");
+                }
+                other => panic!("expected MissingField({field}), got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn rejects_top_level_non_object() {
+        // A JSONL line that parses to a JSON array or string is not a
+        // record at all.
+        let bad = "[1,2,3]\n";
+        let cursor = Cursor::new(bad.as_bytes().to_vec());
+        let err = read_records(cursor).next().unwrap().unwrap_err();
+        match err {
+            ParseError::Json { line, .. } => assert_eq!(line, 1),
+            other => panic!("expected Json error on non-object top-level, got {other:?}"),
+        }
     }
 
     #[test]
