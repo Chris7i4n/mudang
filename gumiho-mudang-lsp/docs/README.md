@@ -14,6 +14,14 @@ known gaps, and the intended direction for closing those gaps.
   forward-looking possibility — unlocked by Scope's R10 typed output
   schema — of a future composition layer consuming Scope
   output via shared Rust types or TS/typeshare-generated bindings.
+- [LABELLER_INTERFACE.md](LABELLER_INTERFACE.md) is the forward-looking
+  contract for the first non-CLI consumer of this crate:
+  `scope-audit-labeller-lsp` in the sibling labeller workspace. Records
+  the single-interface / multi-server promise the labeller depends on,
+  the required public API shape, and the punch list of internal
+  closures (capability detection, per-request timeout, canonical
+  language IDs, server-initiated request responder, `serverInfo`
+  capture) that must land before the labeller can adopt this crate.
 
 ## Design Principle
 
