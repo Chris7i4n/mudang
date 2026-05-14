@@ -44,6 +44,33 @@ pub struct AuditEdgeRow {
     pub args_text: Option<String>,
 }
 
+/// One row destined for the `edge_audit_history` table (sprint 0004
+/// BACKLOG (j)).
+///
+/// Carries the labeller verdict for one edge in one `--label` run.
+/// `audit_id` and `labelled_at` are not on this struct — they are
+/// generated at write time by [`Graph::append_audit_history`] so every
+/// row in one labelling pass shares the same values without the caller
+/// having to thread them.
+///
+/// `label` is the verdict-as-stored: `"correct"` / `"incorrect"` /
+/// `"skipped"`. The trichotomy is preserved verbatim from the
+/// SampleRecord (`Some(true)` / `Some(false)` / `None`); the SQL
+/// `CHECK` constraint refuses anything else.
+///
+/// `evidence_json` is the SampleRecord.evidence field pre-serialised
+/// to a JSON string. `None` when the labeller supplied no evidence.
+#[derive(Debug, Clone)]
+pub struct AuditHistoryRow {
+    pub edge_id: i64,
+    pub labeller_id: Option<String>,
+    pub label: String,
+    pub target_proposed: Option<String>,
+    pub kind_proposed: Option<String>,
+    pub confidence_proposed: Option<String>,
+    pub evidence_json: Option<String>,
+}
+
 /// One row destined for the `file_hashes` table (R6).
 ///
 /// Wraps the historical `(file_path, hash)` pair with `skipped_ranges` so
@@ -2298,6 +2325,57 @@ impl Graph {
             out.push(r?);
         }
         Ok(out)
+    }
+
+    /// Append one labelling pass's verdicts to `edge_audit_history` and
+    /// return the freshly-allocated `audit_id`.
+    ///
+    /// Sprint 0004 (BACKLOG.md § Priority 1 sub-item (j)). The
+    /// `audit_id` is generated inside the writing transaction as
+    /// `COALESCE(MAX(audit_id), 0) + 1`; every row in `rows` is written
+    /// with that id and a shared `labelled_at` UNIX timestamp.
+    /// Single-operator posture (CHARTER.md § 3 invariant 1) makes the
+    /// read-then-insert race-free — no concurrent writers exist.
+    ///
+    /// Sibling auditor-immutability rule: this is the **only** mutation
+    /// the `--label` flow performs on `graph.db`. Source-derived tables
+    /// (`edges`, `symbols`, `file_hashes`) stay frozen during audit.
+    /// The CI gate `edge_audit_history-source-immutability` (sprint
+    /// 0004 CP6) is the mechanical enforcement.
+    pub fn append_audit_history(&mut self, rows: &[AuditHistoryRow]) -> Result<i64> {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_secs() as i64;
+
+        let tx = self.conn.transaction()?;
+        let audit_id: i64 = tx.query_row(
+            "SELECT COALESCE(MAX(audit_id), 0) + 1 FROM edge_audit_history",
+            [],
+            |r| r.get(0),
+        )?;
+        {
+            let mut stmt = tx.prepare(
+                "INSERT INTO edge_audit_history
+                 (audit_id, edge_id, labelled_at, labeller_id, label,
+                  target_proposed, kind_proposed, confidence_proposed, evidence_json)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            )?;
+            for row in rows {
+                stmt.execute(params![
+                    audit_id,
+                    row.edge_id,
+                    now,
+                    row.labeller_id,
+                    row.label,
+                    row.target_proposed,
+                    row.kind_proposed,
+                    row.confidence_proposed,
+                    row.evidence_json,
+                ])?;
+            }
+        }
+        tx.commit()?;
+        Ok(audit_id)
     }
 
     /// Verify that every file in `file_paths` has the same content now as

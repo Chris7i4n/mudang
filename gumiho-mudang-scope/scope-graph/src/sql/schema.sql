@@ -102,6 +102,54 @@ CREATE TABLE IF NOT EXISTS file_hashes (
     skipped_ranges  TEXT NOT NULL DEFAULT '[]'
 );
 
+-- edge_audit_history: append-only audit-derived namespace introduced by
+-- sprint 0004 (BACKLOG.md § Priority 1 sub-item (j); also see
+-- docs/AUDIT-LABEL-SCHEMA.md § Auditor immutability rule § Writable
+-- namespace for audit-derived rows).
+--
+-- Append-only by writer contract; the `--label` flow only INSERTs
+-- (never UPDATE / DELETE), and the sibling auditor-immutability rule
+-- forbids `--label` from touching source-derived tables (`edges`,
+-- `symbols`, `file_hashes`). The CI gate
+-- `edge_audit_history-source-immutability` (sprint 0004 CP6) is the
+-- mechanical enforcement; this comment is the structural one.
+--
+-- audit_id groups all rows from one `--label` invocation. Generated at
+-- write time by Graph::append_audit_history as
+-- `COALESCE(MAX(audit_id), 0) + 1` inside the writing transaction.
+-- Single-operator posture (CHARTER.md § 3 invariant 1) — no concurrent
+-- writers, so the read-then-insert is race-free.
+--
+-- edge_id intentionally has no FK to edges(edge_id). History outlives
+-- source: a `scope index` between audits may delete an edge, but the
+-- historical verdicts against it remain. CP5 (`scope audit history`)
+-- LEFT-JOINs against `edges` to surface dangling-reference history rows.
+--
+-- label is the verdict as stored: `correct` (label=true), `incorrect`
+-- (label=false), `skipped` (label=null). Storing the trichotomy
+-- explicitly lets future flapping / disagreement queries match on the
+-- string without re-deriving from a nullable boolean.
+--
+-- evidence_json is the SampleRecord.evidence field as TEXT JSON (the
+-- column type is TEXT; readers parse it with json_extract or
+-- serde_json). NULL when the labeller supplied no evidence.
+--
+-- No primary key: the table is the audit log, duplicates are
+-- structurally permitted (a labeller can be re-run by mistake; the
+-- history shows that as two rows, not a silent overwrite). The two
+-- BACKLOG-mandated indices cover the CP5 query patterns.
+CREATE TABLE IF NOT EXISTS edge_audit_history (
+    audit_id            INTEGER NOT NULL,
+    edge_id             INTEGER NOT NULL,
+    labelled_at         INTEGER NOT NULL,
+    labeller_id         TEXT,
+    label               TEXT NOT NULL CHECK(label IN ('correct','incorrect','skipped')),
+    target_proposed     TEXT,
+    kind_proposed       TEXT,
+    confidence_proposed TEXT,
+    evidence_json       TEXT
+);
+
 -- FTS5 virtual table for semantic-like search (`scope find`).
 -- Stores a rich text representation of each symbol for full-text search.
 -- The content is kept in sync with the symbols table via the searcher module.
@@ -131,3 +179,9 @@ CREATE INDEX IF NOT EXISTS idx_edges_confidence    ON edges(confidence);
 CREATE INDEX IF NOT EXISTS idx_edges_status        ON edges(status);
 CREATE INDEX IF NOT EXISTS idx_edges_producer      ON edges(producer);
 CREATE INDEX IF NOT EXISTS idx_edges_pattern       ON edges(pattern_id);
+-- Sprint 0004 (BACKLOG.md § Priority 1 sub-item (j)) — audit-history
+-- lookup indices. (edge_id, audit_id) covers the `scope audit history
+-- edge <edge_id>` drill; (labeller_id, audit_id) covers the deferred
+-- sprint 0006 `scope audit history labeller <id>` drill.
+CREATE INDEX IF NOT EXISTS idx_edge_audit_history_edge_audit      ON edge_audit_history(edge_id, audit_id);
+CREATE INDEX IF NOT EXISTS idx_edge_audit_history_labeller_audit  ON edge_audit_history(labeller_id, audit_id);

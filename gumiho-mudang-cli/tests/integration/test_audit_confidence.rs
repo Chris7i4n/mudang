@@ -6,6 +6,7 @@
 /// `gumiho-mudang-scope/docs/AUDIT-LABEL-SCHEMA.md`).
 use assert_cmd::Command;
 use predicates::str::contains;
+use rusqlite::Connection;
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
@@ -1268,6 +1269,181 @@ fn test_audit_confidence_label_surfaces_per_group_coverage_when_some_records_ski
             assert!((cr - expected).abs() < 1e-9, "coverage_ratio math: {row}");
         }
     }
+}
+
+#[test]
+fn test_audit_confidence_label_persists_verdicts_to_edge_audit_history() {
+    // Sprint 0004 CP4 (BACKLOG.md § Priority 1 sub-item (j)): every
+    // `--label` invocation appends one row per record to
+    // `edge_audit_history` under a fresh `audit_id`. The label
+    // trichotomy is preserved: `correct` / `incorrect` / `skipped`.
+    // Two back-to-back runs allocate sequential audit_ids; rows from
+    // each run carry the same id; the second run's rows do not
+    // overwrite the first's (append-only).
+    let (_dir, root) = setup_indexed_fixture();
+    let db_path = root.join(".scope").join("graph.db");
+
+    let sample = root.join("sample.jsonl");
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--emit-sample"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .success();
+
+    // Mix the verdict trichotomy across records: odd → true, even → false,
+    // multiples-of-3 → leave null. The mix guarantees the storage path
+    // round-trips all three labels under one run.
+    let raw = std::fs::read_to_string(&sample).unwrap();
+    let mut out_lines = Vec::new();
+    let mut total = 0usize;
+    let mut correct = 0usize;
+    let mut incorrect = 0usize;
+    let mut skipped = 0usize;
+    for (i, l) in raw
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+        .enumerate()
+    {
+        total += 1;
+        let line = if i % 3 == 0 {
+            skipped += 1;
+            l.to_string()
+        } else if i % 2 == 1 {
+            correct += 1;
+            l.replace("\"label\":null", "\"label\":true")
+        } else {
+            incorrect += 1;
+            l.replace("\"label\":null", "\"label\":false")
+        };
+        out_lines.push(line);
+    }
+    std::fs::write(&sample, format!("{}\n", out_lines.join("\n"))).unwrap();
+
+    // Tier gate fires on incorrect rows that drop precision below
+    // target — the run exits with non-zero status, but history is
+    // persisted BEFORE the gate evaluates, so the rows are there
+    // regardless. The whole point of this test is to verify that
+    // persistence happens on the honest-failure path, not just the
+    // all-true happy path.
+    let _ = Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--label"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert();
+
+    // First run: exactly one audit_id; row count matches the records
+    // we wrote; label trichotomy preserved.
+    let conn = Connection::open(&db_path).unwrap();
+    let row_count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM edge_audit_history", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(
+        row_count as usize, total,
+        "row count must match sample size"
+    );
+
+    let audit_ids: Vec<i64> = conn
+        .prepare("SELECT DISTINCT audit_id FROM edge_audit_history ORDER BY audit_id")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    assert_eq!(audit_ids, vec![1], "first run must allocate audit_id = 1");
+
+    let count_label = |lbl: &str| -> i64 {
+        conn.query_row(
+            "SELECT COUNT(*) FROM edge_audit_history WHERE label = ?1",
+            [lbl],
+            |r| r.get(0),
+        )
+        .unwrap()
+    };
+    assert_eq!(count_label("correct") as usize, correct);
+    assert_eq!(count_label("incorrect") as usize, incorrect);
+    assert_eq!(count_label("skipped") as usize, skipped);
+
+    // labelled_at populated as a positive UNIX-seconds timestamp.
+    let labelled_at: i64 = conn
+        .query_row("SELECT MIN(labelled_at) FROM edge_audit_history", [], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    assert!(
+        labelled_at > 0,
+        "labelled_at must be a positive epoch second"
+    );
+
+    // Source-derived tables untouched by --label (sibling auditor-
+    // immutability rule; mechanically enforced by CP6's CI gate but
+    // probed here as a sanity floor).
+    let edges_before: i64 = conn
+        .query_row("SELECT COUNT(*) FROM edges", [], |r| r.get(0))
+        .unwrap();
+    let symbols_before: i64 = conn
+        .query_row("SELECT COUNT(*) FROM symbols", [], |r| r.get(0))
+        .unwrap();
+    let hashes_before: i64 = conn
+        .query_row("SELECT COUNT(*) FROM file_hashes", [], |r| r.get(0))
+        .unwrap();
+    drop(conn);
+
+    // Second run with the same labelled sample: append-only ⇒ row
+    // count doubles, audit_id increments to 2, source-derived tables
+    // unchanged. Same non-success exit as the first run; same
+    // pre-gate persistence semantics.
+    let _ = Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--label"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert();
+    let conn = Connection::open(&db_path).unwrap();
+    let row_count_after: i64 = conn
+        .query_row("SELECT COUNT(*) FROM edge_audit_history", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(
+        row_count_after as usize,
+        total * 2,
+        "second run must append, not replace"
+    );
+    let audit_ids: Vec<i64> = conn
+        .prepare("SELECT DISTINCT audit_id FROM edge_audit_history ORDER BY audit_id")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    assert_eq!(
+        audit_ids,
+        vec![1, 2],
+        "second run must allocate audit_id = 2"
+    );
+
+    let edges_after: i64 = conn
+        .query_row("SELECT COUNT(*) FROM edges", [], |r| r.get(0))
+        .unwrap();
+    let symbols_after: i64 = conn
+        .query_row("SELECT COUNT(*) FROM symbols", [], |r| r.get(0))
+        .unwrap();
+    let hashes_after: i64 = conn
+        .query_row("SELECT COUNT(*) FROM file_hashes", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(
+        edges_after, edges_before,
+        "edges must stay frozen during --label"
+    );
+    assert_eq!(
+        symbols_after, symbols_before,
+        "symbols must stay frozen during --label"
+    );
+    assert_eq!(
+        hashes_after, hashes_before,
+        "file_hashes must stay frozen during --label"
+    );
 }
 
 #[test]

@@ -14,7 +14,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
-use gumiho_mudang_scope::graph::{AuditEdgeRow, AuditFreshness, Graph};
+use gumiho_mudang_scope::graph::{AuditEdgeRow, AuditFreshness, AuditHistoryRow, Graph};
 use gumiho_mudang_scope::workspace::lang_version::detect_lang_version;
 
 /// Default sample size per `(kind, confidence)` cell.
@@ -352,12 +352,12 @@ fn run_confidence(args: &ConfidenceArgs, project_root: &Path) -> Result<()> {
         );
     }
 
-    let graph = Graph::open(&db_path)
+    let mut graph = Graph::open(&db_path)
         .with_context(|| format!("failed to open index at {}", db_path.display()))?;
 
     match (&args.emit_sample, &args.label) {
         (Some(out_path), None) => emit_sample(&graph, args, project_root, out_path),
-        (None, Some(in_path)) => label_pass(&graph, args, project_root, in_path),
+        (None, Some(in_path)) => label_pass(&mut graph, args, project_root, in_path),
         (None, None) => default_summary(&graph, args),
         // Unreachable because clap's `conflicts_with` prevents both being set.
         (Some(_), Some(_)) => {
@@ -483,7 +483,7 @@ fn emit_sample(
 /// Precision computation, JSON / TSV writers, and tier gate run after
 /// this read-path completes.
 fn label_pass(
-    graph: &Graph,
+    graph: &mut Graph,
     args: &ConfidenceArgs,
     project_root: &Path,
     in_path: &Path,
@@ -871,10 +871,71 @@ fn label_pass(
     }
 
     let records_only: Vec<SampleRecord> = records.into_iter().map(|(_, r)| r).collect();
+
+    // Sprint 0004 (BACKLOG.md § Priority 1 sub-item (j)) — persist the
+    // verdict trichotomy to `edge_audit_history` before printing the
+    // report. The write is the only mutation `--label` performs on
+    // `graph.db`; source-derived tables stay frozen (sibling
+    // auditor-immutability rule). Persist regardless of the tier gate
+    // outcome below — the verdicts are valid audit signal even when
+    // the gate then rejects them as below-target.
+    let history_rows = build_audit_history_rows(&records_only)?;
+    graph.append_audit_history(&history_rows).with_context(|| {
+        format!(
+            "failed to persist {} verdict(s) to edge_audit_history",
+            history_rows.len()
+        )
+    })?;
+
     let report = compute_precision_report(&records_only);
     write_report(&report, args.format, &mut std::io::stdout().lock())?;
     check_tier_gate(&report)?;
     Ok(())
+}
+
+/// Map `SampleRecord`s to the storage-side `AuditHistoryRow` shape.
+///
+/// The `label` trichotomy maps: `Some(true)` → `"correct"`,
+/// `Some(false)` → `"incorrect"`, `None` → `"skipped"`. The schema's
+/// `CHECK` constraint refuses anything else, so the mapping is
+/// total-by-construction.
+///
+/// `evidence` is pre-serialised to a JSON string at the type boundary
+/// so storage stays string-only — `serde_json::Value` lives in the
+/// JSONL wire format and the CLI side, not in the DB-facing struct.
+fn build_audit_history_rows(records: &[SampleRecord]) -> Result<Vec<AuditHistoryRow>> {
+    let mut out = Vec::with_capacity(records.len());
+    for r in records {
+        let edge_id = r
+            .edge_id
+            .parse::<i64>()
+            .with_context(|| format!("edge_id {:?} could not be parsed as i64", r.edge_id))?;
+        let label = match r.label {
+            Some(true) => "correct",
+            Some(false) => "incorrect",
+            None => "skipped",
+        }
+        .to_string();
+        let evidence_json = match &r.evidence {
+            Some(v) => Some(serde_json::to_string(v).with_context(|| {
+                format!(
+                    "edge_id {} evidence could not be serialised to JSON",
+                    edge_id
+                )
+            })?),
+            None => None,
+        };
+        out.push(AuditHistoryRow {
+            edge_id,
+            labeller_id: r.labeller_id.clone(),
+            label,
+            target_proposed: r.target_proposed.clone(),
+            kind_proposed: r.kind_proposed.clone(),
+            confidence_proposed: r.confidence_proposed.clone(),
+            evidence_json,
+        });
+    }
+    Ok(out)
 }
 
 /// Enforce the R8 tier targets against a computed precision report.
