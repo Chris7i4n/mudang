@@ -30,58 +30,50 @@ A header is **not** part of the format; `schema_version` lives inline on every r
 
 ## Record schema (`schema_version: "2"`)
 
-Current emission version is `"2"`. `--label` also accepts `"1"` inputs — missing v2 fields are treated as `null` (see [§ Migration: `"1"` → `"2"`](#migration-1--2)).
+Current emission and accepted version is `"2"`. Per single-operator posture ([`CHARTER.md` § 3 invariant 1](CHARTER.md#3-core-invariants--must-never-break)) there is exactly one accepted version on read — `--label` rejects any other value with the same "unknown schema_version" diagnostic that fires on a forward bump. The remediation is always wipe-and-reindex + re-emit; no dual-read shim ever ships.
 
 Each line is a JSON object with the following fields:
 
-| Field | Type | Required | Since | Description |
-|---|---|---|---|---|
-| `schema_version` | `string` | yes | v1 | `"2"` on emit. `--label` accepts `"1"` and `"2"`; readers must reject any other value. |
-| `edge_id` | `string` | yes | v1 | Stable surrogate edge id from the indexed graph (`edges.edge_id` per R0). The labeller is **not** required to interpret this; it is round-tripped verbatim. |
-| `kind` | `string` | yes | v1 | EdgeKind from the R0 whitelist (e.g. `calls`, `imports`, `extends`, `implements`). |
-| `confidence` | `string` | yes | v1 | One of `high` / `medium` / `low` (the producer's stamp; this is what R8 audits). |
-| `producer` | `string` | yes | v1 | The producing plugin's identifier (e.g. `rust`, `python`, `typescript`, `framework:rails`). |
-| `pattern_id` | `string` | yes | v1 | The pattern within the producer that emitted this edge (e.g. `rust.calls.method`, `python.imports.from`, `rails.routes.draw`). |
-| `from` | `string` | yes | v1 | Source symbol id or name (the `edges.from_id` resolver input). |
-| `to` | `string` | yes | v1 | Target symbol id or name (the `edges.to_id` resolver output; may be unresolved for Dangling edges). |
-| `source_snippet` | `string` | yes | v1 | The relevant source text (typically the call site or definition site). Single-line preferred; multi-line allowed. Used by the labeller as the primary context. |
-| `lang_version` | `string \| null` | yes | v1 | Per-project language version, populated by the `lang_version.rs` dispatcher when a per-language detector resolves it (sprint 0003). Labellers must accept `null` and may use the value as additional context when present. |
-| `label` | `boolean \| null` | yes | v1 | `null` on emit, `true` (correct) or `false` (incorrect) on label. The labeller fills this. Any value other than `null` / `true` / `false` is rejected by `--label`. |
-| `evidence` | `object \| null` | yes | **v2** | Labeller-supplied structured evidence behind the verdict. Schema is labeller-defined; conventional keys: `{"resolver": "rust-analyzer", "target_uri": "...", "definition_range": [...]}` for LSP cross-check; `{"model": "claude-sonnet-4-6", "reasoning": "...", "prompt_hash": "..."}` for LLM. Records the *how*, not just the *what*. `null` on emit; capable labellers populate. |
-| `target_proposed` | `string \| null` | yes | **v2** | Labeller's correction for `to`. *"Scope said `to = foo::bar`; I see this call resolves to `foo::baz` instead."* Feeds the patch suggester to localise the extractor bug. `null` on emit; populated only when the labeller disagrees with `to`. |
-| `kind_proposed` | `string \| null` | yes | **v2** | Labeller's correction for `kind`. *"Scope said `references_type`; this is actually `calls`."* `null` on emit. |
-| `confidence_proposed` | `string \| null` | yes | **v2** | Labeller's correction for `confidence`. Distinct from a binary "wrong" verdict: the labeller may agree the edge is correct but say the confidence stamp is overstated (or understated). `null` on emit. |
-| `reasoning_text` | `string \| null` | yes | **v2** | Free-text human (or LLM) explanation. The post-hoc audit trail when a `false` verdict is reviewed months later. `null` on emit. |
-| `lang_version_evidence` | `string \| null` | yes | **v2** | Labeller's annotation distinguishing detected vs declared `lang_version` (e.g. `"detected:Cargo.toml#edition"` vs `"inferred:syntax-2021"`). `null` on emit. |
-| `labeller_id` | `string \| null` | yes | **v2** | Identifier of which labeller produced this verdict, for multi-labeller aggregation (Priority 1 sub-item (i)). Conventional values: `"lsp:rust-analyzer"`, `"llm:claude-sonnet-4-6"`, `"human:<initials>"`. `null` on emit; capable labellers populate. Matches the `MANIFEST.md` `labeller_id` column (see [§ Provenance record (`MANIFEST.md`)](#provenance-record-manifestmd)). |
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `schema_version` | `string` | yes | Always `"2"` on emit; readers must reject unknown values. |
+| `edge_id` | `string` | yes | Stable surrogate edge id from the indexed graph (`edges.edge_id` per R0). The labeller is **not** required to interpret this; it is round-tripped verbatim. |
+| `kind` | `string` | yes | EdgeKind from the R0 whitelist (e.g. `calls`, `imports`, `extends`, `implements`). |
+| `confidence` | `string` | yes | One of `high` / `medium` / `low` (the producer's stamp; this is what R8 audits). |
+| `producer` | `string` | yes | The producing plugin's identifier (e.g. `rust`, `python`, `typescript`, `framework:rails`). |
+| `pattern_id` | `string` | yes | The pattern within the producer that emitted this edge (e.g. `rust.calls.method`, `python.imports.from`, `rails.routes.draw`). |
+| `from` | `string` | yes | Source symbol id or name (the `edges.from_id` resolver input). |
+| `to` | `string` | yes | Target symbol id or name (the `edges.to_id` resolver output; may be unresolved for Dangling edges). |
+| `source_snippet` | `string` | yes | The relevant source text (typically the call site or definition site). Single-line preferred; multi-line allowed. Used by the labeller as the primary context. |
+| `lang_version` | `string \| null` | yes | Per-project language version, populated by the `lang_version.rs` dispatcher when a per-language detector resolves it (sprint 0003). Labellers must accept `null` and may use the value as additional context when present. |
+| `label` | `boolean \| null` | yes | `null` on emit, `true` (correct) or `false` (incorrect) on label. The labeller fills this. Any value other than `null` / `true` / `false` is rejected by `--label`. |
+| `evidence` | `object \| null` | yes | Labeller-supplied structured evidence behind the verdict. Schema is labeller-defined; conventional keys: `{"resolver": "rust-analyzer", "target_uri": "...", "definition_range": [...]}` for LSP cross-check; `{"model": "claude-sonnet-4-6", "reasoning": "...", "prompt_hash": "..."}` for LLM. Records the *how*, not just the *what*. `null` on emit; capable labellers populate. |
+| `target_proposed` | `string \| null` | yes | Labeller's correction for `to`. *"Scope said `to = foo::bar`; I see this call resolves to `foo::baz` instead."* Feeds the patch suggester to localise the extractor bug. `null` on emit; populated only when the labeller disagrees with `to`. |
+| `kind_proposed` | `string \| null` | yes | Labeller's correction for `kind`. *"Scope said `references_type`; this is actually `calls`."* `null` on emit. |
+| `confidence_proposed` | `string \| null` | yes | Labeller's correction for `confidence`. Distinct from a binary "wrong" verdict: the labeller may agree the edge is correct but say the confidence stamp is overstated (or understated). `null` on emit. |
+| `reasoning_text` | `string \| null` | yes | Free-text human (or LLM) explanation. The post-hoc audit trail when a `false` verdict is reviewed months later. `null` on emit. |
+| `lang_version_evidence` | `string \| null` | yes | Labeller's annotation distinguishing detected vs declared `lang_version` (e.g. `"detected:Cargo.toml#edition"` vs `"inferred:syntax-2021"`). `null` on emit. |
+| `labeller_id` | `string \| null` | yes | Identifier of which labeller produced this verdict, for multi-labeller aggregation (Priority 1 sub-item (i)). Conventional values: `"lsp:rust-analyzer"`, `"llm:claude-sonnet-4-6"`, `"human:<initials>"`. `null` on emit; capable labellers populate. Matches the `MANIFEST.md` `labeller_id` column (see [§ Provenance record (`MANIFEST.md`)](#provenance-record-manifestmd)). |
 
 ### Partial-population semantics
 
-v2 fields are designed for **partial population**. A labeller that can only fill `target_proposed` leaves the rest `null`; `--label` tolerates this. Aggregators (sprint 0006) fuse partial verdicts from heterogeneous labellers into a single record. There is no field that becomes required mid-v2 — a future tightening is a new `schema_version`.
+The seven labeller-fillable fields (`evidence`, `target_proposed`, `kind_proposed`, `confidence_proposed`, `reasoning_text`, `lang_version_evidence`, `labeller_id`) are designed for **partial population**. A labeller that can only fill `target_proposed` leaves the rest `null`; `--label` tolerates this. Aggregators (sprint 0006) fuse partial verdicts from heterogeneous labellers into a single record. A future tightening that makes any of these required is a `schema_version` bump — never a silent contract change.
 
 ---
 
-## Example — unlabelled (`--emit-sample` output, v2)
+## Example — unlabelled (`--emit-sample` output)
 
 ```jsonl
 {"schema_version":"2","edge_id":"e-9f2c","kind":"calls","confidence":"high","producer":"rust","pattern_id":"rust.calls.method","from":"crate::handlers::greet","to":"crate::utils::format_name","source_snippet":"format_name(&user.name)","lang_version":"2021","label":null,"evidence":null,"target_proposed":null,"kind_proposed":null,"confidence_proposed":null,"reasoning_text":null,"lang_version_evidence":null,"labeller_id":null}
 {"schema_version":"2","edge_id":"e-3a17","kind":"extends","confidence":"high","producer":"typescript","pattern_id":"ts.extends.class","from":"components/Button.tsx::PrimaryButton","to":"components/Button.tsx::BaseButton","source_snippet":"class PrimaryButton extends BaseButton {","lang_version":"es2022","label":null,"evidence":null,"target_proposed":null,"kind_proposed":null,"confidence_proposed":null,"reasoning_text":null,"lang_version_evidence":null,"labeller_id":null}
 ```
 
-## Example — labelled (`--label` input, v2 with richer verdict)
+## Example — labelled (`--label` input)
 
 ```jsonl
 {"schema_version":"2","edge_id":"e-9f2c","kind":"calls","confidence":"high","producer":"rust","pattern_id":"rust.calls.method","from":"crate::handlers::greet","to":"crate::utils::format_name","source_snippet":"format_name(&user.name)","lang_version":"2021","label":true,"evidence":{"resolver":"rust-analyzer","target_uri":"file:///crate/src/utils.rs","definition_range":[12,4,18,5]},"target_proposed":null,"kind_proposed":null,"confidence_proposed":null,"reasoning_text":null,"lang_version_evidence":"detected:Cargo.toml#edition","labeller_id":"lsp:rust-analyzer"}
 {"schema_version":"2","edge_id":"e-3a17","kind":"extends","confidence":"high","producer":"typescript","pattern_id":"ts.extends.class","from":"components/Button.tsx::PrimaryButton","to":"components/Button.tsx::BaseButton","source_snippet":"class PrimaryButton extends BaseButton {","lang_version":"es2022","label":false,"evidence":{"model":"claude-sonnet-4-6","prompt_hash":"sha256:abc..."},"target_proposed":"components/Button.tsx::ButtonBase","kind_proposed":null,"confidence_proposed":"medium","reasoning_text":"PrimaryButton extends ButtonBase via re-export; Scope traced the alias to BaseButton.","lang_version_evidence":null,"labeller_id":"llm:claude-sonnet-4-6"}
 ```
-
-## Example — v1 record accepted by `--label`
-
-```jsonl
-{"schema_version":"1","edge_id":"e-9f2c","kind":"calls","confidence":"high","producer":"rust","pattern_id":"rust.calls.method","from":"crate::handlers::greet","to":"crate::utils::format_name","source_snippet":"format_name(&user.name)","lang_version":null,"label":true}
-```
-
-v2 fields treated as `null`; coverage and precision computed identically. See [§ Migration: `"1"` → `"2"`](#migration-1--2).
 
 ---
 
@@ -141,26 +133,16 @@ The point: the labeller is replaceable. The contract is this schema.
 
 ## Versioning rules
 
-- **Adding a field**: bump `schema_version` to `"2"`. Old labellers reading old samples continue to work. New labellers reading old samples treat new fields as `null` / default. Old labellers reading new samples ignore unknown fields.
-- **Removing a field**: charter-grade change. Bumps `schema_version` and breaks the contract. Requires re-labelling existing committed samples.
-- **Changing the type of an existing field**: charter-grade change. Same as removal.
-- **Changing the semantics of an existing field without changing its type**: charter-grade change. Same as removal.
+Per single-operator posture ([`CHARTER.md` § 3 invariant 1](CHARTER.md#3-core-invariants--must-never-break)) every version change is hard-cutover. There is **no** dual-read path, **no** auto-upgrade of committed samples, **no** "old labeller still works on new file" allowance — exactly the named shim shapes the charter-sweep gate refuses re-introduction of ([`CI-GATES.md`](CI-GATES.md)). Changing the contract means:
 
-`--label <path>` rejects records with an unknown `schema_version`. The maintainer either re-emits a fresh sample at the current version or runs the older `scope` binary that emitted the file.
+1. Bump `schema_version` to the new value (any field add, remove, type change, or semantic change is enough — there is no "minor" tier).
+2. Wipe the existing labelled corpus under `scope-core/tests/fixtures/reference/<db_slug>/audit-samples/`. The MANIFEST stays append-only for provenance but the `*.jsonl` files come back fresh.
+3. Re-index (`scope index`) so any stored derived state matches the new contract.
+4. Re-emit with `scope audit confidence --emit-sample <path>` and re-label.
 
-### Migration: `"1"` → `"2"`
+`--label <path>` rejects every `schema_version` other than the current `SAMPLE_SCHEMA_VERSION` const with the same diagnostic that fires on a forward bump. Running an older `scope` binary against newer samples is the only path to "read the old shape" — and that is recovery, not a supported workflow.
 
-Sprint 0004 ships the v1 → v2 bump together with the report-side coverage surface (BACKLOG (h)) and the DB audit-history namespace (BACKLOG (j)). All three are entry points for the same qualitative-signal surface; splitting them would leave the labeller-crate ecosystem (sprint 0005) targeting a half-upgraded contract.
-
-Backward acceptance on read:
-
-- `--emit-sample` emits `"2"` only. There is no opt-out to v1.
-- `--label` accepts both `"1"` and `"2"`. A v1 record is read as if every v2 field were explicitly `null`: precision is computed identically, coverage counts a v1 record as `labelled` when `label` is `true` / `false` and `skipped` when `label` is `null`. v1 records produce identical-shape report rows to v2 records that left every v2 field `null`.
-- Committed corpus samples ([§ Corpus accumulation policy](#corpus-accumulation-policy)) remain valid as v1 until a new labelling pass re-emits them at v2. There is no auto-upgrade.
-
-No dual-write path exists. The single-operator posture ([`CHARTER.md` § Single-operator posture](CHARTER.md#single-operator-posture)) means the DB schema upgrade is wipe-and-reindex; existing `graph.db` files are regenerated, not migrated.
-
-Removing any v1 field, or repurposing a v2 field added here, requires another `schema_version` bump.
+The sprint 0004 cutover (v1 → v2) followed this procedure: the schema bump landed with the report-side coverage surface (BACKLOG (h)) and the DB audit-history namespace (BACKLOG (j)) in one sprint because all three are entry points for the same qualitative-signal surface; splitting them would have left the labeller-crate ecosystem (sprint 0005) targeting a half-upgraded contract.
 
 ---
 

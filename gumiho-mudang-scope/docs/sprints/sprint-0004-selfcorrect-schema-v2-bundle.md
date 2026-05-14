@@ -26,7 +26,7 @@ Bump the audit-sample JSONL `schema_version` from `"1"` to `"2"` across three co
 - **Hard limits** — none crossed.
 - **Soft expansion zone** — `CHARTER.md` §6.
 - **Invariants** — auditor-immutability ([`CHARTER.md` § Core invariants](../CHARTER.md#3-core-invariants--must-never-break)) **extended**, not broken: BACKLOG (j) carves a writable namespace for audit-derived rows that never mutates source-derived rows (`edges`, `symbols`, `file_hashes`). The new `edge_audit_history` table is writable; the source-derived schema stays frozen during audit. [`AUDIT-LABEL-SCHEMA.md` § Auditor immutability rule](../AUDIT-LABEL-SCHEMA.md#auditor-immutability-rule) gains a paragraph carving out the writable namespace explicitly.
-- **Single-operator posture** — schema bump v1 → v2: `--label` accepts both versions, treating new fields as `null` when absent (per BACKLOG (g) explicit clause). Removing or repurposing existing `"1"` fields stays charter-grade.
+- **Single-operator posture** — schema bump v1 → v2 is hard-cutover ([`CHARTER.md` § 3 invariant 1](../CHARTER.md#3-core-invariants--must-never-break)). `--label` rejects every `schema_version` other than the current `SAMPLE_SCHEMA_VERSION` const with the same "unknown schema_version" diagnostic that fires on a forward bump. No dual-read shim, no `#[serde(default)]` on v2-only fields, no per-version REQUIRED_FIELDS branching. Migration path: wipe committed corpus + re-index + re-emit + re-label.
 
 ## Deliverables
 
@@ -34,8 +34,8 @@ Bump the audit-sample JSONL `schema_version` from `"1"` to `"2"` across three co
 
 - [ ] [`AUDIT-LABEL-SCHEMA.md`](../AUDIT-LABEL-SCHEMA.md) `schema_version` bumped `"1"` → `"2"`.
 - [ ] New `"2"` record fields added (each `null` on emit, populated by capable labellers; partial population tolerated): `evidence`, `target_proposed`, `kind_proposed`, `confidence_proposed`, `reasoning_text`, `lang_version_evidence`, `labeller_id`.
-- [ ] `--label` accepts both `schema_version: "1"` and `"2"` inputs; `"1"` records treat new fields as `null`.
-- [ ] Migration note added to [`AUDIT-LABEL-SCHEMA.md`](../AUDIT-LABEL-SCHEMA.md) explaining the bump and backward acceptance.
+- [ ] `--label` accepts exactly `schema_version: "2"`; every other value rejected with the same "unknown schema_version" diagnostic that fires on a forward bump (single-operator posture, no dual-read shim).
+- [ ] [`AUDIT-LABEL-SCHEMA.md` § Versioning rules](../AUDIT-LABEL-SCHEMA.md#versioning-rules) rewritten as hard-cutover: any contract change bumps the version + wipes the committed corpus + re-emits.
 
 ### Priority 1 (h) acceptance ([source](../BACKLOG.md#priority-1--self-correction-cycle))
 

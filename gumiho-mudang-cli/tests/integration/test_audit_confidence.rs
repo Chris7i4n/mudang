@@ -1271,17 +1271,15 @@ fn test_audit_confidence_label_surfaces_per_group_coverage_when_some_records_ski
 }
 
 #[test]
-fn test_audit_confidence_label_accepts_v1_records_backward_compatible() {
-    // Sprint 0004 CP2: `--label` accepts both schema_version "1" and
-    // "2". A v1 record carries only the v1 key set (11 keys) and has
-    // the seven v2-only fields treated as `null` on read. This is the
-    // sole post-bump backward-compat path; there is no dual-write or
-    // auto-upgrade. See docs/AUDIT-LABEL-SCHEMA.md § Migration "1" → "2".
+fn test_audit_confidence_label_rejects_v1_records_single_operator_posture() {
+    // Single-operator posture (CHARTER.md § 3 invariant 1): no
+    // dual-read shim. `--label` accepts the current SAMPLE_SCHEMA_VERSION
+    // only; a v1 record (or any other prior version) is rejected with
+    // the same "unknown schema_version" diagnostic as a forward bump.
+    // The remediation is wipe-and-reindex + re-emit, never carry a
+    // backward-compat path in the binary.
     let (_dir, root) = setup_indexed_fixture();
     let sample = root.join("sample.jsonl");
-
-    // Emit (v2), then downgrade each record to v1: bump version to "1",
-    // strip the seven v2 keys, label every record `true`.
     Command::cargo_bin("mudang")
         .unwrap()
         .args(["audit", "confidence", "--emit-sample"])
@@ -1290,54 +1288,22 @@ fn test_audit_confidence_label_accepts_v1_records_backward_compatible() {
         .assert()
         .success();
 
+    // Downgrade the version stamp to "1" without touching anything else;
+    // even with the full v2 key set physically present, the version
+    // gate fires.
     let raw = std::fs::read_to_string(&sample).unwrap();
-    let mut out_lines = Vec::new();
-    for l in raw
-        .lines()
-        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
-    {
-        let mut v: serde_json::Value = serde_json::from_str(l).unwrap();
-        let obj = v.as_object_mut().unwrap();
-        obj.insert(
-            "schema_version".to_string(),
-            serde_json::Value::String("1".to_string()),
-        );
-        for k in [
-            "evidence",
-            "target_proposed",
-            "kind_proposed",
-            "confidence_proposed",
-            "reasoning_text",
-            "lang_version_evidence",
-            "labeller_id",
-        ] {
-            obj.remove(k);
-        }
-        obj.insert("label".to_string(), serde_json::Value::Bool(true));
-        out_lines.push(serde_json::to_string(&v).unwrap());
-    }
-    std::fs::write(&sample, format!("{}\n", out_lines.join("\n"))).unwrap();
+    let downgraded = raw.replace("\"schema_version\":\"2\"", "\"schema_version\":\"1\"");
+    std::fs::write(&sample, downgraded).unwrap();
 
-    let out = Command::cargo_bin("mudang")
+    Command::cargo_bin("mudang")
         .unwrap()
         .args(["audit", "confidence", "--label"])
         .arg(&sample)
         .current_dir(&root)
         .assert()
-        .success();
-    let stdout = String::from_utf8_lossy(&out.get_output().stdout).to_string();
-    let report: serde_json::Value = serde_json::from_str(&stdout).unwrap();
-    // Report shape is identical to the v2 path: every label=true,
-    // so every row's precision is 1.0.
-    let rows = report["report"].as_array().unwrap();
-    assert!(!rows.is_empty(), "v1 records produced an empty report");
-    for r in rows {
-        assert_eq!(
-            r["precision"].as_f64().unwrap(),
-            1.0,
-            "v1 record path produced non-1.0 precision: {r}"
-        );
-    }
+        .failure()
+        .stderr(contains("unknown schema_version"))
+        .stderr(contains("Re-emit"));
 }
 
 #[test]
