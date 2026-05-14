@@ -30,15 +30,15 @@ Ship `scope-audit-labeller-llm` — a provider-agnostic LLM wrapper that consume
 ### Priority 1 (b₂) acceptance ([source](../BACKLOG.md#priority-1--self-correction-cycle))
 
 - [ ] `scope-audit-labeller-llm` crate exists under `gumiho-mudang-labeller/scope-audit-labeller-llm/` and implements the `Labeller` trait from `scope-audit-labeller-core`.
-- [ ] Provider-agnostic — the LLM transport is a trait on the crate side; at least one provider impl ships (e.g. Anthropic Messages API). Provider implementations sit behind cargo features so users select what they want without dragging every SDK into the build.
+- [ ] Provider-agnostic — the LLM transport is a trait on the crate side; at least one provider impl ships. **First provider (this sprint): DeepSeek** (OpenAI-compatible chat-completions endpoint, `https://api.deepseek.com/chat/completions`). Provider implementations sit behind cargo features so users select what they want without dragging every SDK into the build.
 - [ ] Prompt template documented in the crate's README. Inputs to the template: `kind`, `from`, `to`, `confidence`, `source_snippet`, optional `producer_captured_args` (future), `lang`, `lang_version`. Outputs: structured verdict mapped onto the v2 labeller-fillable fields.
-- [ ] `labeller_id` written by this labeller is `llm:<provider>:<model-id>` (e.g. `llm:anthropic:claude-sonnet-4-6`).
+- [ ] `labeller_id` written by this labeller is `llm:<provider>:<model-id>` (e.g. `llm:deepseek:deepseek-chat`).
 - [ ] Retry + rate-limit handling at the transport layer — bounded attempts, exponential backoff, surfaces "abstained" (`null` verdict) on persistent failure rather than corrupting output.
 - [ ] Integration test against a mocked provider transport: reads a fixture v2 JSONL, applies a canned model response per record, asserts a v2-conformant labelled output stream with the expected `labeller_id` stamp and the seven labeller-fillable fields populated as the mock prescribes.
 
 ### Priority 1 (b₂) implementation deliverables
 
-- [ ] Cargo features per provider (at minimum: `anthropic`). Default features chosen to keep the dependency surface minimal for users who only want one provider.
+- [ ] Cargo features per provider (this sprint: `deepseek` only; other providers — OpenAI, Anthropic, Gemini, local — deferred to follow-up sprints as separate features). `default = ["deepseek"]` so `cargo add scope-audit-labeller-llm` yields a one-provider build out of the box.
 - [ ] Diagnostic output (stderr) per record on transport error so the operator sees what failed and why; the JSONL output itself stays clean.
 - [ ] Bench against the reference fixture corpus committed in sprint 0002 — order-of-magnitude budget for throughput (records / minute, model-dependent). Not a gate; numbers recorded in PR body.
 - [ ] Cross-link from [`SELF-CORRECTION-CYCLE.md`](../SELF-CORRECTION-CYCLE.md) — extend the "Labeller workspace" subsection from sprint 0005 with the LLM labeller as the first concrete implementation.
@@ -46,6 +46,12 @@ Ship `scope-audit-labeller-llm` — a provider-agnostic LLM wrapper that consume
 ---
 
 ## Ambiguities resolved before this sprint opens
+
+- **First-provider choice** — resolved per sprint 0010 prep amendment on `main` (state-doc log entry, this sprint open). First provider is **DeepSeek** (OpenAI-compatible chat-completions endpoint). Rationale: cost / quality / openness of API surface; OpenAI-compatible request shape keeps a future `openai` feature near-trivial to add later. Anthropic / Gemini / local-model providers deferred to follow-up sprints.
+- **Default cargo feature** — resolved: `default = ["deepseek"]`. `cargo add` yields a usable one-provider build; users opting out of DeepSeek disable the default feature.
+- **HTTP client** — resolved: `ureq` (sync). Line-by-line JSONL processing is naturally synchronous; this also avoids dragging `tokio` into the labeller workspace.
+- **Test-time provider mock** — resolved: trait-level `MockProvider` substitution. No `mockito` / `wiremock` dependency; the `Provider` trait is the seam.
+- **Live API in `cargo test`** — resolved: the live DeepSeek transport is exercised only by a test gated behind a cargo feature **and** a `DEEPSEEK_API_KEY` env var presence check. Default `cargo test --workspace` never reaches the live endpoint.
 
 If a provider transport raises a contractual question this sprint cannot resolve from existing docs (e.g. how to map streaming responses onto the line-by-line JSONL contract, or how to attribute per-record cost in the report), halt; consult; amend [`AUDIT-LABEL-SCHEMA.md`](../AUDIT-LABEL-SCHEMA.md) or [`SELF-CORRECTION-CYCLE.md`](../SELF-CORRECTION-CYCLE.md) on `main` before resuming.
 
