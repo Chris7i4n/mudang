@@ -285,6 +285,17 @@ Each entry below has: **ID, rules it enforces, durable contract, where to find i
 - **Where in the tree**: `scripts/gate_doc_sync.sh`, `justfile` recipe `gate-doc-sync` (called by `gate-refactor`).
 - **CI gates**: `Doc-sync` row in [`CI-GATES.md`](CI-GATES.md), `just gate-doc-sync`.
 
+### R14 — Labeller-workspace isolation
+
+- **Enforces**: the build-system boundary between the Scope workspace and the sibling labeller workspace (`gumiho-mudang-labeller/`, sprint 0005 (b₁) per [`BACKLOG.md` § Priority 1 — Self-correction cycle](BACKLOG.md#priority-1--self-correction-cycle)). The boundary is what turns [`CHARTER.md` § 3 invariant 6](CHARTER.md#3-core-invariants--must-never-break) ("Deterministic, read-only at query time. No network calls.") and [`CHARTER.md` § 5 hard limits](CHARTER.md#5-hard-limits--scope-will-never-cross-these) ("Network calls during query", "No toolchain required", "Invoking the language's compiler or interpreter") into mechanical guarantees rather than reviewer discipline — LLM labellers (network-bound) and LSP labellers (toolchain-bound) live legally on the sibling side because cargo cannot reach across the exclusion edge to pull their dependencies into the Scope binary's `Cargo.lock`.
+- **Durable contract**: `scripts/gate_labeller_isolation.sh` — narrow-grep gate. Three checks:
+  - **root-cargo-toml-excludes-labeller** — root `Cargo.toml` must declare `exclude = [..., "gumiho-mudang-labeller", ...]` under `[workspace]`. Without this, cargo would treat the labeller dir as an implicit workspace member.
+  - **scope-side-path-dep-on-labeller** — no Scope-side `Cargo.toml` (root + `gumiho-mudang-scope/**`, `gumiho-mudang-cli/**`, `gumiho-mudang-lsp/**`) declares a `path = "..."` dependency pointing into `gumiho-mudang-labeller/`. Forbidden: a Scope crate that path-depends on a labeller crate would re-import the labeller deps into the Scope build.
+  - **labeller-side-path-dep-on-scope** — no `gumiho-mudang-labeller/**/Cargo.toml` declares a `path = "..."` dependency pointing into `gumiho-mudang-scope`, `gumiho-mudang-cli`, or `gumiho-mudang-lsp`. The labeller contract is [`AUDIT-LABEL-SCHEMA.md`](AUDIT-LABEL-SCHEMA.md), not a code dependency; importing Scope types directly would conflate the schema-doc contract with implementation churn.
+- **Honest limit**: the gate verifies **only** `path = "..."` deps. A future cargo dep that uses `workspace = true` to inherit from the **root** workspace's `[workspace.dependencies]` is automatically caught (the inheriting crate would not be in the root workspace at all). A theoretical `git = "..."` or registry-published dep pulling Scope crates would not match this gate — but Scope crates are `publish = false` everywhere and there is no Scope git remote a labeller could pull from, so that path is closed by [`CHARTER.md` § 3 invariant 1](CHARTER.md#3-core-invariants--must-never-break) (single-operator posture) before the gate even runs.
+- **Where in the tree**: `scripts/gate_labeller_isolation.sh`, `justfile` recipe `gate-labeller-isolation` (called by `gate-refactor`).
+- **CI gates**: `Labeller-workspace isolation` row in [`CI-GATES.md`](CI-GATES.md), `just gate-labeller-isolation`.
+
 ---
 
 ## Discipline-only rules

@@ -68,7 +68,7 @@ gate: fmt-check clippy test
 # this recipe.
 
 # Run every active architecture gate.
-gate-refactor: ci-edge-sealed test-builder test-typestate ci-context-shape ci-no-fs ci-dispatch ci-trait-shape ci-no-spawn ci-no-network ci-immutable ci-no-framework-scm ci-patterns ci-output-schema audit-confidence ci-history-immutable test-malformed gate-charter gate-doc-sync
+gate-refactor: ci-edge-sealed test-builder test-typestate ci-context-shape ci-no-fs ci-dispatch ci-trait-shape ci-no-spawn ci-no-network ci-immutable ci-no-framework-scm ci-patterns ci-output-schema audit-confidence ci-history-immutable test-malformed gate-charter gate-doc-sync gate-labeller-isolation
 
 ci-edge-sealed:
     ./scripts/grep_edge_sealed.sh
@@ -172,6 +172,17 @@ gate-charter:
 # gate".
 gate-doc-sync:
     ./scripts/gate_doc_sync.sh
+
+# Labeller-workspace isolation gate (R14).
+#
+# Enforces the build-system boundary that turns CHARTER §3 invariant 6
+# (no network) + §5 hard limits (no toolchain, no compiler/interpreter
+# invocation) into mechanical guarantees: labeller dependencies cannot
+# enter the Scope binary's `Cargo.lock` because the labeller workspace
+# is excluded from the root, and no cargo path-dep edge crosses the
+# boundary in either direction.
+gate-labeller-isolation:
+    ./scripts/gate_labeller_isolation.sh
 
 # --- Install ---
 
