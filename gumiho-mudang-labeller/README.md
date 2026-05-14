@@ -19,7 +19,7 @@ The full rationale lives in [`BACKLOG.md` § Priority 1 (b)](../gumiho-mudang-sc
 |---|---|---|---|
 | `scope-audit-labeller-core` | shipped | 0005 (b₁) | `Labeller` trait, v2 `SampleRecord` types, JSONL read/write helpers. |
 | `scope-audit-labeller-noop` | shipped | 0005 (b₁) | Reference impl: stamps `labeller_id` and passes every other field through. |
-| `scope-audit-labeller-llm` | unstarted | 0010 (b₂) | Provider-agnostic LLM wrapper. |
+| `scope-audit-labeller-llm` | shipped | 0010 (b₂) | Provider-agnostic LLM wrapper. First provider: DeepSeek (`deepseek` cargo feature, default). |
 | `scope-audit-labeller-lsp` | unstarted | 0011 (b₃) | Per-language LSP cross-check via `tower-lsp` clients. |
 | `scope-audit-labeller-hybrid` | unstarted | 0012 (b₄) | LLM-first composition + human-reviews-diffs surface. |
 
@@ -56,7 +56,7 @@ The trait is **frozen at sprint 0005's close**. Concrete labellers in sprints 00
 
 The seven labeller-fillable columns of a v2 record (`evidence`, `target_proposed`, `kind_proposed`, `confidence_proposed`, `reasoning_text`, `lang_version_evidence`, plus the verdict `label`) are designed for **partial population** per [`AUDIT-LABEL-SCHEMA.md` § Partial-population semantics](../gumiho-mudang-scope/docs/AUDIT-LABEL-SCHEMA.md#partial-population-semantics). A labeller writes only the fields it has an opinion about; the others stay `null`. Aggregators fuse partial verdicts from heterogeneous labellers into a single record.
 
-Every labeller **must** stamp its identifier into the `labeller_id` column. Convention: `<kind>:<recipe>` (`noop:reference-v0`, `llm:anthropic:claude-sonnet-4-6`, `lsp:rust-analyzer:2025.5.12`, `hybrid:llm-first-human-review:anthropic-claude-sonnet-4-6`).
+Every labeller **must** stamp its identifier into the `labeller_id` column. Convention: `<kind>:<recipe>` (`noop:reference-v0`, `llm:deepseek:deepseek-chat`, `lsp:rust-analyzer:2025.5.12`, `hybrid:llm-first-human-review:deepseek-deepseek-chat`).
 
 ## Building
 
