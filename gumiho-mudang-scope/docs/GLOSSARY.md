@@ -100,6 +100,16 @@ When a term collides with a Rust crate name (`semver`, `tree-sitter`), the entry
 
 ---
 
+## Labeller workspace
+
+| Term | Definition | Source |
+|---|---|---|
+| `labeller workspace` | Sibling cargo workspace at `gumiho-mudang-labeller/` at the repo root, listed under the root `Cargo.toml`'s `[workspace] exclude = [...]`. Houses the concrete audit labellers (LLM / LSP / hybrid + reference noop) that consume only the v2 JSONL schema documented in `AUDIT-LABEL-SCHEMA.md`. The exclusion is the build-system fact that turns `CHARTER.md` §3 invariant 6 ("No network calls") and §5 hard limits ("Network calls during query", "No toolchain required", "Invoking the language's compiler or interpreter") into a mechanical guarantee: labeller dependencies never enter the root `Cargo.lock` or the Scope binary. Mechanically enforced by R14's narrow-grep gate `labeller-workspace-isolation` | `BACKLOG.md` § Priority 1 (b) + `SELF-CORRECTION-CYCLE.md` § Labeller workspace + `ENFORCEMENT-MAP.md` § R14 |
+| `Labeller trait` | The single-method-pair trait every concrete labeller implements: `fn label_one(&mut self, record: SampleRecord) -> Result<SampleRecord, Self::Error>` + `fn labeller_id(&self) -> &str`. Defined in `scope-audit-labeller-core::runner`. **Frozen** at sprint 0005's close; the three concrete labellers (sprints 0010 LLM / 0011 LSP / 0012 hybrid) inherit the shape as-is. A future trait change is charter-amendment grade — single-operator-posture hard-cutover with every concrete labeller updated in lockstep, never a silent shape change | `BACKLOG.md` § Priority 1 (b₁) + `gumiho-mudang-labeller/scope-audit-labeller-core/src/runner.rs` |
+| `scope-audit-labeller-core` | Shared core crate in the labeller workspace. Defines the `Labeller` trait, the v2 `SampleRecord` type (a faithful **duplicate** of `AUDIT-LABEL-SCHEMA.md` § Record schema maintained on the labeller side), and JSONL read/write helpers that enforce `schema_version == "2"` + required-field presence + `evidence: object \| null` shape per record. Zero `path` or `workspace` dependency edges to any Scope crate; the contract is the schema doc, the code on each side is an implementation of it | `BACKLOG.md` § Priority 1 (b₁) + `gumiho-mudang-labeller/README.md` |
+
+---
+
 ## Plugin shapes
 
 | Term | Definition | Source |
