@@ -1366,6 +1366,24 @@ fn test_audit_confidence_label_persists_verdicts_to_edge_audit_history() {
     assert_eq!(count_label("incorrect") as usize, incorrect);
     assert_eq!(count_label("skipped") as usize, skipped);
 
+    // pattern_id denormalised onto the audit row (CP6.5 — codex
+    // review on sprint 0004). Every row carries a non-empty pattern_id
+    // copied verbatim from the SampleRecord; the column lets the read
+    // surface survive wipe-and-reindex (edge_id is AUTOINCREMENT and
+    // can recycle, pattern_id slug is stable). Floor: zero NULL or
+    // empty-string pattern_ids in the table.
+    let bad_pattern_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM edge_audit_history WHERE pattern_id IS NULL OR pattern_id = ''",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        bad_pattern_count, 0,
+        "every audit-history row must carry a non-empty pattern_id"
+    );
+
     // labelled_at populated as a positive UNIX-seconds timestamp.
     let labelled_at: i64 = conn
         .query_row("SELECT MIN(labelled_at) FROM edge_audit_history", [], |r| {

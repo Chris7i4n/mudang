@@ -121,9 +121,19 @@ CREATE TABLE IF NOT EXISTS file_hashes (
 -- writers, so the read-then-insert is race-free.
 --
 -- edge_id intentionally has no FK to edges(edge_id). History outlives
--- source: a `scope index` between audits may delete an edge, but the
--- historical verdicts against it remain. CP5 (`scope audit history`)
--- LEFT-JOINs against `edges` to surface dangling-reference history rows.
+-- source: a `scope index` between audits may delete an edge (edge_id
+-- is INTEGER PRIMARY KEY AUTOINCREMENT and is not stable across
+-- wipe-and-reindex), but the historical verdicts against it remain.
+--
+-- pattern_id is denormalised onto the audit row so the read-side
+-- pattern drill (`scope audit history pattern <id>`) is robust under
+-- re-index. `edges.pattern_id` is the source-derived value at audit
+-- time; copying it here lets `audit_history_pattern` query directly,
+-- without a JOIN to the mutable `edges` table that may have been
+-- wiped between audits (CP6.5 — addresses codex review on sprint 0004
+-- regarding "history outlives source"). For the `currently_incorrect`
+-- drivers query the JOIN is preserved because it is scoped to
+-- MAX(audit_id) where the edges still exist.
 --
 -- label is the verdict as stored: `correct` (label=true), `incorrect`
 -- (label=false), `skipped` (label=null). Storing the trichotomy
@@ -141,6 +151,7 @@ CREATE TABLE IF NOT EXISTS file_hashes (
 CREATE TABLE IF NOT EXISTS edge_audit_history (
     audit_id            INTEGER NOT NULL,
     edge_id             INTEGER NOT NULL,
+    pattern_id          TEXT NOT NULL,
     labelled_at         INTEGER NOT NULL,
     labeller_id         TEXT,
     label               TEXT NOT NULL CHECK(label IN ('correct','incorrect','skipped')),
@@ -185,3 +196,8 @@ CREATE INDEX IF NOT EXISTS idx_edges_pattern       ON edges(pattern_id);
 -- sprint 0006 `scope audit history labeller <id>` drill.
 CREATE INDEX IF NOT EXISTS idx_edge_audit_history_edge_audit      ON edge_audit_history(edge_id, audit_id);
 CREATE INDEX IF NOT EXISTS idx_edge_audit_history_labeller_audit  ON edge_audit_history(labeller_id, audit_id);
+-- Pattern drill `scope audit history pattern <id>` is the canonical
+-- consumer of this index: scopes the audit-history → pattern-precision
+-- timeline lookup without the JOIN to `edges` that was the codex-review
+-- finding for sprint 0004 (CP6.5).
+CREATE INDEX IF NOT EXISTS idx_edge_audit_history_pattern_audit   ON edge_audit_history(pattern_id, audit_id);

@@ -392,3 +392,113 @@ fn test_audit_history_two_runs_dashboard_shows_latest_only() {
     assert_eq!(v["latest_audit_id"].as_i64().unwrap(), 2);
     assert_eq!(v["records_total"].as_u64().unwrap() as usize, total);
 }
+
+#[test]
+fn test_audit_history_pattern_timeline_survives_reindex() {
+    // Sprint 0004 CP6.5 — addresses codex review finding on the
+    // pattern drill's JOIN against `edges`. Scenario:
+    //   1. Index + label → audit_id = 1 against edges_pre.
+    //   2. `mudang index --full` wipes + repopulates the edges table.
+    //      `edges.edge_id` is AUTOINCREMENT and is NOT stable across
+    //      reindex; pre-reindex history rows now reference edge_ids
+    //      that may or may not exist in the new edges set.
+    //   3. Label again → audit_id = 2 against edges_post.
+    //   4. `scope audit history pattern <id>` must still surface BOTH
+    //      audit_ids in the timeline (pattern_id is the user-facing
+    //      stable key, so its drill must "outlive source" per
+    //      AUDIT-LABEL-SCHEMA.md § Writable namespace for audit-derived
+    //      rows). Pre-CP6.5 this dropped audit_id=1 silently because
+    //      the timeline JOINed `edges` for pattern_id.
+    let (_dir, root) = setup_indexed_fixture();
+    let (sample, _) = emit_and_label_mixed(&root);
+
+    // Pick a pattern_id present in the first run's history. Query the
+    // audit-history table directly so the lookup itself doesn't depend
+    // on the JOIN that the bug used.
+    let db_path = root.join(".scope").join("graph.db");
+    let pattern_id: String = {
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        conn.query_row(
+            "SELECT pattern_id FROM edge_audit_history
+              GROUP BY pattern_id
+              HAVING COUNT(*) > 0
+              ORDER BY pattern_id ASC LIMIT 1",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap()
+    };
+
+    // Full reindex — drops + repopulates edges, symbols, file_hashes.
+    // The auditor-immutability rule still binds source-derived rows;
+    // `--label` does not touch them, but `mudang index --full` may
+    // (it IS the indexer, not the auditor).
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["index", "--full"])
+        .current_dir(&root)
+        .assert()
+        .success();
+
+    // Second labelling pass after reindex. The emit-sample-then-label
+    // pair binds against the freshly-indexed edges. `--emit-sample`
+    // refuses to overwrite an existing file, so the previous sample
+    // is unlinked first.
+    std::fs::remove_file(&sample).unwrap();
+    Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--emit-sample"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert()
+        .success();
+    let raw = std::fs::read_to_string(&sample).unwrap();
+    let labelled = raw
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+        .enumerate()
+        .map(|(i, l)| {
+            if i % 3 == 0 {
+                l.to_string()
+            } else if i % 2 == 1 {
+                l.replace("\"label\":null", "\"label\":true")
+            } else {
+                l.replace("\"label\":null", "\"label\":false")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    std::fs::write(&sample, format!("{labelled}\n")).unwrap();
+    let _ = Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "confidence", "--label"])
+        .arg(&sample)
+        .current_dir(&root)
+        .assert();
+
+    // Pattern drill must surface both audit_ids — pre-CP6.5 the JOIN
+    // dropped the older one silently when edge_id changed under
+    // reindex.
+    let out = Command::cargo_bin("mudang")
+        .unwrap()
+        .args(["audit", "history", "pattern", &pattern_id, "--json"])
+        .current_dir(&root)
+        .assert()
+        .success();
+    let stdout = String::from_utf8_lossy(&out.get_output().stdout).to_string();
+    let v: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let audit_ids: Vec<i64> = v["precision_over_time"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| p["audit_id"].as_i64().unwrap())
+        .collect();
+    assert!(
+        audit_ids.contains(&1),
+        "audit_id=1 from pre-reindex run must survive in the timeline; got {audit_ids:?}",
+    );
+    assert!(
+        audit_ids.contains(&2),
+        "audit_id=2 from post-reindex run must appear; got {audit_ids:?}",
+    );
+}

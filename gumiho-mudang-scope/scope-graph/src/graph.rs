@@ -53,6 +53,12 @@ pub struct AuditEdgeRow {
 /// row in one labelling pass shares the same values without the caller
 /// having to thread them.
 ///
+/// `pattern_id` is denormalised onto the audit row so the pattern
+/// drill is robust under wipe-and-reindex (`edges.edge_id` is
+/// AUTOINCREMENT and is not stable across reindex; the source-derived
+/// pattern_id is). See `scope-graph/src/sql/schema.sql` comment on
+/// `edge_audit_history`.
+///
 /// `label` is the verdict-as-stored: `"correct"` / `"incorrect"` /
 /// `"skipped"`. The trichotomy is preserved verbatim from the
 /// SampleRecord (`Some(true)` / `Some(false)` / `None`); the SQL
@@ -63,6 +69,7 @@ pub struct AuditEdgeRow {
 #[derive(Debug, Clone)]
 pub struct AuditHistoryRow {
     pub edge_id: i64,
+    pub pattern_id: String,
     pub labeller_id: Option<String>,
     pub label: String,
     pub target_proposed: Option<String>,
@@ -2442,14 +2449,15 @@ impl Graph {
         {
             let mut stmt = tx.prepare(
                 "INSERT INTO edge_audit_history
-                 (audit_id, edge_id, labelled_at, labeller_id, label,
+                 (audit_id, edge_id, pattern_id, labelled_at, labeller_id, label,
                   target_proposed, kind_proposed, confidence_proposed, evidence_json)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             )?;
             for row in rows {
                 stmt.execute(params![
                     audit_id,
                     row.edge_id,
+                    row.pattern_id,
                     now,
                     row.labeller_id,
                     row.label,
@@ -2501,25 +2509,30 @@ impl Graph {
     /// `pattern_id` — feeds `scope audit history pattern <ID>`
     /// (sprint 0004 (j)).
     ///
-    /// `timeline` JOINs `edge_audit_history` against `edges` on
-    /// `edge_id` to recover the pattern_id (which lives on the
-    /// source-derived side). An edge whose row in `edges` has been
-    /// wiped between audits drops out of the timeline — its history
-    /// rows survive but the JOIN no longer resolves the pattern.
-    /// `currently_incorrect` filters to the latest audit and
-    /// `label = 'incorrect'`.
+    /// `timeline` reads `pattern_id` directly off `edge_audit_history`
+    /// (denormalised at write time per CP6.5 — addresses codex review
+    /// on sprint 0004). Pre-CP6.5 the timeline JOINed against `edges`
+    /// to recover the pattern_id, which silently dropped history rows
+    /// after a wipe-and-reindex (edge_id is AUTOINCREMENT and is not
+    /// stable across reindex). The denormalised column makes the
+    /// timeline truly "outlive source".
+    ///
+    /// `currently_incorrect` still JOINs to `edges` for `from_id` /
+    /// `to_id` — scoped to `MAX(audit_id)` where edges still exist by
+    /// construction (the latest audit happened against the current
+    /// `edges` table).
     pub fn audit_history_pattern(&self, pattern_id: &str) -> Result<AuditHistoryPattern> {
-        // Per-audit fold for this pattern.
+        // Per-audit fold for this pattern. No JOIN — pattern_id is on
+        // the audit row directly so the timeline survives reindex.
         let mut stmt = self.conn.prepare(
-            "SELECT eh.audit_id,
-                    MIN(eh.labelled_at) AS labelled_at,
-                    SUM(CASE WHEN eh.label IN ('correct','incorrect') THEN 1 ELSE 0 END) AS labelled,
-                    SUM(CASE WHEN eh.label = 'correct' THEN 1 ELSE 0 END) AS correct
-               FROM edge_audit_history eh
-               JOIN edges e ON e.edge_id = eh.edge_id
-              WHERE e.pattern_id = ?1
-              GROUP BY eh.audit_id
-              ORDER BY eh.audit_id ASC",
+            "SELECT audit_id,
+                    MIN(labelled_at) AS labelled_at,
+                    SUM(CASE WHEN label IN ('correct','incorrect') THEN 1 ELSE 0 END) AS labelled,
+                    SUM(CASE WHEN label = 'correct' THEN 1 ELSE 0 END) AS correct
+               FROM edge_audit_history
+              WHERE pattern_id = ?1
+              GROUP BY audit_id
+              ORDER BY audit_id ASC",
         )?;
         let timeline: Vec<AuditHistoryPatternPoint> = stmt
             .query_map(params![pattern_id], |row| {
@@ -2545,17 +2558,23 @@ impl Graph {
             .collect::<rusqlite::Result<Vec<_>>>()?;
 
         // Latest audit_id present for this pattern, then the
-        // currently-incorrect drivers in that audit.
+        // currently-incorrect drivers in that audit. The JOIN to
+        // `edges` is preserved here because the drivers query needs
+        // `from_id` / `to_id` from the source-derived row, and is
+        // scoped to MAX(audit_id) where the edges still exist by
+        // construction (the latest audit ran against the current edges
+        // table — its rows have not yet been wiped). For prior audits
+        // the timeline above is the read surface; drivers from prior
+        // audits are not surfaced by this view.
         let mut stmt_drivers = self.conn.prepare(
             "SELECT eh.edge_id, e.from_id, e.to_id, eh.target_proposed, eh.labeller_id
                FROM edge_audit_history eh
                JOIN edges e ON e.edge_id = eh.edge_id
-              WHERE e.pattern_id = ?1
+              WHERE eh.pattern_id = ?1
                 AND eh.label = 'incorrect'
                 AND eh.audit_id = (
-                    SELECT MAX(eh2.audit_id) FROM edge_audit_history eh2
-                      JOIN edges e2 ON e2.edge_id = eh2.edge_id
-                     WHERE e2.pattern_id = ?1
+                    SELECT MAX(audit_id) FROM edge_audit_history
+                     WHERE pattern_id = ?1
                 )
               ORDER BY eh.edge_id ASC",
         )?;
@@ -2757,14 +2776,16 @@ impl Graph {
     /// from the denominator; patterns with zero labelled rows are
     /// omitted (no precision is measurable).
     fn per_pattern_precision(&self, audit_id: i64) -> Result<HashMap<String, f64>> {
+        // No JOIN — pattern_id is on the audit row directly so this
+        // aggregation is stable under wipe-and-reindex (CP6.5 — codex
+        // review on sprint 0004).
         let mut stmt = self.conn.prepare(
-            "SELECT e.pattern_id,
-                    SUM(CASE WHEN eh.label = 'correct' THEN 1 ELSE 0 END) AS correct,
-                    SUM(CASE WHEN eh.label IN ('correct','incorrect') THEN 1 ELSE 0 END) AS labelled
-               FROM edge_audit_history eh
-               JOIN edges e ON e.edge_id = eh.edge_id
-              WHERE eh.audit_id = ?1
-              GROUP BY e.pattern_id",
+            "SELECT pattern_id,
+                    SUM(CASE WHEN label = 'correct' THEN 1 ELSE 0 END) AS correct,
+                    SUM(CASE WHEN label IN ('correct','incorrect') THEN 1 ELSE 0 END) AS labelled
+               FROM edge_audit_history
+              WHERE audit_id = ?1
+              GROUP BY pattern_id",
         )?;
         let rows = stmt.query_map(params![audit_id], |row| {
             Ok((
