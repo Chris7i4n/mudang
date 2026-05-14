@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "scope-audit-labeller-core",
+    "scope-audit-labeller-noop",
 ]
 
 [workspace.package]
